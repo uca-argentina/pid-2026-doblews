@@ -1,0 +1,102 @@
+erDiagram
+    ROL ||--o{ USUARIO_ROL : "se asigna en"
+    USUARIO ||--o{ USUARIO_ROL : "tiene"
+    USUARIO ||--o{ OBRA_MIEMBRO : "participa en"
+    OBRA ||--o{ OBRA_MIEMBRO : "tiene como equipo"
+    USUARIO |o--o{ OBRA : "es cliente de"
+    UNIDAD_MEDIDA ||--o{ MATERIAL : "expresa"
+    UNIDAD_MEDIDA ||--o{ COMPONENTE_CONSTRUCTIVO : "expresa"
+    COMPONENTE_CONSTRUCTIVO ||--o{ COMPONENTE_MATERIAL : "requiere"
+    MATERIAL ||--o{ COMPONENTE_MATERIAL : "es insumo de"
+    OBRA ||--o{ OBRA_COMPONENTE : "usa"
+    COMPONENTE_CONSTRUCTIVO ||--o{ OBRA_COMPONENTE : "se registra como"
+
+    ROL {
+        bigint id PK
+        varchar codigo UK "admin | arquitecto | cliente"
+        varchar nombre
+        text descripcion
+    }
+
+    USUARIO {
+        bigint id PK
+        varchar nombre
+        varchar email UK "unico, case-insensitive"
+        varchar password_hash "bcrypt / argon2"
+        boolean is_active "baja logica"
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    USUARIO_ROL {
+        bigint usuario_id PK,FK
+        bigint rol_id PK,FK
+        timestamptz asignado_en
+    }
+
+    OBRA {
+        bigint id PK
+        varchar nombre
+        text descripcion
+        varchar direccion
+        date fecha_estimada_inicio
+        bigint cliente_id FK "usuario con rol cliente, nullable"
+        bigint created_by FK "usuario que la creo"
+        boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    OBRA_MIEMBRO {
+        bigint obra_id PK,FK
+        bigint usuario_id PK,FK
+        varchar rol_en_obra "responsable | colaborador"
+        timestamptz fecha_alta
+    }
+
+    UNIDAD_MEDIDA {
+        bigint id PK
+        varchar codigo UK "m2 | m3 | ml | u | kg | bolsa | lt"
+        varchar nombre
+        varchar abreviatura
+        varchar magnitud "superficie | volumen | longitud | masa | conteo"
+        boolean is_active
+    }
+
+    MATERIAL {
+        bigint id PK
+        varchar nombre UK "unico entre los activos"
+        bigint unidad_medida_id FK
+        numeric_14_2 precio_referencia "CHECK >= 0"
+        varchar moneda "ARS fijo por ahora"
+        timestamptz precio_actualizado_en
+        boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    COMPONENTE_CONSTRUCTIVO {
+        bigint id PK
+        varchar nombre UK "plantilla, ej Pared de 15cm, unico entre activos"
+        text descripcion
+        bigint unidad_medida_id FK "unidad en la que se mide 1 de este componente"
+        boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    COMPONENTE_MATERIAL {
+        bigint componente_id PK,FK
+        bigint material_id PK,FK
+        numeric_14_4 cantidad_por_unidad "CHECK > 0, receta: material por 1 unidad del componente"
+    }
+
+    OBRA_COMPONENTE {
+        bigint id PK
+        bigint obra_id FK
+        bigint componente_id FK
+        numeric_14_3 cantidad "CHECK > 0, cuanto de esta plantilla se uso en la obra"
+        boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
