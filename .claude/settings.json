@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ruff)",
+      "Bash(ruff *)",
+      "Bash(black)",
+      "Bash(black *)",
+      "Bash(pytest)",
+      "Bash(pytest *)",
+      "Bash(alembic)",
+      "Bash(alembic *)",
+      "Bash(npm run build)",
+      "Bash(npm run lint)"
+    ],
+    "ask": [
+      "Bash(git push*)",
+      "Bash(rm *)"
+    ]
+  }
+}
