@@ -8,10 +8,20 @@ Ver [docs/adr/0001-stack.md](docs/adr/0001-stack.md) (ADR-001, Aceptada). No lo 
 
 ## Entorno local
 
+Setup inicial al clonar (una sola vez):
+
 ```bash
-docker compose up -d          # levanta Postgres (y demás servicios definidos en compose)
-cd backend
-alembic upgrade head           # aplica migraciones
+cp .env.example .env          # nunca commitear .env
+pre-commit install            # hooks de ruff/prettier antes de cada commit
+```
+
+Para levantar todo:
+
+```bash
+docker compose up -d          # levanta Postgres
+cd backend && uv sync         # instala deps del backend
+uv run alembic upgrade head   # aplica migraciones
+cd ../frontend && npm install # instala deps del frontend
 ```
 
 `.env.example` está versionado; copiarlo a `.env` (nunca commitear `.env`).
