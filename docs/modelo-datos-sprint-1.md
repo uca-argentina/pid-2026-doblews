@@ -11,7 +11,7 @@ Este documento tiene dos funciones y ninguna más:
 
 **No** repite el modelo de usuarios, roles y permisos: eso está definido en [ADR-002](adr/0002-authorization-model.md) y esa ADR es la fuente de verdad. Si algo de acá la contradice, gana la ADR.
 
-> **Nota histórica.** Hasta el 2026-09-06 este documento describía un modelo de un solo estudio, con roles globales `admin`/`arquitecto`/`cliente` y `obra.cliente_id`. ADR-002 lo reemplazó por un modelo multi-tenant con roles por ámbito. Los archivos que acompañaban a esa versión (`ddl-sprint-1.sql`, `models_sprint_1.py.reference`, `pruebas-invariantes.sql`) se eliminaron por describir el esquema viejo; están en el historial de git si hace falta consultarlos.
+> **Nota histórica.** Hasta el 2026-09-06 este documento describía un modelo de un solo estudio, con roles globales `admin`/`architect`/`client` y `project.client_id`. ADR-002 lo reemplazó por un modelo multi-tenant con roles por ámbito. Los archivos que acompañaban a esa versión (`ddl-sprint-1.sql`, `models_sprint_1.py.reference`, `pruebas-invariantes.sql`) se eliminaron por describir el esquema viejo; están en el historial de git si hace falta consultarlos.
 
 ---
 
@@ -21,7 +21,7 @@ Tres reglas ordenan todo lo que sigue. Si aparece una discusión de modelado, se
 
 1. **Se modela lo que las historias piden.** Una tabla vacía que nadie usa igual hay que mantenerla, migrarla y explicarla en la defensa.
 
-2. **Salvo cuando agregarlo después sale caro.** Agregar una columna nullable es barato en cualquier momento. Partir una tabla en dos, o convertir una FK 1:N en N:M con datos cargados y código consultándola, es caro: migración de datos + reescritura de queries + retoque del front. Ese es el criterio por el que `estudio` entra desde la primera migración aunque al principio haya uno solo.
+2. **Salvo cuando agregarlo después sale caro.** Agregar una columna nullable es barato en cualquier momento. Partir una tabla en dos, o convertir una FK 1:N en N:M con datos cargados y código consultándola, es caro: migración de datos + reescritura de queries + retoque del front. Ese es el criterio por el que `firm` entra desde la primera migración aunque al principio haya uno solo.
 
 3. **La base defiende sus propios invariantes.** Todo lo que se pueda expresar como `NOT NULL`, `CHECK`, `UNIQUE` o `FOREIGN KEY` va en el esquema, no solamente en el validador de Pydantic. El backend no es el único que escribe en esa base: también lo hacen los seeds, las migraciones y ustedes mismos desde `psql` a las 2 de la mañana antes de la demo.
 
@@ -32,10 +32,10 @@ Tres reglas ordenan todo lo que sigue. Si aparece una discusión de modelado, se
 | Área | Estado | Dónde está definido |
 |---|---|---|
 | Estudios, usuarios, roles, permisos, asignaciones | **Cerrado** | [ADR-002](adr/0002-authorization-model.md) |
-| `obra` (campos, `estudio_id`, membresía) | **Cerrado** | [ADR-002](adr/0002-authorization-model.md) §3 |
-| `unidad_medida` | Cerrado en lo esencial | HU-0, §5 de este documento |
+| `project` (campos, `firm_id`, membresía) | **Cerrado** | [ADR-002](adr/0002-authorization-model.md) §3 |
+| `unit_of_measure` | Cerrado en lo esencial | HU-0, §5 de este documento |
 | `material` | **Abierto** — multi-tenant cambió el supuesto de catálogo global | §5 |
-| `componente_constructivo` | **Abierto** — hay dos modelos en discusión | §5 |
+| `building_component` | **Abierto** — hay dos modelos en discusión | §5 |
 | Presupuestos, planificación, proveedores | Fuera de alcance | — |
 
 ---
@@ -46,13 +46,13 @@ Aplican a toda tabla, incluidas las que todavía no existen.
 
 ### 3.1 Claves primarias: `BIGINT GENERATED ALWAYS AS IDENTITY`
 
-Índices más chicos, URLs legibles (`/obras/12`), debug cómodo. `IDENTITY` en lugar de `SERIAL` porque es el estándar SQL y evita que alguien inserte un `id` a mano y desincronice la secuencia.
+Índices más chicos, URLs legibles (`/projects/12`), debug cómodo. `IDENTITY` en lugar de `SERIAL` porque es el estándar SQL y evita que alguien inserte un `id` a mano y desincronice la secuencia.
 
-*Riesgo conocido:* los IDs son enumerables — cualquiera puede probar `/obras/13`. Se mitiga con el chequeo de acceso que ADR-002 exige, devolviendo **404 y no 403** para no revelar que el recurso existe. Ese chequeo hay que hacerlo igual con UUIDs; el UUID solo esconde el problema.
+*Riesgo conocido:* los IDs son enumerables — cualquiera puede probar `/projects/13`. Se mitiga con el chequeo de acceso que ADR-002 exige, devolviendo **404 y no 403** para no revelar que el recurso existe. Ese chequeo hay que hacerlo igual con UUIDs; el UUID solo esconde el problema.
 
-### 3.2 Multi-tenant: `estudio_id` en toda tabla de negocio
+### 3.2 Multi-tenant: `firm_id` en toda tabla de negocio
 
-Toda tabla que contenga datos de un estudio lleva `estudio_id`, y **toda query de lectura filtra por él**. No es una convención cosmética: es lo único que impide que un estudio vea los datos de otro, y no lo garantiza el sistema de permisos (ver ADR-002 §8).
+Toda tabla que contenga datos de un estudio lleva `firm_id`, y **toda query de lectura filtra por él**. No es una convención cosmética: es lo único que impide que un estudio vea los datos de otro, y no lo garantiza el sistema de permisos (ver ADR-002 §8).
 
 El filtro va en un repositorio base compartido, nunca repetido a mano en cada servicio.
 
@@ -60,16 +60,16 @@ El filtro va en un repositorio base compartido, nunca repetido a mano en cada se
 
 Dos consecuencias que hay que tener presentes desde el primer endpoint:
 
-- Todo listado filtra `WHERE is_active = TRUE`. Conviene resolverlo en el mismo repositorio compartido que el `estudio_id` y no repetir el `where` en 20 lugares, porque el día que se olviden en uno solo aparece un material dado de baja en un desplegable.
-- Las FKs **nunca** llevan `ON DELETE CASCADE` hacia datos de negocio, porque no borramos. El `CASCADE` se usa solo donde el borrado físico sí tiene sentido: vínculos puros como `rol_permiso`, no entidades.
+- Todo listado filtra `WHERE is_active = TRUE`. Conviene resolverlo en el mismo repositorio compartido que el `firm_id` y no repetir el `where` en 20 lugares, porque el día que se olviden en uno solo aparece un material dado de baja en un desplegable.
+- Las FKs **nunca** llevan `ON DELETE CASCADE` hacia datos de negocio, porque no borramos. El `CASCADE` se usa solo donde el borrado físico sí tiene sentido: vínculos puros como `role_permission`, no entidades.
 
-Cuidado con el caso de los dos `is_active` con significados distintos, que ya aparece en el modelo: `usuario.is_active` es baja de la plataforma (no se loguea en ningún lado) y `usuario_estudio.is_active` es baja del padrón de un estudio (se loguea, pero ese estudio dejó de existir para esa persona).
+Cuidado con el caso de los dos `is_active` con significados distintos, que ya aparece en el modelo: `account.is_active` es baja de la plataforma (no se loguea en ningún lado) y `firm_member.is_active` es baja del padrón de un estudio (se loguea, pero ese estudio dejó de existir para esa persona).
 
 ### 3.4 Unicidad conviviendo con baja lógica
 
 Hay una trampa clásica y se resuelve distinto según qué represente el campo:
 
-- **Si el campo es una identidad, la unicidad es global**, incluyendo inactivos. Es el caso de `usuario.email`: si se permitiera reusar el email de alguien dado de baja, dos filas competirían por la misma credencial y el reingreso del usuario original sería ambiguo. Al reactivar, se reactiva la fila existente.
+- **Si el campo es una identidad, la unicidad es global**, incluyendo inactivos. Es el caso de `account.email`: si se permitiera reusar el email de alguien dado de baja, dos filas competirían por la misma credencial y el reingreso del usuario original sería ambiguo. Al reactivar, se reactiva la fila existente.
 - **Si el campo es una etiqueta, la unicidad es parcial** (`... WHERE is_active`). Si dieron de baja "Cemento Loma Negra 50kg" por error y lo quieren volver a cargar, la base no tiene por qué impedirlo.
 
 Ambos casos comparan en minúsculas (`lower(...)`) para que "Cemento" y "cemento" no convivan.
@@ -78,19 +78,19 @@ Ambos casos comparan en minúsculas (`lower(...)`) para que "Cemento" y "cemento
 
 `NUMERIC(14,2)` para importes. Un `float` acumula error de redondeo y en un presupuesto de obra eso se nota. En Python el tipo es `Decimal`; en el JSON de FastAPI se serializa como string o número según se configure Pydantic — definirlo una vez y que el front lo respete.
 
-`moneda VARCHAR(3)` con código ISO 4217 y `CHECK` de tres mayúsculas, fijo en `'ARS'` por ahora. Está la columna, no está la lógica: no hay tabla de cotizaciones ni conversión. Cuando se necesite, el precio ya sabe en qué moneda está expresado y no hay que reinterpretar datos históricos.
+`currency VARCHAR(3)` con código ISO 4217 y `CHECK` de tres mayúsculas, fijo en `'ARS'` por ahora. Está la columna, no está la lógica: no hay tabla de cotizaciones ni conversión. Cuando se necesite, el precio ya sabe en qué moneda está expresado y no hay que reinterpretar datos históricos.
 
 ### 3.6 Fechas: `TIMESTAMPTZ` para eventos, `DATE` para fechas de calendario
 
-`created_at`, `updated_at`, `fecha_alta` son instantes → `TIMESTAMPTZ`. Nunca `TIMESTAMP` a secas: el día que el server esté en UTC y ustedes en UTC-3, los timestamps sin zona mienten.
+`created_at`, `updated_at`, `joined_at` son instantes → `TIMESTAMPTZ`. Nunca `TIMESTAMP` a secas: el día que el server esté en UTC y ustedes en UTC-3, los timestamps sin zona mienten.
 
-`fecha_estimada_inicio` es una fecha de calendario → `DATE`. "La obra arranca el 15 de octubre" no tiene hora ni zona horaria.
+`estimated_start_date` es una fecha de calendario → `DATE`. "La obra arranca el 15 de octubre" no tiene hora ni zona horaria.
 
 ### 3.7 Enumerados: `VARCHAR` + `CHECK`, no `ENUM` nativo
 
 Un `CHECK` se modifica con un `ALTER TABLE` reversible; un tipo `ENUM` de Postgres no se puede alterar dentro de una transacción y complica el `downgrade` de Alembic.
 
-La excepción son los enumerados que tienen datos propios o relaciones: esos son tablas. `rol` es tabla porque tiene nombre, descripción y una relación N:M con `permiso`; `unidad_medida` es tabla porque tiene abreviatura y magnitud.
+La excepción son los enumerados que tienen datos propios o relaciones: esos son tablas. `role` es tabla porque tiene nombre, descripción y una relación N:M con `permission`; `unit_of_measure` es tabla porque tiene abreviatura y magnitud.
 
 ### 3.8 FK compuesta para invariantes entre tablas
 
@@ -105,9 +105,13 @@ El costo es una columna redundante en la tabla de origen, que hay que setear al 
 
 ### 3.9 Nombres
 
-- `snake_case`, tablas en **singular** (`usuario`, no `usuarios`), en español.
-- Columnas técnicas de infraestructura en inglés (`is_active`, `created_at`) porque son parte del vocabulario del framework.
+- **Todo identificador va en inglés**: tablas, columnas, clases, códigos de permisos y de roles, y los valores de enumerados que el código compara (`scope`, `code`). La documentación y la conversación del equipo siguen en español; el código no.
+- `snake_case`, tablas en **singular** (`account`, no `accounts`).
 - FKs siempre `<tabla>_id`, PK siempre `id`.
+
+Hasta el 2026-09-07 esta sección decía "tablas en español, columnas técnicas en inglés". Se cambió por dos razones. La primera es que contradecía a `CLAUDE.md`, que ya pedía identificadores en inglés. La segunda es que la frontera "dominio vs. infraestructura" no existe en la práctica: obligaba a decidir columna por columna de qué lado caía cada una —`fecha_alta` es dominio o es auditoría?— y ya había producido `es_sistema` conviviendo con `is_active`. Ver [ADR-002 §3](adr/0002-authorization-model.md).
+
+Un caso vale la pena recordarlo: **`usuario` se traduce como `account`, no como `user`**, porque `user` es palabra reservada en PostgreSQL y obligaría a entrecomillarla en toda query cruda.
 
 ### 3.10 Constraints con nombre explícito
 
@@ -131,7 +135,7 @@ No duplicamos diccionarios de datos: cada tabla se define en un solo lugar.
 
 | Tablas | Fuente |
 |---|---|
-| `estudio`, `usuario`, `rol`, `permiso`, `rol_permiso`, `usuario_plataforma`, `usuario_estudio`, `obra`, `obra_miembro` | [ADR-002](adr/0002-authorization-model.md) §3-§7 |
+| `firm`, `account`, `role`, `permission`, `role_permission`, `platform_member`, `firm_member`, `project`, `project_member` | [ADR-002](adr/0002-authorization-model.md) §3-§7 |
 | El resto | Todavía no está definido — ver §5 |
 
 El diagrama completo del modelo cerrado está en ADR-002 §3. `docs/diagrams/der.mmd` todavía refleja el modelo anterior y hay que actualizarlo.
@@ -140,17 +144,17 @@ El diagrama completo del modelo cerrado está en ADR-002 §3. `docs/diagrams/der
 
 ## 5. Lo que queda abierto
 
-### `unidad_medida` (HU-0)
+### `unit_of_measure` (HU-0)
 
 Catálogo cerrado, global a la plataforma: un metro cuadrado es un metro cuadrado en todos los estudios. Se carga por seed, no por pantalla.
 
 | Columna | Tipo | Notas |
 |---|---|---|
 | `id` | `BIGINT` identity | |
-| `codigo` | `VARCHAR(10)` | UNIQUE. `m2`, `m3`, `ml`, `u`, `kg`, `bolsa`, `lt` |
-| `nombre` | `VARCHAR(60)` | "Metro cuadrado" |
-| `abreviatura` | `VARCHAR(10)` | Lo que se muestra al lado del número: "m²" |
-| `magnitud` | `VARCHAR(20)` | `superficie`, `volumen`, `longitud`, `masa`, `conteo`. No lo pide el sprint; entra porque el seed lo llena gratis y sin él, el día de las recetas, no hay forma de saber que convertir m² a bolsas necesita un factor y m² a m³ no tiene sentido |
+| `code` | `VARCHAR(10)` | UNIQUE. `m2`, `m3`, `ml`, `u`, `kg`, `bolsa`, `lt` |
+| `name` | `VARCHAR(60)` | "Metro cuadrado" |
+| `abbreviation` | `VARCHAR(10)` | Lo que se muestra al lado del número: "m²" |
+| `magnitude` | `VARCHAR(20)` | `superficie`, `volumen`, `longitud`, `masa`, `conteo`. No lo pide el sprint; entra porque el seed lo llena gratis y sin él, el día de las recetas, no hay forma de saber que convertir m² a bolsas necesita un factor y m² a m³ no tiene sentido |
 | `is_active` | `BOOLEAN` | Permite retirar una unidad sin romper los registros que la usan |
 
 **Lo único a confirmar:** que efectivamente sea global y no por estudio. Es lo razonable, pero hay que decirlo explícitamente.
@@ -161,18 +165,18 @@ La decisión anterior era "catálogo global, no por obra". **Multi-tenant invali
 
 Hay que decidir entre:
 
-- **Catálogo por estudio** (`material.estudio_id`): lo más simple y lo más seguro. Cada estudio arranca vacío.
+- **Catálogo por estudio** (`material.firm_id`): lo más simple y lo más seguro. Cada estudio arranca vacío.
 - **Semilla global + copia por estudio**: al crearse un estudio se le copia un catálogo base. Mejor experiencia inicial, más maquinaria.
 - **Catálogo global compartido + precios por estudio**: dos tablas. Es el modelo correcto a largo plazo (habilita la normalización de catálogos de proveedores del Módulo 2), y el más caro ahora.
 
-Las convenciones de §3 ya definen el resto: `NUMERIC(14,2)` con `CHECK >= 0`, `moneda` ISO, unicidad parcial del nombre entre activos, `precio_actualizado_en` como gancho de la futura tabla de histórico.
+Las convenciones de §3 ya definen el resto: `NUMERIC(14,2)` con `CHECK >= 0`, `currency` ISO, unicidad parcial del nombre entre activos, `price_updated_at` como gancho de la futura tabla de histórico.
 
-### `componente_constructivo` (HU-5) — abierto
+### `building_component` (HU-5) — abierto
 
 Hay **dos modelos distintos** dando vueltas y hay que elegir uno:
 
-- **Componente por obra, con jerarquía** (`obra_id`, `parent_id` self-referencial, `descripcion`, `medida`, `unidad_medida_id`). El componente es una línea del cómputo de esa obra. La FK compuesta de §3.8 garantiza que un componente y su padre son de la misma obra.
-- **Componente como plantilla global + uso por obra** (`componente_constructivo` como catálogo tipo "Pared de 15cm" + `componente_material` como receta + `obra_componente` como cantidad usada en cada obra). Es lo que está hoy en `docs/diagrams/der.mmd`.
+- **Componente por obra, con jerarquía** (`project_id`, `parent_id` self-referencial, `description`, `measure`, `unit_of_measure_id`). El componente es una línea del cómputo de esa obra. La FK compuesta de §3.8 garantiza que un componente y su padre son de la misma obra.
+- **Componente como plantilla global + uso por obra** (`building_component` como catálogo tipo "Pared de 15cm" + `component_material` como receta + `project_component` como cantidad usada en cada obra). Es lo que está hoy en `docs/diagrams/der.mmd`.
 
 No son variantes del mismo modelo: son decisiones distintas sobre qué es un componente. La segunda adelanta parte del Módulo 2 (recetas constructivas). Hay que resolverlo antes de HU-5 y registrarlo como ADR.
 
@@ -201,7 +205,7 @@ Los tests de `pytest` cubren tres familias, y las tres son obligatorias:
 
 - [ ] `naming_convention` configurada en el `MetaData` **antes** del primer `alembic revision --autogenerate`.
 - [ ] Una migración de esquema + una migración de seeds, separadas.
-- [ ] Seeds: catálogo de `permiso`, `rol` y `rol_permiso` según ADR-002 §7; las 7 unidades de medida; el usuario de soporte inicial (con la contraseña fuera del repo, en `.env`).
+- [ ] Seeds: catálogo de `permission`, `role` y `role_permission` según ADR-002 §7; las 7 unidades de medida; el usuario de soporte inicial (con la contraseña fuera del repo, en `.env`).
 - [ ] El trigger de `updated_at` está creado en la misma migración que las tablas.
 - [ ] `alembic downgrade base` seguido de `alembic upgrade head` corre limpio sobre una base vacía. Probarlo el día 2, no el día 12.
 - [ ] `docker compose up` levanta Postgres y las migraciones corren solas contra ese contenedor.

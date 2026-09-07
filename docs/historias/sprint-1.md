@@ -10,12 +10,12 @@ El modelo de usuarios, roles y permisos está definido en [ADR-002](../adr/0002-
 
 - La plataforma es **multi-estudio**: varios estudios de arquitectura la usan en paralelo y ninguno ve datos de otro.
 - Una persona tiene **una sola cuenta** y puede pertenecer a varios estudios, con un rol distinto en cada uno.
-- Hay roles en **tres ámbitos**: `soporte` (plataforma), `propietario` / `arquitecto` / `cliente` (estudio) y `responsable` / `colaborador` / `lector` / `cliente` (obra).
-- El **cliente** de una obra es un miembro del estudio con rol `cliente`, asignado a esa obra. No es una columna de `obra`.
+- Hay roles en **tres ámbitos**: `support` (plataforma), `owner` / `architect` / `client` (estudio) y `lead` / `collaborator` / `viewer` / `client` (obra).
+- El **cliente** de una obra es un miembro del estudio con rol `client`, asignado a esa obra. No es una columna de `project`.
 - Los estudios los da de alta el **soporte**; no hay auto-registro público.
 - Cada persona ve únicamente **las obras de las que es miembro**, dentro del estudio en el que está actuando.
-- Los endpoints chequean **permisos** (`obra.editar`), nunca roles. Recurso ajeno → **404**, nunca 403.
-- La moneda de los precios es **ARS fijo**, pero el campo `moneda` se modela desde ahora para soportar otras monedas más adelante.
+- Los endpoints chequean **permisos** (`project.edit`), nunca roles. Recurso ajeno → **404**, nunca 403.
+- La moneda de los precios es **ARS fijo**, pero el campo `currency` se modela desde ahora para soportar otras monedas más adelante.
 - Todos los ABM usan **baja lógica** (`is_active`), nunca `DELETE` físico.
 
 ---
@@ -36,9 +36,9 @@ Tarea de equipo, no historia de usuario. Timebox: 30 minutos. Bloquea el repo, F
 
 **Criterios de aceptación**
 
-- Existe la tabla `unidad_medida` con `id`, `codigo` (m2, m3, ml, u, kg, bolsa, lt), `nombre`, `abreviatura`.
+- Existe la tabla `unit_of_measure` con `id`, `code` (m2, m3, ml, u, kg, bolsa, lt), `name`, `abbreviation`.
 - Se carga por migración/seed, no por pantalla.
-- Hay un endpoint `GET /unidades-medida` que devuelve la lista.
+- Hay un endpoint `GET /units-of-measure` que devuelve la lista.
 - En el front, cualquier campo "unidad" es un `<select>` alimentado por ese endpoint. Nunca texto libre.
 
 **Fuera de alcance:** ABM de unidades por pantalla, conversiones entre unidades.
@@ -59,7 +59,7 @@ Tarea de equipo, no historia de usuario. Timebox: 30 minutos. Bloquea el repo, F
 - La sesión persiste al recargar la página.
 - Hay un botón de cerrar sesión visible en el layout.
 - Las contraseñas se guardan hasheadas (bcrypt/argon2), nunca en texto plano.
-- Existen por seed un usuario `soporte` y, por cada estudio semilla, su `propietario`, para poder entrar la primera vez.
+- Existen por seed un usuario `support` y, por cada estudio semilla, su `owner`, para poder entrar la primera vez.
 - Después del login se resuelve **en qué estudio estoy actuando**: si pertenezco a uno solo entro directo; si pertenezco a varios, elijo. El estudio va explícito en la URL, no guardado en la sesión.
 - Si no pertenezco a ningún estudio, veo una pantalla que lo explica — no un listado vacío ni un error.
 - Los permisos **no viajan dentro del token**: se resuelven contra la base en cada request, para que una baja o un cambio de rol tengan efecto inmediato.
@@ -77,14 +77,14 @@ Tarea de equipo, no historia de usuario. Timebox: 30 minutos. Bloquea el repo, F
 
 **Criterios de aceptación**
 
-- Listado de miembros del estudio con nombre, email, rol (`propietario` / `arquitecto` / `cliente`) y estado.
+- Listado de miembros del estudio con nombre, email, rol (`owner` / `architect` / `client`) y estado.
 - Alta con nombre, email y rol. Como la identidad es global, el email puede pertenecer a alguien que ya tiene cuenta por trabajar con otro estudio: en ese caso **se lo agrega al padrón** en vez de crear una cuenta nueva, y si no existe, se crea con una contraseña temporal.
 - El alta responde lo mismo exista o no el email: **nunca se revela** si una persona ya tiene cuenta en la plataforma. Si ya existía, se conserva su nombre actual y la UI lo dice.
 - Edición: puedo cambiar el rol de un miembro. El email no se edita — es su identidad global, no un dato de mi estudio.
 - Baja del padrón: lógica. La persona deja de ver este estudio, pero sigue pudiendo loguearse y trabajar en otros. Sus asignaciones a obras de este estudio quedan inertes, **no se borran**: si la reincorporo, vuelven solas.
-- No puedo darme de baja a mí mismo ni quitarme el rol de `propietario`. Un estudio siempre tiene exactamente un propietario activo.
-- Un miembro con rol de estudio `cliente` solo puede recibir el rol `cliente` en las obras.
-- La sección exige los permisos de gestión del padrón (`miembro.agregar`, `miembro.editar_rol`, `miembro.quitar`; ver [ADR-002 §7](../adr/0002-authorization-model.md)): un `arquitecto`, que solo tiene `miembro.ver`, entra por URL directa y recibe 403; si el estudio de la URL no es suyo, recibe 404.
+- No puedo darme de baja a mí mismo ni quitarme el rol de `owner`. Un estudio siempre tiene exactamente un propietario activo.
+- Un miembro con rol de estudio `client` solo puede recibir el rol `client` en las obras.
+- La sección exige los permisos de gestión del padrón (`member.add`, `member.edit_role`, `member.remove`; ver [ADR-002 §7](../adr/0002-authorization-model.md)): un `architect`, que solo tiene `member.view`, entra por URL directa y recibe 403; si el estudio de la URL no es suyo, recibe 404.
 - El listado se ve bien en 375px de ancho.
 
 **Fuera de alcance:** invitaciones por email, recuperación de contraseña, roles a medida, transferencia de propiedad del estudio, foto de perfil.
@@ -101,11 +101,11 @@ Tarea de equipo, no historia de usuario. Timebox: 30 minutos. Bloquea el repo, F
 
 - Listado de obras con nombre, dirección, fecha estimada de inicio y cliente.
 - Alta/edición con: nombre (obligatorio), descripción, dirección, fecha estimada de inicio, cliente.
-- El cliente se elige de un desplegable alimentado por el **padrón de mi estudio filtrado por rol `cliente`** — nunca por la tabla global de usuarios. El campo puede quedar vacío.
-- El cliente se guarda como una **asignación a la obra** con rol `cliente`, no como una columna de `obra`. Hay a lo sumo uno por obra.
-- La obra pertenece al estudio en el que estoy actuando, y al crearla **quedo asignado como `responsable`** en la misma transacción: si eso no pasa, creo una obra que después no puedo ver.
+- El cliente se elige de un desplegable alimentado por el **padrón de mi estudio filtrado por rol `client`** — nunca por la tabla global de usuarios. El campo puede quedar vacío.
+- El cliente se guarda como una **asignación a la obra** con rol `client`, no como una columna de `project`. Hay a lo sumo uno por obra.
+- La obra pertenece al estudio en el que estoy actuando, y al crearla **quedo asignado como `lead`** en la misma transacción: si eso no pasa, creo una obra que después no puedo ver.
 - Solo veo las obras del estudio activo donde soy miembro. Si pido por URL una obra ajena —de otro miembro o de otro estudio— recibo 404 (no 403 — no revelamos que existe).
-- El `propietario` del estudio ve todas las obras de su estudio, porque tiene el permiso `obra.ver_todas`. Sigue sin ver las de otros estudios.
+- El `owner` del estudio ve todas las obras de su estudio, porque tiene el permiso `project.view_all`. Sigue sin ver las de otros estudios.
 - Baja lógica.
 - Al entrar a una obra veo su pantalla de detalle, con el nombre visible como contexto en toda la navegación interna.
 - El listado se ve como tarjetas en mobile, no como tabla horizontal.
@@ -164,13 +164,13 @@ Tarea de equipo, no historia de usuario. Timebox: 30 minutos. Bloquea el repo, F
 
 - Dentro del detalle de la obra hay una sección "Equipo" con los miembros: nombre, rol en la obra y fecha de alta.
 - Agrego personas eligiendo del **padrón de mi estudio**. El desplegable nunca muestra usuarios de otros estudios ni de la tabla global de usuarios.
-- Roles asignables: `responsable`, `colaborador`, `lector`, `cliente`.
-- Un miembro con rol de estudio `cliente` **solo** puede recibir el rol `cliente`: el desplegable ni siquiera le ofrece los otros.
-- Hay a lo sumo un `responsable` y a lo sumo un `cliente` por obra.
-- Asignar `responsable` a otra persona **transfiere** el rol en una sola transacción: el anterior queda como `colaborador`, la obra nunca se queda sin responsable ni con dos.
+- Roles asignables: `lead`, `collaborator`, `viewer`, `client`.
+- Un miembro con rol de estudio `client` **solo** puede recibir el rol `client`: el desplegable ni siquiera le ofrece los otros.
+- Hay a lo sumo un `lead` y a lo sumo un `client` por obra.
+- Asignar `lead` a otra persona **transfiere** el rol en una sola transacción: el anterior queda como `collaborator`, la obra nunca se queda sin responsable ni con dos.
 - Puedo cambiar el rol de un miembro que ya está, y puedo quitarlo. Quien queda fuera deja de ver la obra inmediatamente.
-- No puedo quitarme a mí mismo si soy el único `responsable`.
-- La sección exige el permiso `obra.miembro.gestionar`. Un `colaborador` ve el equipo (`obra.miembro.ver`) pero no puede modificarlo: los controles de edición directamente no aparecen, y si llama al endpoint igual recibe 403.
+- No puedo quitarme a mí mismo si soy el único `lead`.
+- La sección exige el permiso `project.member.manage`. Un `collaborator` ve el equipo (`project.member.view`) pero no puede modificarlo: los controles de edición directamente no aparecen, y si llama al endpoint igual recibe 403.
 - El cliente que se asigna acá es **el mismo** que muestra el listado de obras de HU-3: una sola fuente, no dos lugares donde cargar lo mismo.
 - La sección se usa bien desde el celular.
 
@@ -186,14 +186,14 @@ Tarea de equipo, no historia de usuario. Timebox: 30 minutos. Bloquea el repo, F
 
 **Criterios de aceptación**
 
-- Alta de estudio con nombre, email de contacto y teléfono y, **en la misma transacción**, su usuario `propietario`. Un estudio sin dueño es un estudio al que nadie puede entrar: no puede existir ni por un instante.
+- Alta de estudio con nombre, email de contacto y teléfono y, **en la misma transacción**, su usuario `owner`. Un estudio sin dueño es un estudio al que nadie puede entrar: no puede existir ni por un instante.
 - Si el email del propietario ya pertenece a alguien, se lo asigna como propietario sin crear una cuenta nueva.
 - Listado de estudios con nombre, cantidad de miembros y estado.
 - Suspender y reactivar un estudio (baja lógica). Un estudio suspendido no deja entrar a sus miembros.
 - Puedo resetear la contraseña de un usuario.
 - El soporte **no ve obras, componentes ni presupuestos de ningún estudio**, y no existe endpoint que se lo permita. Administra cuentas, no contenido.
 - El soporte no puede asignarse a sí mismo roles de estudio ni de obra.
-- Solo un usuario con rol de plataforma `soporte` accede a esta sección.
+- Solo un usuario con rol de plataforma `support` accede a esta sección.
 - Mientras esta historia no esté implementada, los estudios y sus propietarios se cargan por **seed/migración** — la plataforma funciona igual sin estas pantallas.
 
 **Fuera de alcance:** impersonación de usuarios, facturación, métricas de uso, auto-registro público, invitaciones por email.
@@ -207,7 +207,7 @@ Tarea de equipo, no historia de usuario. Timebox: 30 minutos. Bloquea el repo, F
 
 | Días | Persona A | Persona B |
 |---|---|---|
-| 1 | Actualizar historias + cerrar las decisiones de modelo de `material` y `componente` (juntos) | idem |
+| 1 | Actualizar historias + cerrar las decisiones de modelo de `material` y `building_component` (juntos) | idem |
 | 2-3 | T-02 (esquema + seeds: permisos, roles, unidades, 2 estudios) | HU-0 + theme y layout de Mantine + **deploy andando** |
 | 4-5 | HU-1 backend (auth, JWT) | HU-1 front (login, guard, selector de estudio) |
 | 6 | **T-03 (motor de autorización)** — de a dos | idem |
@@ -226,5 +226,5 @@ Dos avisos sobre este plan:
 
 No son historias de usuario, pero ocupan días del sprint y sin ellas no hay nada que demostrar.
 
-- **T-02 — Esquema inicial y seeds.** Las tablas de ADR-002 más `unidad_medida`; seeds de `permiso`, `rol`, `rol_permiso`, las 7 unidades, el usuario de soporte y **dos estudios** con su propietario. Dos estudios desde el día uno hacen que el aislamiento entre tenants sea demostrable en la defensa. *2 días.*
-- **T-03 — Motor de autorización.** Resolución del estudio activo desde la URL con verificación de padrón; dependencia `requiere(permiso, ámbito)`; repositorio base que inyecta `estudio_id` en toda lectura; tests de aislamiento parametrizados sobre la tabla de rutas de FastAPI. *1 día, de a dos.*
+- **T-02 — Esquema inicial y seeds.** Las tablas de ADR-002 más `unit_of_measure`; seeds de `permission`, `role`, `role_permission`, las 7 unidades, el usuario de soporte y **dos estudios** con su propietario. Dos estudios desde el día uno hacen que el aislamiento entre tenants sea demostrable en la defensa. *2 días.*
+- **T-03 — Motor de autorización.** Resolución del estudio activo desde la URL con verificación de padrón; dependencia `requires(permission, ámbito)`; repositorio base que inyecta `firm_id` en toda lectura; tests de aislamiento parametrizados sobre la tabla de rutas de FastAPI. *1 día, de a dos.*
