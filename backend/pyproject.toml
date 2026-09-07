@@ -31,8 +31,15 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.isort]
+# Without this, the backend/alembic/ directory makes ruff read the alembic
+# package as first-party, but its submodules as third-party, so the import
+# block can never satisfy both rules at once.
+known-third-party = ["alembic"]
+
 [tool.black]
 line-length = 100
+target-version = ["py312"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
