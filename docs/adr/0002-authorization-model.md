@@ -1,7 +1,7 @@
 # ADR-002: Modelo de autorización — RBAC con permisos y alcance
 
-**Estado:** Propuesta
-**Fecha:** 2026-09-06
+**Estado:** Aceptada
+**Fecha:** 2026-09-06 (aceptada 2026-09-07, al implementarse T-02)
 **Contexto:** Modelo de usuarios, roles y permisos de la plataforma. Afecta a HU-1, HU-2 y HU-3 del Sprint 1, y a todo módulo posterior que lea o escriba datos de una obra.
 
 ---
@@ -120,7 +120,7 @@ erDiagram
 
     PERMISO {
         bigint id PK
-        varchar codigo UK "recurso.accion"
+        varchar codigo "UK compuesto con ambito"
         varchar ambito "en que nivel aplica"
         text descripcion
     }
@@ -128,11 +128,13 @@ erDiagram
     ROL_PERMISO {
         bigint rol_id PK,FK
         bigint permiso_id PK,FK
+        varchar ambito FK "compartido: fuerza rol.ambito = permiso.ambito"
     }
 
     USUARIO_PLATAFORMA {
         bigint usuario_id PK,FK
         bigint rol_id PK,FK "solo ambito plataforma"
+        varchar rol_ambito FK "fijo en plataforma por CHECK"
         timestamptz asignado_en
     }
 
@@ -140,6 +142,7 @@ erDiagram
         bigint estudio_id PK,FK
         bigint usuario_id PK,FK
         bigint rol_id FK "solo ambito estudio"
+        varchar rol_ambito FK "fijo en estudio por CHECK"
         boolean is_active "baja del padron"
         timestamptz fecha_alta
     }
@@ -162,6 +165,8 @@ erDiagram
         bigint usuario_id PK,FK
         bigint estudio_id FK "redundante: ata las dos FKs compuestas"
         bigint rol_id FK "solo ambito obra"
+        varchar rol_ambito FK "fijo en obra por CHECK"
+        varchar rol_codigo FK "redundante: condicion de los indices parciales"
         timestamptz fecha_alta
     }
 ```
@@ -175,15 +180,21 @@ El modelo son **seis tablas**, en dos grupos de tres:
 
 **`permiso`** — el verbo atómico. `codigo` con formato `recurso.accion` es **lo único que aparece en el código**; el `id` existe solo para que las FKs sean chicas. La columna `ambito` dice en qué nivel tiene sentido el permiso, y es lo que impide cablear `obra.editar` al rol `soporte`: sin ella, una fila mal sembrada rompe el aislamiento entre estudios sin que nadie escriba una línea de código.
 
+La unicidad es `UNIQUE (codigo, ambito)` y no `UNIQUE (codigo)`, por la misma razón que en `rol`: hay códigos que existen en dos ámbitos. En la tabla de la §7, `estudio.ver` y `estudio.editar` los tienen a la vez el `soporte` (ámbito plataforma) y el `propietario` (ámbito estudio), y **no son el mismo permiso**: el del soporte es "ver cualquier estudio de la plataforma", el del propietario es "ver el estudio en el que estoy actuando". Con un solo ámbito por código habría que elegir uno de los dos, y la regla de que un rol solo recibe permisos de su propio ámbito dejaría de poder escribirse. El código nunca ve esta duplicación: el chequeo siempre ocurre dentro de un ámbito concreto (`requiere("estudio.ver", estudio_id=...)`), así que el par `(codigo, ambito)` está determinado por el sitio de la llamada.
+
 **`rol`** — un paquete con nombre. No tiene ninguna capacidad propia: todo lo que "puede un responsable" está en `rol_permiso`. `codigo` es el identificador estable (nunca se traduce, nunca se muestra crudo) y `nombre` es la etiqueta de la UI. La unicidad es `UNIQUE (codigo, ambito)` y no `UNIQUE (codigo)`, porque `cliente` existe en dos ámbitos: como rol de estudio (estás en el padrón) y como rol de obra (ves esa obra). `es_sistema` hoy es siempre `TRUE`; existe para que el día que haya roles a medida, la distinción entre los roles que el producto necesita y los que inventó un estudio ya esté hecha y no requiera una migración sobre datos vivos.
 
-**`rol_permiso`** — el cableado. Sin `id` propio ni timestamps: una fila significa exactamente "este rol concede este permiso". **Deliberadamente no tiene una columna `otorga/deniega`**: la regla es *deny by default*, la ausencia de fila es la negación. Con permisos negativos, saber si alguien puede hacer algo deja de ser una consulta y pasa a ser una resolución de precedencias entre roles, y nadie en el equipo puede explicar por qué un botón está deshabilitado. (AWS IAM sí tiene deny explícito; su tabla de precedencias es exactamente la complejidad que estamos eligiendo no comprar.)
+**`rol_permiso`** — el cableado. Sin `id` propio ni timestamps: una fila significa exactamente "este rol concede este permiso". Lleva una columna `ambito` que **no es un dato nuevo**, es el mecanismo: las dos FKs son compuestas —`(rol_id, ambito)` contra `rol (id, ambito)` y `(permiso_id, ambito)` contra `permiso (id, ambito)`— y al compartir la misma columna obligan a que el rol y el permiso sean del mismo ámbito. Así, "el `soporte` no puede recibir `obra.editar`" no es una validación que alguien tenga que acordarse de escribir: es una fila que Postgres rechaza.
+
+**Deliberadamente no tiene una columna `otorga/deniega`**: la regla es *deny by default*, la ausencia de fila es la negación. Con permisos negativos, saber si alguien puede hacer algo deja de ser una consulta y pasa a ser una resolución de precedencias entre roles, y nadie en el equipo puede explicar por qué un botón está deshabilitado. (AWS IAM sí tiene deny explícito; su tabla de precedencias es exactamente la complejidad que estamos eligiendo no comprar.)
 
 Por la misma razón los conjuntos de permisos son **planos**: `responsable` no hereda de `colaborador`, tiene sus filas escritas. Son unas decenas de filas más en el seed, a cambio de que "¿qué puede hacer un colaborador?" sea siempre un `SELECT` que no cambia solo cuando alguien toca otro rol. En términos del estándar, es RBAC0 y no RBAC1.
 
 ### 5. Las tablas de asignación
 
 Las tres son la misma tupla `(usuario, rol, ámbito)`. Lo que cambia es dónde aplica, y ese "dónde" no es una columna: **es en qué tabla estás**. Por eso son tres tablas explícitas y no una sola polimórfica con `ambito_tipo`/`ambito_id`: cada una puede tener FKs reales contra su recurso, cosa que una columna polimórfica no permite.
+
+Las tres llevan una columna `rol_ambito` con un `CHECK` que la fija a un valor constante (`'plataforma'`, `'estudio'`, `'obra'` respectivamente) y una FK compuesta `(rol_id, rol_ambito)` contra `rol (id, ambito)`. No aporta información —siempre vale lo mismo en toda la tabla—: es puramente el mecanismo con el que la base cumple lo que dice la §11, que en el padrón de un estudio no se pueda meter un rol de obra. Sin esa columna, la única forma de escribir esa regla sería un trigger o una validación en Python.
 
 **`usuario_plataforma`** — el staff. En producción va a tener dos o tres filas para siempre. Quien está acá normalmente no está en ningún `usuario_estudio`: son poblaciones separadas. `rol_id` va dentro de la PK, así que soporta varios roles de plataforma el día que haya más de uno. **Ningún endpoint escribe en esta tabla**: el primer soporte entra por seed y los siguientes por migración. Es la tabla con más poder del sistema y ninguna historia pide administrarla por pantalla.
 
@@ -195,6 +206,8 @@ Los dos `is_active` significan cosas distintas y conviene no confundirlos nunca:
 - `usuario_estudio.is_active = FALSE` → se loguea normal, pero **ese estudio dejó de existir para esa persona**. Es "el arquitecto renunció al estudio A y sigue trabajando en el B".
 
 **`obra_miembro`** — el equipo de cada obra. PK `(obra_id, usuario_id)`: un rol por persona por obra. Es la tabla más consultada del sistema, porque de ella sale "mis obras", la primera pantalla después del login; necesita índice por `usuario_id`. Dos índices parciales expresan reglas del dominio directamente en el esquema: **un solo `responsable` por obra** y **un solo `cliente` por obra**.
+
+Para que esos dos índices se puedan escribir, la tabla lleva también `rol_codigo`, y la FK contra `rol` se extiende a `(rol_id, rol_ambito, rol_codigo)` → `rol (id, ambito, codigo)`. La razón es que un índice parcial de Postgres necesita una **condición literal**, y lo único que hay en la fila es `rol_id`: un número que sale del seed y del que el esquema no puede hablar. Con el código denormalizado, la regla se escribe tal como se lee —`UNIQUE (obra_id) WHERE rol_codigo = 'responsable'`— y la FK compuesta impide que ese código se desincronice del rol al que apunta. Es la misma técnica que ya se usa dos veces en esta tabla, aplicada una tercera.
 
 La columna **`estudio_id` es redundante a propósito**. Con ella, dos FKs compuestas convierten una regla de negocio en una imposibilidad física:
 
