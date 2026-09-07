@@ -10,4 +10,4 @@ Pasos:
 2. Copiar la estructura de `docs/adr/template.md`.
 3. Completar Contexto / Decisión / Consecuencias / Alternativas descartadas con la decisión sobre: $ARGUMENTS
 4. Guardar como `docs/adr/000N-<slug-corto-en-ingles>.md`, estado inicial **Propuesta**.
-5. Nunca editar una ADR con estado **Aceptado**: si esta decisión reemplaza una anterior, decirlo explícitamente en "Contexto" (link a la ADR anterior) y, si corresponde, actualizar el estado de la ADR vieja a **Superada por ADR-00N** (eso sí se puede editar: es metadato de estado, no la decisión en sí).
+5. Si esta decisión reemplaza o corrige una anterior, decirlo explícitamente en "Contexto" con un link a la ADR anterior. Las ADR se pueden editar: si el ajuste es chico, actualizá la que ya existe; si es un cambio de fondo, escribí una nueva y marcá la vieja como **Reemplazada por ADR-00N**.

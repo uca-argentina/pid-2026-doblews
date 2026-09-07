@@ -39,7 +39,7 @@ No negociables, ver [docs/reglas-de-trabajo.md](docs/reglas-de-trabajo.md): bran
 
 Antes de proponer cualquier cambio de arquitectura o de modelo de datos: **leer `docs/adr/` primero**.
 
-Toda decisión nueva se registra como una ADR nueva (usar [docs/adr/template.md](docs/adr/template.md)). Una ADR aceptada **no se edita** — si cambia, se supersede con una ADR nueva que lo diga explícitamente.
+Toda decisión nueva se registra como una ADR nueva (usar [docs/adr/template.md](docs/adr/template.md)). **Las ADR se editan**: el proyecto está en desarrollo y una decisión se afina mientras se implementa. Si lo que cambia es el fondo —se decide otra cosa, no se precisa lo mismo— conviene escribir una ADR nueva que la reemplace, para no perder por qué se había decidido lo anterior.
 
 ## Subdirectorios
 
