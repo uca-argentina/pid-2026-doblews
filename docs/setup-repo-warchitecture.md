@@ -516,7 +516,7 @@ git push
 ## Fase 11 — CI (lint + build + tests, sin deploy)
 
 Este es el primero de los cuatro pasos que quedaban pendientes, porque es el único que no depende de
-Azure y el que hace que tu regla de "review cruzada obligatoria" sea real y no un acuerdo de palabra.
+Azure y el que pone una verificación automática en cada PR, que es lo que reemplaza a la review manual.
 
 `.github/workflows/ci.yml` — pedíselo a Claude Code, que ya conoce el stack y las reglas de trabajo.
 El contrato:
