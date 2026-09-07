@@ -161,7 +161,11 @@ Notas:
 
 - Los PNG del DER **no** los traigas: `der.mmd` es la fuente, el PNG es derivado.
 - `models_sprint_1.py` queda con sufijo `.reference` porque es el modelo **viejo** — material de
-  consulta, no código vivo. Se borra cuando escribas los modelos reales en la Fase 8.
+  consulta, no código vivo.
+- **Actualización 2026-09-06:** `ddl-sprint-1.sql`, `models_sprint_1.py.reference` y
+  `pruebas-invariantes.sql` **ya fueron eliminados del repo**: describían el modelo de un solo
+  estudio que [ADR-002](adr/0002-authorization-model.md) reemplazó. Si volvés a correr esta fase,
+  no los copies. Están en el historial de git si hace falta consultarlos.
 - El `.docx` es un binario en git. Para un archivo de la cátedra que casi no cambia, está bien.
 
 Después de copiar, dejá la carpeta de OneDrive quieta: a partir de acá el repo es la fuente de verdad.
@@ -413,9 +417,13 @@ git add . && git commit -m "chore: add docker compose and env template"
 
 ## Fase 8 — Modelos + primera migración
 
-Escribí los modelos SQLAlchemy en `backend/app/models/` con lo que ya está cerrado: `usuario`, `rol`,
-`usuario_rol`, `obra`, `obra_miembro`, `material`. `docs/models_sprint_1.py.reference` sirve de base.
-Dejá afuera `componente_constructivo` y todo lo relacionado — eso espera a la Fase 0.1.
+Escribí los modelos SQLAlchemy en `backend/app/models/` con lo que ya está cerrado, que es todo el
+modelo de [ADR-002](adr/0002-authorization-model.md): `estudio`, `usuario`, `rol`, `permiso`,
+`rol_permiso`, `usuario_plataforma`, `usuario_estudio`, `obra`, `obra_miembro`. Sumá `unidad_medida`,
+que también está cerrada.
+
+Dejá afuera `material` y `componente_constructivo`: siguen abiertos (ver
+[modelo-datos-sprint-1.md §5](modelo-datos-sprint-1.md)).
 
 ```bash
 cd backend
@@ -423,10 +431,11 @@ uv run alembic revision --autogenerate -m "initial schema: users, roles, obras, 
 uv run alembic upgrade head
 ```
 
-Verificá contra tus invariantes:
+Verificá contra tus invariantes (el slash command `/revisar-invariantes` hace esto mismo):
 
 ```bash
-docker compose exec -T db psql -U warchitecture -d warchitecture < ../docs/pruebas-invariantes.sql
+uv run alembic check   # modelos y migraciones no divergieron
+uv run pytest          # invariantes, aislamiento entre estudios, seed de permisos
 ```
 
 ```bash
@@ -659,12 +668,12 @@ Hacé un merge de prueba `dev → main` y confirmá que ambos deploys corren.
 - [ ] `docker compose up -d && uv run uvicorn app.main:app --reload` levanta y `/health` responde
 - [ ] `npm run dev` levanta el front y pega contra el back local
 - [ ] `alembic upgrade head` corre limpio sobre una base vacía
-- [ ] `pruebas-invariantes.sql` pasa
+- [ ] `alembic check` no reporta diferencias y `pytest` pasa (invariantes + aislamiento entre estudios)
 - [ ] Un PR de prueba dispara CI y no puede mergearse sin approval
 - [ ] Un merge a `main` deploya solo, y `https://app-warchitecture-api.azurewebsites.net/health` responde
 - [ ] El front en Azure carga y le pega al back de Azure (CORS configurado)
 - [ ] `.env` no está en git: `git ls-files | grep -c '^\.env$'` devuelve `0`
-- [ ] ADR-0002 (Azure) escrita, ADR-0001 marcada como superseded en parte
+- [ ] ADR-0003 (Azure) escrita, ADR-0001 marcada como superseded en parte — el número 0002 ya lo tomó el modelo de autorización
 - [ ] `reglas-de-trabajo.md` actualizado (§6 ambientes, DoD punto 4)
 - [ ] `dev` protegida igual que `main`, PRs targeteando `dev` por default
 
