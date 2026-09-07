@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # Only pytest needs it: the app has to boot on a machine that never runs tests.
     test_database_url: str | None = None
 
+    # Password given to every account created by app/db/seed_dev.py. Only that
+    # script reads it, and it has a default so nobody needs to define it to boot.
+    seed_password: str = "warchitecture"
+
     jwt_secret: str
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
