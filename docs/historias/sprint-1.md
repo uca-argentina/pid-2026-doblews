@@ -18,6 +18,13 @@ El modelo de usuarios, roles y permisos está definido en [ADR-002](../adr/0002-
 - La moneda de los precios es **ARS fijo**, pero el campo `currency` se modela desde ahora para soportar otras monedas más adelante.
 - Todos los ABM usan **baja lógica** (`is_active`), nunca `DELETE` físico.
 
+El modelo del cómputo de materiales está definido en [ADR-003](../adr/0003-recipe-catalog.md), que cierra lo que HU-4 y HU-5 tenían bloqueado:
+
+- El **catálogo de materiales y recetas es del sistema**, no de cada estudio: se siembra por migración, es igual para todos y es de solo lectura. Así la aplicación sirve desde el primer login, sin que nadie cargue proporciones a mano.
+- Una **receta** dice qué lleva **1 unidad** de algo ("1 m² de pared de 15cm lleva 60 ladrillos y 0,25 bolsas de cemento"). La obra guarda **qué recetas usa y en qué cantidad**, y de ahí sale el cómputo.
+- **No hay composición de componentes dentro de componentes.** Se evaluó, existe en el software del rubro, y se descartó.
+- El **precio de referencia es único y global**. Precios por estudio o por proveedor quedan para más adelante.
+
 ---
 
 ## T-01 — Definir el nombre de la aplicación
@@ -38,6 +45,7 @@ Tarea de equipo, no historia de usuario. Timebox: 30 minutos. Bloquea el repo, F
 
 - Existe la tabla `unit_of_measure` con `id`, `code` (m2, m3, ml, u, kg, bolsa, lt), `name`, `abbreviation`.
 - Se carga por migración/seed, no por pantalla.
+- El catálogo es **global a la plataforma**, no por estudio: un metro cuadrado es un metro cuadrado en todos ([ADR-003](../adr/0003-recipe-catalog.md)).
 - Hay un endpoint `GET /units-of-measure` que devuelve la lista.
 - En el front, cualquier campo "unidad" es un `<select>` alimentado por ese endpoint. Nunca texto libre.
 
@@ -116,43 +124,46 @@ Tarea de equipo, no historia de usuario. Timebox: 30 minutos. Bloquea el repo, F
 
 ---
 
-## HU-4 — Gestionar materiales (ABM)
+## HU-4 — Consultar el catálogo de materiales
 
-> Como **arquitecto**, quiero mantener un catálogo de materiales con su unidad y precio de referencia para poder usarlos después en los cómputos de mis obras.
+> Como **arquitecto**, quiero consultar el catálogo de materiales del sistema con su unidad y precio de referencia, para saber con qué insumos y a qué costo se calculan los cómputos de mis obras.
 
 **Criterios de aceptación**
 
 - Listado de materiales con nombre, unidad de medida y precio de referencia.
-- Alta/edición: nombre (obligatorio, único), unidad de medida (del catálogo HU-0), precio de referencia (numérico ≥ 0, con decimales), moneda (fija en ARS por ahora, campo modelado para el futuro).
-- El precio se guarda como decimal (nunca float) y se muestra formateado en pesos.
+- El catálogo es **del sistema**, igual para todos los estudios y de **solo lectura**: se carga por migración/seed, no por pantalla. Ningún endpoint escribe en él.
 - Buscador por nombre en el listado.
-- Baja lógica.
-- El catálogo es **de mi estudio**, no por obra y no compartido entre estudios: los precios son información sensible de cada estudio.
+- El precio se guarda como decimal (nunca float) y se muestra formateado en pesos. La moneda es ARS fija, con el campo modelado para el futuro.
+- La sección exige el permiso `catalog.view`.
+- El listado se ve bien en 375px de ancho.
 
-**Fuera de alcance:** precios por proveedor, importación CSV, historial de precios, categorías/rubros, multi-moneda real.
+**Fuera de alcance:** alta, edición y baja de materiales por pantalla; catálogo o precios propios de cada estudio; precios por proveedor; importación CSV; historial de precios; categorías/rubros; multi-moneda real.
 **Depende de:** HU-0 y HU-1. Se desarrolla en paralelo con HU-2/HU-3.
-**Estimación:** 1,5 días.
-**Bloqueada:** falta decidir el modelo de `material` bajo multi-tenant (catálogo por estudio, semilla global copiada, o catálogo global con precios por estudio). Ver [modelo-datos §5](../modelo-datos-sprint-1.md). Decisión chica, pero hay que tomarla antes de empezar.
+**Estimación:** 0,5 día — bajó de 1,5 al dejar de ser un ABM.
+**Definida por:** [ADR-003](../adr/0003-recipe-catalog.md). El catálogo pasó a ser de la plataforma para que la aplicación sirva desde el minuto cero: si fuera de cada estudio, cada uno arrancaría con una pantalla en blanco pidiendo cargar a mano las proporciones del rubro.
 
 ---
 
-## HU-5 — Registrar componentes constructivos en una obra
+## HU-5 — Computar los materiales de una obra
 
-> Como **arquitecto**, quiero registrar los componentes constructivos de una obra con su medida y unidad para tener listado y cuantificado todo lo que hay que construir.
+> Como **arquitecto**, quiero registrar qué recetas constructivas lleva mi obra y en qué cantidad, para saber cuántos materiales necesito y cuánto me van a costar.
 
 **Criterios de aceptación**
 
-- Dentro del detalle de una obra hay una sección "Componentes".
-- Alta/edición: descripción (obligatoria), medida (numérica > 0), unidad de medida (catálogo HU-0).
-- El listado muestra los componentes de esa obra y solo de esa.
-- Puedo editar y dar de baja un componente.
-- Si la obra no tiene componentes, veo un estado vacío con un llamado a la acción, no una tabla en blanco.
+- Dentro del detalle de una obra hay una sección "Cómputo".
+- Alta: elijo una receta del catálogo del sistema y cargo la cantidad (numérica > 0), expresada en la unidad de esa receta. Opcionalmente una nota que la ubique ("planta baja", "sector A").
+- El listado muestra las líneas de esa obra y solo de esa.
+- Puedo editar la cantidad de una línea y darla de baja (baja lógica).
+- La obra muestra el **cómputo de materiales**: por cada material, la cantidad total que hace falta y su costo estimado, sumando todas las líneas.
+- Una obra puede tener **dos líneas de la misma receta** —computar por sectores es normal— y las cantidades se suman.
+- Si la obra no tiene líneas cargadas, veo un estado vacío con un llamado a la acción, no una tabla en blanco.
+- Ver el cómputo exige `project.recipe.view` y modificarlo exige `project.recipe.manage`. **El costo exige `project.cost.view`, que el rol `client` no tiene**: el cliente ve cuántos materiales lleva su obra, no lo que le cuestan al estudio.
 - El alta se puede completar entera desde el celular.
 
-**Fuera de alcance:** recetas constructivas, cálculo de materiales, jerarquía EDT, costos.
-**Depende de:** HU-0 y HU-3.
-**Estimación:** 1,5 días.
-**Bloqueada:** hay **dos modelos de componente en discusión** —componente propio de cada obra con jerarquía (`parent_id`), o plantilla global reutilizable con receta de materiales y cantidad usada por obra—. No son variantes: son definiciones distintas de qué es un componente. Ver [modelo-datos §5](../modelo-datos-sprint-1.md). **Es la decisión más urgente del sprint**: bloquea la historia que está al final del camino crítico, así que tomarla el día 1, no el día 8.
+**Fuera de alcance:** crear o editar recetas (el catálogo es del sistema); personalizar una receta para una obra; composición de recetas dentro de recetas; mano de obra y equipo; jerarquía EDT; costos indirectos y utilidad.
+**Depende de:** HU-0, HU-1, HU-3 y T-03 (el permiso de costo).
+**Estimación:** 2 días — subió de 1,5 porque además del alta ahora entrega el cómputo.
+**Definida por:** [ADR-003](../adr/0003-recipe-catalog.md). Las recetas pasaron de estar fuera de alcance a ser el centro de la historia: son la promesa del producto. Se descartó la composición de componentes dentro de componentes.
 
 ---
 
@@ -207,7 +218,7 @@ Tarea de equipo, no historia de usuario. Timebox: 30 minutos. Bloquea el repo, F
 
 | Días | Persona A | Persona B |
 |---|---|---|
-| 1 | Actualizar historias + cerrar las decisiones de modelo de `material` y `building_component` (juntos) | idem |
+| 1 | Actualizar historias + cerrar las decisiones de modelo de `material` y `building_component` (juntos) — **hecho**, ver [ADR-003](../adr/0003-recipe-catalog.md) | idem |
 | 2-3 | T-02 (esquema + seeds: permisos, roles, unidades, 2 estudios) | HU-0 + theme y layout de Mantine + **deploy andando** |
 | 4-5 | HU-1 backend (auth, JWT) | HU-1 front (login, guard, selector de estudio) |
 | 6 | **T-03 (motor de autorización)** — de a dos | idem |

@@ -33,9 +33,9 @@ Tres reglas ordenan todo lo que sigue. Si aparece una discusión de modelado, se
 |---|---|---|
 | Estudios, usuarios, roles, permisos, asignaciones | **Cerrado** | [ADR-002](adr/0002-authorization-model.md) |
 | `project` (campos, `firm_id`, membresía) | **Cerrado** | [ADR-002](adr/0002-authorization-model.md) §3 |
-| `unit_of_measure` | Cerrado en lo esencial | HU-0, §5 de este documento |
-| `material` | **Abierto** — multi-tenant cambió el supuesto de catálogo global | §5 |
-| `building_component` | **Abierto** — hay dos modelos en discusión | §5 |
+| `unit_of_measure` | **Cerrado** | [ADR-003](adr/0003-recipe-catalog.md) |
+| `resource` (antes `material`) | **Cerrado** | [ADR-003](adr/0003-recipe-catalog.md) |
+| `recipe`, `recipe_resource`, `project_recipe` (antes `building_component`) | **Cerrado** | [ADR-003](adr/0003-recipe-catalog.md) |
 | Presupuestos, planificación, proveedores | Fuera de alcance | — |
 
 ---
@@ -136,49 +136,24 @@ No duplicamos diccionarios de datos: cada tabla se define en un solo lugar.
 | Tablas | Fuente |
 |---|---|
 | `firm`, `account`, `role`, `permission`, `role_permission`, `platform_member`, `firm_member`, `project`, `project_member` | [ADR-002](adr/0002-authorization-model.md) §3-§7 |
+| `unit_of_measure`, `resource`, `recipe`, `recipe_resource`, `project_recipe` | [ADR-003](adr/0003-recipe-catalog.md) §2 |
 | El resto | Todavía no está definido — ver §5 |
 
-El diagrama completo del modelo cerrado está en ADR-002 §3. `docs/diagrams/der.mmd` todavía refleja el modelo anterior y hay que actualizarlo.
+Cada ADR lleva su propio diagrama: ADR-002 §3 para autorización y obras, ADR-003 §2 para el cómputo. No hay un diagrama global aparte — `docs/diagrams/der.mmd` se eliminó porque reflejaba el modelo anterior a multi-tenant y contradecía a las dos.
 
 ---
 
 ## 5. Lo que queda abierto
 
-### `unit_of_measure` (HU-0)
+**Nada del Sprint 1.** Las tres entradas que vivían acá —`unit_of_measure`, `material` y `building_component`— se cerraron en [ADR-003](adr/0003-recipe-catalog.md), que también renombró dos de ellas:
 
-Catálogo cerrado, global a la plataforma: un metro cuadrado es un metro cuadrado en todos los estudios. Se carga por seed, no por pantalla.
+| Lo que decía este documento | Cómo quedó |
+|---|---|
+| `unit_of_measure`, con la duda de si era global o por estudio | **Global a la plataforma**, sembrada. Un metro cuadrado es un metro cuadrado en todos los estudios |
+| `material`, con tres opciones sobre a quién pertenece | **`resource`**, del sistema, con una columna `type` (`material` / `labor` / `equipment`) que permite que una receta futura incluya mano de obra y equipo sin tablas nuevas |
+| `building_component`, con dos modelos incompatibles en discusión | **`recipe`** + **`recipe_resource`** (el catálogo: qué lleva 1 unidad) y **`project_recipe`** (la obra: cuánta cantidad). Sin composición recursiva |
 
-| Columna | Tipo | Notas |
-|---|---|---|
-| `id` | `BIGINT` identity | |
-| `code` | `VARCHAR(10)` | UNIQUE. `m2`, `m3`, `ml`, `u`, `kg`, `bolsa`, `lt` |
-| `name` | `VARCHAR(60)` | "Metro cuadrado" |
-| `abbreviation` | `VARCHAR(10)` | Lo que se muestra al lado del número: "m²" |
-| `magnitude` | `VARCHAR(20)` | `superficie`, `volumen`, `longitud`, `masa`, `conteo`. No lo pide el sprint; entra porque el seed lo llena gratis y sin él, el día de las recetas, no hay forma de saber que convertir m² a bolsas necesita un factor y m² a m³ no tiene sentido |
-| `is_active` | `BOOLEAN` | Permite retirar una unidad sin romper los registros que la usan |
-
-**Lo único a confirmar:** que efectivamente sea global y no por estudio. Es lo razonable, pero hay que decirlo explícitamente.
-
-### `material` (HU-4) — abierto
-
-La decisión anterior era "catálogo global, no por obra". **Multi-tenant invalida ese supuesto**: los materiales y sobre todo sus precios son información sensible de cada estudio, y no pueden compartirse entre tenants.
-
-Hay que decidir entre:
-
-- **Catálogo por estudio** (`material.firm_id`): lo más simple y lo más seguro. Cada estudio arranca vacío.
-- **Semilla global + copia por estudio**: al crearse un estudio se le copia un catálogo base. Mejor experiencia inicial, más maquinaria.
-- **Catálogo global compartido + precios por estudio**: dos tablas. Es el modelo correcto a largo plazo (habilita la normalización de catálogos de proveedores del Módulo 2), y el más caro ahora.
-
-Las convenciones de §3 ya definen el resto: `NUMERIC(14,2)` con `CHECK >= 0`, `currency` ISO, unicidad parcial del nombre entre activos, `price_updated_at` como gancho de la futura tabla de histórico.
-
-### `building_component` (HU-5) — abierto
-
-Hay **dos modelos distintos** dando vueltas y hay que elegir uno:
-
-- **Componente por obra, con jerarquía** (`project_id`, `parent_id` self-referencial, `description`, `measure`, `unit_of_measure_id`). El componente es una línea del cómputo de esa obra. La FK compuesta de §3.8 garantiza que un componente y su padre son de la misma obra.
-- **Componente como plantilla global + uso por obra** (`building_component` como catálogo tipo "Pared de 15cm" + `component_material` como receta + `project_component` como cantidad usada en cada obra). Es lo que está hoy en `docs/diagrams/der.mmd`.
-
-No son variantes del mismo modelo: son decisiones distintas sobre qué es un componente. La segunda adelanta parte del Módulo 2 (recetas constructivas). Hay que resolverlo antes de HU-5 y registrarlo como ADR.
+Lo que sigue abierto es de módulos posteriores y no bloquea a ninguna historia del sprint: recetas propias de cada estudio, precios por estudio y por proveedor, histórico de precios, mano de obra y equipo sembrados, capítulos para agrupar, y composición de recetas. ADR-003 §Consecuencias lista cada uno con la condición bajo la cual se revisa.
 
 ---
 
