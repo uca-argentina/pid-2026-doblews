@@ -11,11 +11,11 @@ from types import SimpleNamespace
 
 import pytest
 import sqlalchemy as sa
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import Connection, Engine, text
 from sqlalchemy.engine import make_url
 
-from alembic import command
-from alembic.config import Config
 from app.core.config import get_settings
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
