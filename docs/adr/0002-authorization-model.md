@@ -84,26 +84,55 @@ Dos consecuencias que conviene tener a mano al leer el resto:
 
 ```mermaid
 erDiagram
-    FIRM ||--o{ FIRM_MEMBER : "tiene en su padron"
-    FIRM ||--o{ PROJECT : "es dueño de"
-    ACCOUNT ||--o{ FIRM_MEMBER : "pertenece a"
-    ACCOUNT ||--o{ PLATFORM_MEMBER : "es staff"
-    FIRM_MEMBER ||--o{ PROJECT_MEMBER : "habilita a participar"
-    PROJECT ||--o{ PROJECT_MEMBER : "tiene equipo"
-    ROLE ||--o{ PLATFORM_MEMBER : "otorgado como"
-    ROLE ||--o{ FIRM_MEMBER : "otorgado como"
-    ROLE ||--o{ PROJECT_MEMBER : "otorgado como"
-    ROLE ||--o{ ROLE_PERMISSION : "concede"
-    PERMISSION ||--o{ ROLE_PERMISSION : "incluido en"
+    PERMISSION  ||--o{ ROLE_PERMISSION : "incluido en"
+    ROLE        ||--o{ ROLE_PERMISSION : "concede"
+    ROLE        ||--o{ PLATFORM_MEMBER : "otorga"
+    ACCOUNT     ||--o{ PLATFORM_MEMBER : "es staff"
+    ACCOUNT     ||--o{ FIRM_MEMBER : "pertenece a"
+    FIRM        ||--o{ FIRM_MEMBER : "padron"
+    ROLE        ||--o{ FIRM_MEMBER : "otorga"
+    FIRM        ||--o{ PROJECT : "posee"
+    FIRM_MEMBER ||--o{ PROJECT_MEMBER : "habilita"
+    PROJECT     ||--o{ PROJECT_MEMBER : "equipo"
+    ROLE        ||--o{ PROJECT_MEMBER : "otorga"
+
+    PERMISSION {
+        bigint id PK
+        varchar code "UK con scope"
+        varchar scope "en que nivel aplica"
+        text description
+    }
+
+    ROLE {
+        bigint id PK
+        varchar code "UK con scope"
+        varchar scope "platform | firm | project"
+        varchar name "etiqueta de UI"
+        text description
+        boolean is_system "sembrado por migracion"
+    }
+
+    ROLE_PERMISSION {
+        bigint role_id PK,FK
+        bigint permission_id PK,FK
+        varchar scope FK "fuerza el mismo scope"
+    }
 
     ACCOUNT {
         bigint id PK
         varchar name
-        varchar email UK "identidad global, guardado en minusculas"
+        varchar email UK "identidad global"
         varchar password_hash
-        boolean is_active "baja de la plataforma"
+        boolean is_active "baja de plataforma"
         timestamptz created_at
         timestamptz updated_at
+    }
+
+    PLATFORM_MEMBER {
+        bigint account_id PK,FK
+        bigint role_id PK,FK
+        varchar role_scope FK "fijo: platform"
+        timestamptz assigned_at
     }
 
     FIRM {
@@ -111,57 +140,28 @@ erDiagram
         varchar name
         varchar contact_email
         varchar phone
-        boolean is_active "suspension por el soporte"
+        boolean is_active "suspension"
         timestamptz created_at
         timestamptz updated_at
-    }
-
-    ROLE {
-        bigint id PK
-        varchar code "UK compuesto con scope"
-        varchar scope "platform | firm | project"
-        varchar name "etiqueta para la UI"
-        text description
-        boolean is_system "sembrado por migracion, no editable"
-    }
-
-    PERMISSION {
-        bigint id PK
-        varchar code "UK compuesto con scope"
-        varchar scope "en que nivel aplica"
-        text description
-    }
-
-    ROLE_PERMISSION {
-        bigint role_id PK,FK
-        bigint permission_id PK,FK
-        varchar scope FK "compartido: fuerza role.scope = permission.scope"
-    }
-
-    PLATFORM_MEMBER {
-        bigint account_id PK,FK
-        bigint role_id PK,FK "solo scope platform"
-        varchar role_scope FK "fijo en platform por CHECK"
-        timestamptz assigned_at
     }
 
     FIRM_MEMBER {
         bigint firm_id PK,FK
         bigint account_id PK,FK
-        bigint role_id FK "solo scope firm"
-        varchar role_scope FK "fijo en firm por CHECK"
+        bigint role_id FK
+        varchar role_scope FK "fijo: firm"
         boolean is_active "baja del padron"
         timestamptz joined_at
     }
 
     PROJECT {
         bigint id PK
-        bigint firm_id FK "el tenant, presente en TODA query"
+        bigint firm_id FK "el tenant"
         varchar name
         text description
         varchar address
         date estimated_start_date
-        bigint created_by FK "account"
+        bigint created_by FK
         boolean is_active
         timestamptz created_at
         timestamptz updated_at
@@ -170,10 +170,10 @@ erDiagram
     PROJECT_MEMBER {
         bigint project_id PK,FK
         bigint account_id PK,FK
-        bigint firm_id FK "redundante: ata las dos FKs compuestas"
-        bigint role_id FK "solo scope project"
-        varchar role_scope FK "fijo en project por CHECK"
-        varchar role_code FK "redundante: condicion de los indices parciales"
+        bigint firm_id FK "ata las dos FKs"
+        bigint role_id FK
+        varchar role_scope FK "fijo: project"
+        varchar role_code FK "para los indices parciales"
         timestamptz joined_at
     }
 ```
