@@ -84,7 +84,7 @@ Tarea de equipo, no historia de usuario. Timebox: 30 minutos. Bloquea el repo, F
 - Baja del padrón: lógica. La persona deja de ver este estudio, pero sigue pudiendo loguearse y trabajar en otros. Sus asignaciones a obras de este estudio quedan inertes, **no se borran**: si la reincorporo, vuelven solas.
 - No puedo darme de baja a mí mismo ni quitarme el rol de `propietario`. Un estudio siempre tiene exactamente un propietario activo.
 - Un miembro con rol de estudio `cliente` solo puede recibir el rol `cliente` en las obras.
-- La sección exige el permiso `miembro.gestionar`: un `arquitecto` que entra por URL directa recibe 403; si el estudio de la URL no es suyo, recibe 404.
+- La sección exige los permisos de gestión del padrón (`miembro.agregar`, `miembro.editar_rol`, `miembro.quitar`; ver [ADR-002 §7](../adr/0002-authorization-model.md)): un `arquitecto`, que solo tiene `miembro.ver`, entra por URL directa y recibe 403; si el estudio de la URL no es suyo, recibe 404.
 - El listado se ve bien en 375px de ancho.
 
 **Fuera de alcance:** invitaciones por email, recuperación de contraseña, roles a medida, transferencia de propiedad del estudio, foto de perfil.
