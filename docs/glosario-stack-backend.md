@@ -56,21 +56,37 @@ variables de entorno o de un `.env`, con el mismo tipado y validación que Pydan
 variables de entorno, no hardcodeado" que pide la ADR-001. Todavía no está escrito en el repo
 (`app/core/config.py` sigue vacío).
 
-## Capa de autenticación (para HU-1, todavía sin código)
+## Capa de autenticación
 
-**PyJWT** — genera y valida JWT (JSON Web Tokens): un token firmado que codifica quién es el usuario
-(y qué roles tiene) sin que el servidor tenga que guardar sesión en memoria. Al loguearse, el backend
-entrega un JWT; en cada request siguiente se manda ese token y el backend lo valida y confía en lo que
-dice adentro, sin ir a la base de nuevo.
+Las decisiones de esta capa están en [ADR-004](adr/0004-authentication.md); acá solo se explica qué
+hace cada librería.
 
-**passlib[bcrypt]** — hashea contraseñas. Nunca se guarda la contraseña tal cual en la base (si alguien
-roba la base, tendría todas las contraseñas en texto plano); se guarda un hash — una transformación de
-un solo sentido, no reversible. `bcrypt` es el algoritmo específico, diseñado para ser lento a propósito
+**PyJWT** — genera y valida JWT (JSON Web Tokens): un token firmado, que el servidor puede verificar
+sin guardar ninguna sesión en memoria. Al loguearse, el backend entrega un JWT; en cada request
+siguiente se manda ese token y el backend verifica la firma.
+
+Dos aclaraciones importantes, porque es donde este stack se aparta de lo que dice cualquier tutorial de
+JWT:
+
+- **El token solo dice _quién sos_** (`sub`, con el id de cuenta). No lleva roles ni permisos.
+- **El backend no confía en el token para nada más.** Verificada la firma, va a la base, carga la
+  cuenta y resuelve los permisos ahí, en cada request. Es lo que exige
+  [ADR-002 §9](adr/0002-authorization-model.md), y el motivo es concreto: si los permisos viajaran
+  adentro del token, dar de baja a alguien o cambiarle el rol no tendría efecto hasta que su token
+  venciera. HU-2 promete lo contrario.
+
+**bcrypt** — hashea contraseñas. Nunca se guarda la contraseña tal cual en la base (si alguien roba la
+base, tendría todas las contraseñas en texto plano); se guarda un hash — una transformación de un solo
+sentido, no reversible. `bcrypt` es el algoritmo específico, diseñado para ser lento a propósito
 (dificulta probar contraseñas por fuerza bruta).
+
+Se usa la librería `bcrypt` directamente y **no** `passlib[bcrypt]`, que es lo que suele recomendarse:
+passlib no tiene release desde 2020 y se rompe contra bcrypt 5.x, levantando un `ValueError` dentro de
+su propia detección de versión.
 
 **python-multipart** — le permite a FastAPI leer datos de formularios HTML normales
 (`multipart/form-data`), distinto de JSON. Es requisito técnico de FastAPI para ciertos flujos de auth
-con formularios.
+con formularios. Nuestro login recibe JSON, así que hoy no se usa.
 
 ## Capa de testing y calidad
 

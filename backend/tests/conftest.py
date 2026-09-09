@@ -13,10 +13,16 @@ import pytest
 import sqlalchemy as sa
 from alembic import command
 from alembic.config import Config
+from fastapi.testclient import TestClient
 from sqlalchemy import Connection, Engine, text
 from sqlalchemy.engine import make_url
+from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.security import hash_password
+from app.core.token import create_access_token
+from app.db.session import get_db
+from app.main import app
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
@@ -184,3 +190,70 @@ def add_project_member(db: Connection, role_id: dict[tuple[str, str], int]):
         )
 
     return _add
+
+
+# The password every account in the API tests answers to.
+TEST_PASSWORD = "test-password"
+
+
+@pytest.fixture(scope="session")
+def password_hash() -> str:
+    """Hashed once for the whole run, not once per test.
+
+    bcrypt is slow by design — around 250 ms a call — so hashing per test would
+    make this file the slowest thing in the suite for no added coverage.
+    """
+    return hash_password(TEST_PASSWORD)
+
+
+@pytest.fixture
+def client(db: Connection) -> Iterator[TestClient]:
+    """A TestClient whose endpoints run on the test's own connection.
+
+    Without the override the app would open its own connections against the
+    development database: the rows this test inserted would be invisible to the
+    endpoint, and anything the endpoint wrote would outlive the test.
+
+    A Session per request, exactly as in production. Binding it to a Connection
+    that already has a transaction open makes SQLAlchemy 2.0 open a SAVEPOINT
+    instead of a second transaction (join_transaction_mode defaults to
+    "conditional_savepoint"), so a commit inside a request cannot escape the
+    rollback in the db fixture. The 1.3-era recipe of nesting transactions by
+    hand and re-opening them from an after_transaction_end listener is not only
+    unnecessary here, it breaks this.
+    """
+
+    def override_get_db() -> Iterator[Session]:
+        session = Session(bind=db, autoflush=False, expire_on_commit=False)
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+    with TestClient(app) as test_client:
+        yield test_client
+    # pop and not clear(): another fixture may be overriding something else.
+    app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.fixture
+def usable_passwords(db: Connection, password_hash: str) -> str:
+    """Give every seeded account a real hash, and return the password.
+
+    The world fixture stores 'not-a-real-hash' on purpose, since its own tests
+    are about what the database refuses. Logging in needs something bcrypt can
+    actually verify.
+    """
+    db.execute(text("UPDATE account SET password_hash = :hash"), {"hash": password_hash})
+    return TEST_PASSWORD
+
+
+@pytest.fixture
+def auth_header():
+    """account id -> the Authorization header for it, signed for real."""
+
+    def _header(account_id: int) -> dict[str, str]:
+        return {"Authorization": f"Bearer {create_access_token(account_id)}"}
+
+    return _header
