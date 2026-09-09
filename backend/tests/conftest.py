@@ -207,6 +207,22 @@ def password_hash() -> str:
 
 
 @pytest.fixture
+def db_session(db: Connection) -> Iterator[Session]:
+    """An ORM Session on the test's own connection, for testing services directly.
+
+    The db fixture hands out a raw Connection because the oldest tests here are
+    about what the database refuses. Service functions take a Session, so this
+    wraps the same connection in one: both see the same rows and both are undone
+    by the same rollback.
+    """
+    session = Session(bind=db, autoflush=False, expire_on_commit=False)
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+@pytest.fixture
 def client(db: Connection) -> Iterator[TestClient]:
     """A TestClient whose endpoints run on the test's own connection.
 
