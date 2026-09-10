@@ -30,6 +30,11 @@ NO_PERMISSION_REQUIRED = {
         "are open to them. There is no permission to demand, and what it returns is already "
         "filtered to the caller's own roster rows."
     ),
+    "GET /units-of-measure": (
+        "Global platform catalogue (HU-0, ADR-003 section 7): no firm_id/project_id in the "
+        "path, so there is no scope to hang a requires(...) permission off. Every firm role "
+        "needs to read it to fill a 'unidad' field, and it holds no firm's data."
+    ),
 }
 
 # How to build a URL for a route that takes path parameters. A parameter missing
