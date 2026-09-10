@@ -40,7 +40,10 @@ jobs:
       # variables, which is exactly how the deploy works too.
       DATABASE_URL: postgresql+psycopg://warchitecture:warchitecture@localhost:5432/warchitecture
       TEST_DATABASE_URL: postgresql+psycopg://warchitecture:warchitecture@localhost:5432/warchitecture_test
-      JWT_SECRET: ci-only-not-a-real-secret
+      # Fixed and public on purpose: CI signs tokens it verifies itself. Still
+      # 32 bytes or more, so the suite does not run under a warning it would
+      # then learn to ignore.
+      JWT_SECRET: ci-only-not-a-real-secret-at-least-32-bytes-long
 
     defaults:
       run:
