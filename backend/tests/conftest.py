@@ -44,6 +44,33 @@ def _create_database_if_missing(url: sa.URL) -> None:
     admin.dispose()
 
 
+def _clear_leftover_rows(url: sa.URL) -> None:
+    """Empty the test database before the migrations run down.
+
+    The catalogue migration's downgrade deletes the roles it seeded, so a single
+    stray platform_member row pointing at one makes it fail on a foreign key.
+    That surfaces as every test in the suite erroring during setup, with a
+    message naming neither the cause nor the fix.
+
+    Rows only get here by accident — a seed script aimed at the wrong database,
+    a run killed mid-test — but this database exists to be thrown away, so
+    clearing it is always safe and costs less than diagnosing it by hand.
+
+    Read from the database rather than from Base.metadata, so a table left over
+    by a half-applied migration is cleared too. alembic_version is left alone:
+    the downgrade needs to know where it is starting from.
+    """
+    engine = sa.create_engine(url)
+    with engine.begin() as connection:
+        tables = [
+            name for name in sa.inspect(connection).get_table_names() if name != "alembic_version"
+        ]
+        if tables:
+            quoted = ", ".join(f'"{name}"' for name in tables)
+            connection.execute(text(f"TRUNCATE {quoted} CASCADE"))
+    engine.dispose()
+
+
 @pytest.fixture(scope="session")
 def engine() -> Iterator[Engine]:
     """The test database, built by the migrations themselves.
@@ -58,6 +85,7 @@ def engine() -> Iterator[Engine]:
 
     url = make_url(settings.test_database_url)
     _create_database_if_missing(url)
+    _clear_leftover_rows(url)
 
     config = Config(str(BACKEND_DIR / "alembic.ini"))
     # The channel alembic/env.py reads, so the suite never touches DATABASE_URL.

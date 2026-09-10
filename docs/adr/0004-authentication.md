@@ -95,6 +95,7 @@ El paso 2 es una consulta por request contra una tabla indexada, y es el precio 
 - No se puede revocar una sesión antes de su expiración. Cambiar la contraseña de alguien **no** cierra sus sesiones abiertas.
 - Al usuario se lo desloguea cada 60 minutos.
 - `JWT_SECRET` es un secreto de producción de verdad: quien lo tenga puede firmar un token de cualquier cuenta. Nunca se commitea, y en el deploy se setea como variable de entorno.
+- Ese secreto tiene un **largo mínimo de 32 bytes**. Con HS256 la clave es el único material secreto que hay: si es corta, un solo token capturado alcanza para adivinarla offline por fuerza bruta y a partir de ahí firmar la sesión de cualquiera. RFC 7518 §3.2 lo exige y PyJWT avisa por consola en cada llamada cuando no se cumple. Los placeholders de `.env.example` y del workflow de CI cumplen el largo para que copiar y pegar no arranque mal; el de cada ambiente se genera con `openssl rand -hex 32`.
 - Rotar `JWT_SECRET` invalida todas las sesiones activas de golpe.
 
 **Queda pendiente de revisar, y bajo qué condición:**

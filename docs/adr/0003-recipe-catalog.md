@@ -1,7 +1,7 @@
 # ADR-003: Cómputo de materiales — catálogo del sistema de recetas y recursos
 
-**Estado:** Propuesta
-**Fecha:** 2026-09-07
+**Estado:** Aceptada
+**Fecha:** 2026-09-07 (aceptada 2026-09-09, al sembrarse sus permisos junto con T-03)
 **Contexto:** Modelo de datos del cómputo de materiales. Desbloquea HU-4 y HU-5 del Sprint 1, y es la base sobre la que se apoyan los presupuestos del Módulo 1.
 
 ---
