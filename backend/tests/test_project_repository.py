@@ -6,7 +6,6 @@ resolving it: what is under test is the query, not the catalogue.
 """
 
 import pytest
-from sqlalchemy import text
 
 from app.repositories.base import FirmScopedRepository
 from app.repositories.project import VIEW_ALL, ProjectRepository
@@ -15,22 +14,6 @@ from app.services.authz import firm_permissions
 
 MEMBER_ONLY = frozenset()
 SEES_EVERYTHING = frozenset({VIEW_ALL})
-
-
-@pytest.fixture
-def new_project(db):
-    """Another project, so "all of them" and "in name order" have something to say."""
-
-    def _new(firm_id: int, created_by: int, name: str, is_active: bool = True) -> int:
-        return db.execute(
-            text(
-                "INSERT INTO project (firm_id, name, created_by, is_active)"
-                " VALUES (:f, :n, :c, :a) RETURNING id"
-            ),
-            {"f": firm_id, "n": name, "c": created_by, "a": is_active},
-        ).scalar_one()
-
-    return _new
 
 
 def repo(db_session, firm_id: int) -> ProjectRepository:

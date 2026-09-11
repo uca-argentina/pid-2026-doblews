@@ -197,6 +197,22 @@ def world(db: Connection, role_id: dict[tuple[str, str], int]) -> SimpleNamespac
 
 
 @pytest.fixture
+def new_project(db: Connection):
+    """Another project besides the world's two, active or archived."""
+
+    def _new(firm_id: int, created_by: int, name: str, is_active: bool = True) -> int:
+        return db.execute(
+            text(
+                "INSERT INTO project (firm_id, name, created_by, is_active)"
+                " VALUES (:f, :n, :c, :a) RETURNING id"
+            ),
+            {"f": firm_id, "n": name, "c": created_by, "a": is_active},
+        ).scalar_one()
+
+    return _new
+
+
+@pytest.fixture
 def add_project_member(db: Connection, role_id: dict[tuple[str, str], int]):
     """Insert one project_member row, spelling out every column it ties together."""
 
