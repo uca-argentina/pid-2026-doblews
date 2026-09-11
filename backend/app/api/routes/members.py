@@ -1,14 +1,30 @@
 """The firm roster: who works in this firm, and with which role (HU-2)."""
 
-from fastapi import APIRouter, Depends
+from collections.abc import Iterator
+from contextlib import contextmanager
+
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import CurrentMembership, DbSession, requires
 from app.repositories.member import FirmMemberRepository, RosterEntry
 from app.schemas.firm import RoleOut
-from app.schemas.member import MemberOut
-from app.services.roster import list_assignable_roles
+from app.schemas.member import MemberCreate, MemberOut
+from app.services.roster import RosterError, add_member, list_assignable_roles
 
 router = APIRouter(prefix="/firms/{firm_id}/members", tags=["members"])
+
+
+@contextmanager
+def _roster_rules() -> Iterator[None]:
+    """Where a broken roster rule becomes a status code, for every write here.
+
+    409 Conflict and not 422: the request was well formed, it is the roster's
+    current state that refuses it. 422 stays for what Pydantic rejects.
+    """
+    try:
+        yield
+    except RosterError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error.detail) from None
 
 
 def _to_member_out(entry: RosterEntry) -> MemberOut:
@@ -42,6 +58,41 @@ def list_members(membership: CurrentMembership, db: DbSession) -> list[MemberOut
     """
     members = FirmMemberRepository(db, firm_id=membership.firm_id)
     return [_to_member_out(entry) for entry in members.list_roster()]
+
+
+@router.post(
+    "",
+    response_model=MemberOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(requires("member.add", "firm"))],
+)
+def add_member_to_roster(
+    payload: MemberCreate, membership: CurrentMembership, db: DbSession
+) -> MemberOut:
+    """Add someone to the roster, or bring back someone who left.
+
+    The same 201 and the same shape whether the address already had an account
+    or not (HU-2). What comes back is the member as stored, so if the account
+    existed its name is the person's own, not the one typed: joining a roster
+    means this firm sees it from now on, and HU-2 asks the UI to say so.
+
+    The only 409 is about this firm's roster ("already a member"), never about
+    the platform: there is no "that email is taken".
+    """
+    with _roster_rules():
+        member = add_member(
+            db,
+            membership.firm_id,
+            name=payload.name,
+            email=payload.email,
+            role_code=payload.role_code,
+            password=payload.password,
+        )
+    db.commit()
+
+    return _to_member_out(
+        FirmMemberRepository(db, firm_id=membership.firm_id).entry(member.account_id)
+    )
 
 
 @router.get(

@@ -7,6 +7,7 @@ dependencies = [
     # bcrypt directly, not passlib: passlib has had no release since 2020 and
     # breaks against bcrypt 5.x (ValueError inside its own version detection).
     "bcrypt>=5.0.0",
+    "email-validator>=2.3.0",
     "fastapi>=0.141.1",
     "gunicorn>=26.2.0",
     "psycopg[binary]>=3.3.5",

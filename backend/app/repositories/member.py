@@ -14,7 +14,7 @@ they are about.
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import Select, select
+from sqlalchemy import Row, Select, select
 
 from app.models import Account, FirmMember, Project, ProjectMember, Role
 from app.repositories.base import FirmScopedRepository
@@ -42,6 +42,19 @@ class RosterEntry:
     role_name: str
     is_active: bool
     joined_at: datetime
+
+
+def _to_entry(row: Row) -> RosterEntry:
+    member, name, email, role_code, role_name = row
+    return RosterEntry(
+        account_id=member.account_id,
+        name=name,
+        email=email,
+        role_code=role_code,
+        role_name=role_name,
+        is_active=member.is_active,
+        joined_at=member.joined_at,
+    )
 
 
 class FirmMemberRepository(FirmScopedRepository[FirmMember]):
@@ -77,18 +90,18 @@ class FirmMemberRepository(FirmScopedRepository[FirmMember]):
                 FirmMember.is_active.desc(), Account.name, FirmMember.account_id
             )
         ).all()
-        return [
-            RosterEntry(
-                account_id=member.account_id,
-                name=name,
-                email=email,
-                role_code=role_code,
-                role_name=role_name,
-                is_active=member.is_active,
-                joined_at=member.joined_at,
-            )
-            for member, name, email, role_code, role_name in rows
-        ]
+        return [_to_entry(row) for row in rows]
+
+    def entry(self, account_id: int) -> RosterEntry:
+        """One member with their labels, whatever their state.
+
+        For answering a write with the row it just wrote, so the frontend can
+        update the table without fetching the whole roster again. Raises if
+        the row is missing, since after a successful write that would be a bug
+        and not a 404.
+        """
+        row = self.db.execute(self._entries().where(FirmMember.account_id == account_id)).one()
+        return _to_entry(row)
 
     def get(self, account_id: int, *, include_inactive: bool = False) -> FirmMember | None:
         """One roster row of this firm, or None.
