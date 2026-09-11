@@ -49,6 +49,12 @@ CLIENT_WITH_PROJECT_ROLES = (
 )
 CANNOT_CHANGE_OWN_ROLE = "No podés cambiar tu propio rol"
 OWNER_ROLE_IS_FIXED = "El rol de propietario no se puede cambiar"
+CANNOT_REMOVE_YOURSELF = "No podés darte de baja a vos mismo"
+OWNER_CANNOT_BE_REMOVED = "El propietario no se puede dar de baja"
+LEADS_ACTIVE_PROJECTS = (
+    "Esta persona es responsable de obras activas del estudio. "
+    "Transferí esa responsabilidad antes de darla de baja."
+)
 
 
 class RosterError(Exception):
@@ -204,3 +210,40 @@ def change_member_role(
     member.role_id = _firm_role(db, role_code).id
     db.flush()
     return member
+
+
+def remove_member(db: Session, firm_id: int, *, actor_id: int, account_id: int) -> None:
+    """Take an active member off this firm's roster. A logical removal.
+
+    Only firm_member.is_active changes. The account is untouched, so they keep
+    logging in and working in any other firm. Their project_member rows are
+    untouched too: without an active roster row they grant nothing (ADR-002
+    section 2), and if they are ever added back they work again as they were
+    (section 11.3). Nothing is deleted.
+
+    The checks, in the order they run:
+
+    - no active member with that account here: MemberNotFoundError;
+    - it is the caller themselves: ADR-002 section 11.5;
+    - it is the owner: a firm always has exactly one active owner (section
+      11.1). Same case as the previous one today, kept apart for the same
+      reason as in change_member_role;
+    - they lead a live project of this firm: their lead row would go inert but
+      still count for uq_project_member_lead, leaving the project with no
+      working lead and no way to appoint one. The lead is transferred first
+      (HU-6). Archived projects do not block it.
+    """
+    members = FirmMemberRepository(db, firm_id=firm_id)
+    member = members.get(account_id)
+    if member is None:
+        raise MemberNotFoundError
+
+    if account_id == actor_id:
+        raise RosterError(CANNOT_REMOVE_YOURSELF)
+    if member.role_id == _firm_role(db, OWNER).id:
+        raise RosterError(OWNER_CANNOT_BE_REMOVED)
+    if members.leads_active_projects(account_id):
+        raise RosterError(LEADS_ACTIVE_PROJECTS)
+
+    member.is_active = False
+    db.flush()

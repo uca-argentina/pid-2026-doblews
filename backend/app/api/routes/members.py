@@ -15,6 +15,7 @@ from app.services.roster import (
     add_member,
     change_member_role,
     list_assignable_roles,
+    remove_member,
 )
 
 router = APIRouter(prefix="/firms/{firm_id}/members", tags=["members"])
@@ -150,3 +151,29 @@ def change_role(
     db.commit()
 
     return _to_member_out(FirmMemberRepository(db, firm_id=membership.firm_id).entry(account_id))
+
+
+@router.delete(
+    "/{account_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(requires("member.remove", "firm"))],
+)
+def remove_from_roster(
+    account_id: int,
+    account: CurrentAccount,
+    membership: CurrentMembership,
+    db: DbSession,
+) -> None:
+    """Take someone off the roster. A logical removal, not a DELETE in the database.
+
+    The HTTP verb says what happens from the API's point of view: the membership
+    is gone, and the listing shows it as inactive from now on. In the database it
+    is an UPDATE of firm_member.is_active; the team rule against deleting rows is
+    about SQL, and nothing is deleted here. Adding the same address again brings
+    the person back, projects included.
+
+    204 with no body: the frontend already has the row and only flips its state.
+    """
+    with _roster_rules():
+        remove_member(db, membership.firm_id, actor_id=account.id, account_id=account_id)
+    db.commit()

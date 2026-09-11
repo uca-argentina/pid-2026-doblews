@@ -9,12 +9,16 @@ who is not.
 from datetime import datetime
 
 import pytest
+from sqlalchemy import text
 
 from app.api.routes.members import MEMBER_NOT_FOUND
+from app.services.authz import project_permissions
 from app.services.roster import (
     ALREADY_MEMBER,
     CANNOT_CHANGE_OWN_ROLE,
+    CANNOT_REMOVE_YOURSELF,
     CLIENT_WITH_PROJECT_ROLES,
+    LEADS_ACTIVE_PROJECTS,
 )
 
 
@@ -332,3 +336,116 @@ class TestChangeRole:
         )
 
         assert response.status_code == 403
+
+
+class TestRemoveMember:
+    def url(self, world, account_id: int) -> str:
+        return f"{members_url(world.firm_a)}/{account_id}"
+
+    def test_the_owner_removes_a_member(self, client, world, auth_header):
+        headers = auth_header(world.account_a)
+
+        response = client.delete(self.url(world, world.account_a2), headers=headers)
+
+        assert response.status_code == 204
+        assert response.content == b""
+        roster = client.get(members_url(world.firm_a), headers=headers).json()
+        assert {member["account_id"]: member["is_active"] for member in roster} == {
+            world.account_a: True,
+            world.account_a2: False,
+        }
+
+    def test_the_removed_person_keeps_working_elsewhere(
+        self, client, world, auth_header, join_roster, usable_passwords
+    ):
+        """HU-2: "la persona deja de ver este estudio, pero sigue pudiendo
+        loguearse y trabajar en otros"."""
+        join_roster(world.firm_b, world.account_a2, "architect")
+
+        client.delete(self.url(world, world.account_a2), headers=auth_header(world.account_a))
+
+        alba = auth_header(world.account_a2)
+        credentials = {"email": "alba@test.com", "password": usable_passwords}
+        assert client.post("/auth/login", json=credentials).status_code == 200
+        assert client.get(f"/firms/{world.firm_a}", headers=alba).status_code == 404
+        assert client.get(f"/firms/{world.firm_b}", headers=alba).status_code == 200
+        me = client.get("/auth/me", headers=alba).json()
+        assert [firm["id"] for firm in me["firms"]] == [world.firm_b]
+
+    def test_removing_and_adding_back_restores_her_projects(
+        self, client, db, db_session, world, auth_header, add_project_member
+    ):
+        """The full cycle HU-2 promises: "si la reincorporo, vuelven solas"."""
+        add_project_member(world.project_a, world.account_a2, world.firm_a, "collaborator")
+        headers = auth_header(world.account_a)
+
+        def alba_on_project_a() -> frozenset[str]:
+            return project_permissions(db_session, world.account_a2, world.project_a, world.firm_a)
+
+        client.delete(self.url(world, world.account_a2), headers=headers)
+        assert alba_on_project_a() == frozenset()
+
+        client.post(
+            members_url(world.firm_a),
+            json=new_person(email="alba@test.com"),
+            headers=headers,
+        )
+        assert "project.edit" in alba_on_project_a()
+
+        rows = db.execute(
+            text("SELECT count(*) FROM project_member WHERE account_id = :a"),
+            {"a": world.account_a2},
+        ).scalar_one()
+        assert rows == 1, "nothing was reassigned: the same row came back to life"
+
+    def test_the_owner_cannot_remove_themselves(self, client, world, auth_header):
+        response = client.delete(
+            self.url(world, world.account_a), headers=auth_header(world.account_a)
+        )
+
+        assert response.status_code == 409
+        assert response.json() == {"detail": CANNOT_REMOVE_YOURSELF}
+
+    def test_the_lead_of_a_live_project_cannot_be_removed(
+        self, client, world, auth_header, add_project_member
+    ):
+        add_project_member(world.project_a, world.account_a2, world.firm_a, "lead")
+
+        response = client.delete(
+            self.url(world, world.account_a2), headers=auth_header(world.account_a)
+        )
+
+        assert response.status_code == 409
+        assert response.json() == {"detail": LEADS_ACTIVE_PROJECTS}
+
+    def test_removing_twice_is_not_found(self, client, world, auth_header):
+        headers = auth_header(world.account_a)
+        client.delete(self.url(world, world.account_a2), headers=headers)
+
+        response = client.delete(self.url(world, world.account_a2), headers=headers)
+
+        assert response.status_code == 404
+        assert response.json() == {"detail": MEMBER_NOT_FOUND}
+
+    def test_a_member_of_another_firm_is_not_found(self, client, world, auth_header):
+        response = client.delete(
+            self.url(world, world.account_b), headers=auth_header(world.account_a)
+        )
+
+        assert response.status_code == 404
+
+    def test_an_architect_cannot_remove_anyone(self, client, world, auth_header, new_member):
+        firm_client = new_member(world.firm_a, "cliente@test.com", "client")
+
+        response = client.delete(
+            self.url(world, firm_client), headers=auth_header(world.account_a2)
+        )
+
+        assert response.status_code == 403
+
+    def test_another_firms_owner_gets_404(self, client, world, auth_header):
+        response = client.delete(
+            self.url(world, world.account_a2), headers=auth_header(world.account_b)
+        )
+
+        assert response.status_code == 404

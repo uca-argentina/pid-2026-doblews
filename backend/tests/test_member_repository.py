@@ -33,15 +33,9 @@ def alba(world) -> int:
 
 
 @pytest.fixture
-def alba_also_in_firm_b(db, world, role_id):
+def alba_also_in_firm_b(world, join_roster):
     """Alba joins firm_b as an architect: one person on two rosters."""
-    db.execute(
-        text(
-            "INSERT INTO firm_member (firm_id, account_id, role_id, role_scope)"
-            " VALUES (:f, :a, :r, 'firm')"
-        ),
-        {"f": world.firm_b, "a": world.account_a2, "r": role_id[("architect", "firm")]},
-    )
+    join_roster(world.firm_b, world.account_a2, "architect")
 
 
 class TestListRoster:

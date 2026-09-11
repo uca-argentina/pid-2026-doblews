@@ -225,6 +225,26 @@ def new_member(db: Connection, role_id: dict[tuple[str, str], int]):
 
 
 @pytest.fixture
+def join_roster(db: Connection, role_id: dict[tuple[str, str], int]):
+    """Put an existing account on one more firm's roster: one person, two firms.
+
+    Isolation is only proved by someone who could leak across, so this is how
+    a test gets one.
+    """
+
+    def _join(firm_id: int, account_id: int, code: str) -> None:
+        db.execute(
+            text(
+                "INSERT INTO firm_member (firm_id, account_id, role_id, role_scope)"
+                " VALUES (:f, :a, :r, 'firm')"
+            ),
+            {"f": firm_id, "a": account_id, "r": role_id[(code, "firm")]},
+        )
+
+    return _join
+
+
+@pytest.fixture
 def new_project(db: Connection):
     """Another project besides the world's two, active or archived."""
 

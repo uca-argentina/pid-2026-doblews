@@ -14,13 +14,17 @@ from app.services.authz import project_permissions
 from app.services.roster import (
     ALREADY_MEMBER,
     CANNOT_CHANGE_OWN_ROLE,
+    CANNOT_REMOVE_YOURSELF,
     CLIENT_WITH_PROJECT_ROLES,
+    LEADS_ACTIVE_PROJECTS,
+    OWNER_CANNOT_BE_REMOVED,
     OWNER_ROLE_IS_FIXED,
     STAFF_ACCOUNT,
     MemberNotFoundError,
     RosterError,
     add_member,
     change_member_role,
+    remove_member,
 )
 
 TYPED_PASSWORD = "clave-inicial"
@@ -229,3 +233,90 @@ class TestChangeRole:
     def test_an_account_that_does_not_exist_is_not_found(self, db_session, world):
         with pytest.raises(MemberNotFoundError):
             self.change(db_session, world, 999999, "client")
+
+
+class TestRemoveMember:
+    """Ana (owner) takes people off firm_a's roster."""
+
+    def remove(self, db_session, world, account_id: int, actor_id=None) -> None:
+        remove_member(
+            db_session,
+            world.firm_a,
+            actor_id=world.account_a if actor_id is None else actor_id,
+            account_id=account_id,
+        )
+
+    def test_the_roster_row_goes_inactive(self, db_session, world):
+        self.remove(db_session, world, world.account_a2)
+
+        member = db_session.get(FirmMember, (world.firm_a, world.account_a2))
+        assert member is not None and member.is_active is False
+
+    def test_the_account_is_left_alone(self, db_session, world):
+        """Leaving a firm is not leaving the platform: two different is_active."""
+        self.remove(db_session, world, world.account_a2)
+
+        account = db_session.get(Account, world.account_a2)
+        assert account is not None and account.is_active is True
+
+    def test_project_rows_stay_but_grant_nothing(self, db, db_session, world, add_project_member):
+        """ADR-002 section 11.3: inert, not deleted."""
+        add_project_member(world.project_a, world.account_a2, world.firm_a, "collaborator")
+
+        self.remove(db_session, world, world.account_a2)
+
+        rows = db.execute(
+            text("SELECT count(*) FROM project_member WHERE account_id = :a"),
+            {"a": world.account_a2},
+        ).scalar_one()
+        assert rows == 1
+        assert (
+            project_permissions(db_session, world.account_a2, world.project_a, world.firm_a)
+            == frozenset()
+        )
+
+    def test_nobody_removes_themselves(self, db_session, world):
+        with pytest.raises(RosterError) as refused:
+            self.remove(db_session, world, world.account_a)
+
+        assert refused.value.detail == CANNOT_REMOVE_YOURSELF
+
+    def test_the_owner_cannot_be_removed_even_by_someone_else(self, db_session, world):
+        """Unreachable over HTTP today, for the same reason as the role edit."""
+        with pytest.raises(RosterError) as refused:
+            self.remove(db_session, world, world.account_a, actor_id=world.account_a2)
+
+        assert refused.value.detail == OWNER_CANNOT_BE_REMOVED
+
+    def test_the_lead_of_a_live_project_cannot_be_removed(
+        self, db_session, world, add_project_member
+    ):
+        add_project_member(world.project_a, world.account_a2, world.firm_a, "lead")
+
+        with pytest.raises(RosterError) as refused:
+            self.remove(db_session, world, world.account_a2)
+
+        assert refused.value.detail == LEADS_ACTIVE_PROJECTS
+        member = db_session.get(FirmMember, (world.firm_a, world.account_a2))
+        assert member is not None and member.is_active is True
+
+    def test_leading_an_archived_project_does_not_block_it(
+        self, db_session, world, new_project, add_project_member
+    ):
+        archived = new_project(world.firm_a, world.account_a, "Obra vieja", is_active=False)
+        add_project_member(archived, world.account_a2, world.firm_a, "lead")
+
+        self.remove(db_session, world, world.account_a2)
+
+        member = db_session.get(FirmMember, (world.firm_a, world.account_a2))
+        assert member is not None and member.is_active is False
+
+    def test_a_member_of_another_firm_is_not_found(self, db_session, world):
+        with pytest.raises(MemberNotFoundError):
+            self.remove(db_session, world, world.account_b)
+
+    def test_someone_who_already_left_is_not_found(self, db_session, world, new_member):
+        gone = new_member(world.firm_a, "carla@test.com", "architect", is_active=False)
+
+        with pytest.raises(MemberNotFoundError):
+            self.remove(db_session, world, gone)
