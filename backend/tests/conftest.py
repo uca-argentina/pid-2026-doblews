@@ -197,6 +197,34 @@ def world(db: Connection, role_id: dict[tuple[str, str], int]) -> SimpleNamespac
 
 
 @pytest.fixture
+def new_member(db: Connection, role_id: dict[tuple[str, str], int]):
+    """A fresh account on one firm's roster, with any firm role and state.
+
+    For the people the world fixture does not have: a firm client, someone who
+    already left.
+    """
+
+    def _new(firm_id: int, email: str, code: str, is_active: bool = True) -> int:
+        account_id = db.execute(
+            text(
+                "INSERT INTO account (name, email, password_hash)"
+                " VALUES (:n, :e, 'not-a-real-hash') RETURNING id"
+            ),
+            {"n": email.split("@")[0], "e": email},
+        ).scalar_one()
+        db.execute(
+            text(
+                "INSERT INTO firm_member (firm_id, account_id, role_id, role_scope, is_active)"
+                " VALUES (:f, :a, :r, 'firm', :active)"
+            ),
+            {"f": firm_id, "a": account_id, "r": role_id[(code, "firm")], "active": is_active},
+        )
+        return account_id
+
+    return _new
+
+
+@pytest.fixture
 def new_project(db: Connection):
     """Another project besides the world's two, active or archived."""
 
