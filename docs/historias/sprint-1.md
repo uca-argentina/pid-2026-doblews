@@ -85,14 +85,17 @@ Tarea de equipo, no historia de usuario. Timebox: 30 minutos. Bloquea el repo, F
 
 **Criterios de aceptación**
 
-- Listado de miembros del estudio con nombre, email, rol (`owner` / `architect` / `client`) y estado.
-- Alta con nombre, email y rol. Como la identidad es global, el email puede pertenecer a alguien que ya tiene cuenta por trabajar con otro estudio: en ese caso **se lo agrega al padrón** en vez de crear una cuenta nueva, y si no existe, se crea con una contraseña temporal.
-- El alta responde lo mismo exista o no el email: **nunca se revela** si una persona ya tiene cuenta en la plataforma. Si ya existía, se conserva su nombre actual y la UI lo dice.
+- Listado de miembros del estudio con nombre, email, rol (`owner` / `architect` / `client`) y estado. Incluye a los dados de baja, marcados como inactivos: de ahí el propietario saca a quién reincorporar.
+- Alta con nombre, email, rol y una **contraseña inicial que tipea el propietario** en el mismo formulario (no hay invitaciones por email: se la entrega en persona). Como la identidad es global, el email puede pertenecer a alguien que ya tiene cuenta por trabajar con otro estudio: en ese caso **se lo agrega al padrón** en vez de crear una cuenta nueva, y el nombre y la contraseña tipeados se ignoran.
+- El alta responde lo mismo exista o no el email: **nunca se revela** si una persona ya tiene cuenta en la plataforma (mismo status, misma forma de respuesta, mismo tiempo, y ningún "ese email ya existe"). Si ya existía, se conserva su nombre actual y la UI lo dice.
+- Los roles asignables son `architect` y `client`. `owner` no se asigna ni en el alta ni en la edición: habría dos propietarios.
 - Edición: puedo cambiar el rol de un miembro. El email no se edita — es su identidad global, no un dato de mi estudio.
 - Baja del padrón: lógica. La persona deja de ver este estudio, pero sigue pudiendo loguearse y trabajar en otros. Sus asignaciones a obras de este estudio quedan inertes, **no se borran**: si la reincorporo, vuelven solas.
+- **Se reincorpora dando de alta de nuevo el mismo email**, con el rol que elija: no hay un botón aparte.
+- No puedo dar de baja a quien es **responsable (`lead`) de una obra activa**: primero se transfiere la responsabilidad (HU-6). Si no, la obra quedaría sin responsable y sin forma de nombrar otro, porque su asignación inerte sigue ocupando el lugar del `lead`.
 - No puedo darme de baja a mí mismo ni quitarme el rol de `owner`. Un estudio siempre tiene exactamente un propietario activo.
-- Un miembro con rol de estudio `client` solo puede recibir el rol `client` en las obras.
-- La sección exige los permisos de gestión del padrón (`member.add`, `member.edit_role`, `member.remove`; ver [ADR-002 §7](../adr/0002-authorization-model.md)): un `architect`, que solo tiene `member.view`, entra por URL directa y recibe 403; si el estudio de la URL no es suyo, recibe 404.
+- Un miembro con rol de estudio `client` solo puede recibir el rol `client` en las obras. Por eso no puedo pasar a `client` —ni reincorporar como `client`— a alguien que tiene otro rol en alguna obra del estudio: primero se lo saca de esas obras. El padrón nunca modifica las asignaciones a obras.
+- La sección exige los permisos de gestión del padrón (`member.add`, `member.edit_role`, `member.remove`; ver [ADR-002 §7](../adr/0002-authorization-model.md)): un `architect`, que solo tiene `member.view`, entra por URL directa y recibe 403; si el estudio de la URL no es suyo, recibe 404. El listado en sí sí lo puede leer, porque HU-3 elige el cliente de una obra de ahí. Para saber qué mostrar, el front usa los permisos que devuelve `GET /firms/{id}`, nunca el rol.
 - El listado se ve bien en 375px de ancho.
 
 **Fuera de alcance:** invitaciones por email, recuperación de contraseña, roles a medida, transferencia de propiedad del estudio, foto de perfil.
