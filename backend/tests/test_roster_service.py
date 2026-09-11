@@ -13,10 +13,14 @@ from app.models import Account, FirmMember
 from app.services.authz import project_permissions
 from app.services.roster import (
     ALREADY_MEMBER,
+    CANNOT_CHANGE_OWN_ROLE,
     CLIENT_WITH_PROJECT_ROLES,
+    OWNER_ROLE_IS_FIXED,
     STAFF_ACCOUNT,
+    MemberNotFoundError,
     RosterError,
     add_member,
+    change_member_role,
 )
 
 TYPED_PASSWORD = "clave-inicial"
@@ -160,3 +164,68 @@ class TestReinstating:
         member = add(db_session, world.firm_a, "carla@test.com", role_code="client")
 
         assert member.is_active is True
+
+
+class TestChangeRole:
+    """Ana (owner) edits the roles of firm_a's members."""
+
+    def change(self, db_session, world, account_id: int, role_code: str, actor_id=None):
+        return change_member_role(
+            db_session,
+            world.firm_a,
+            actor_id=world.account_a if actor_id is None else actor_id,
+            account_id=account_id,
+            role_code=role_code,
+        )
+
+    def test_an_architect_becomes_a_client(self, db_session, world, role_id):
+        member = self.change(db_session, world, world.account_a2, "client")
+
+        assert member.role_id == role_id[("client", "firm")]
+
+    def test_a_client_becomes_an_architect(self, db_session, world, role_id, new_member):
+        firm_client = new_member(world.firm_a, "cliente@test.com", "client")
+
+        member = self.change(db_session, world, firm_client, "architect")
+
+        assert member.role_id == role_id[("architect", "firm")]
+
+    def test_nobody_changes_their_own_role(self, db_session, world):
+        with pytest.raises(RosterError) as refused:
+            self.change(db_session, world, world.account_a, "architect")
+
+        assert refused.value.detail == CANNOT_CHANGE_OWN_ROLE
+
+    def test_the_owners_role_is_fixed_even_for_someone_else(self, db_session, world):
+        """Unreachable over HTTP today, since only the owner holds member.edit_role
+        and "not yourself" catches it first. Proved here with another actor, for
+        the day a firm_admin role can edit roles too."""
+        with pytest.raises(RosterError) as refused:
+            self.change(db_session, world, world.account_a, "architect", actor_id=world.account_a2)
+
+        assert refused.value.detail == OWNER_ROLE_IS_FIXED
+
+    def test_a_lead_cannot_become_a_client(self, db_session, world, role_id, add_project_member):
+        add_project_member(world.project_a, world.account_a2, world.firm_a, "lead")
+
+        with pytest.raises(RosterError) as refused:
+            self.change(db_session, world, world.account_a2, "client")
+
+        assert refused.value.detail == CLIENT_WITH_PROJECT_ROLES
+        member = db_session.get(FirmMember, (world.firm_a, world.account_a2))
+        assert member is not None and member.role_id == role_id[("architect", "firm")]
+
+    def test_a_member_of_another_firm_is_not_found(self, db_session, world):
+        with pytest.raises(MemberNotFoundError):
+            self.change(db_session, world, world.account_b, "client")
+
+    def test_someone_who_left_is_not_found(self, db_session, world, new_member):
+        """Bringing them back is an add, and it takes the role with it."""
+        gone = new_member(world.firm_a, "carla@test.com", "architect", is_active=False)
+
+        with pytest.raises(MemberNotFoundError):
+            self.change(db_session, world, gone, "client")
+
+    def test_an_account_that_does_not_exist_is_not_found(self, db_session, world):
+        with pytest.raises(MemberNotFoundError):
+            self.change(db_session, world, 999999, "client")

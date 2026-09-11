@@ -33,6 +33,12 @@ AssignableFirmRole = Literal["architect", "client"]
 # they are two different roles that happen to share a word.
 FIRM_CLIENT = "client"
 
+# Compared by code for an invariant, not for authorization: "exactly one active
+# owner per firm" (ADR-002 section 11.1) is a rule about the data, and section
+# 11 sends it to this layer by name. Who may edit the roster at all is still
+# decided by the member.* permissions, never here.
+OWNER = "owner"
+
 # What the owner reads when a rule says no. Spanish, because they are rendered
 # as they are, and constants so the tests assert against these very strings.
 ALREADY_MEMBER = "Esta persona ya es miembro del estudio"
@@ -41,6 +47,8 @@ CLIENT_WITH_PROJECT_ROLES = (
     "Esta persona tiene en obras del estudio un rol que un cliente no puede tener. "
     "Sacala de esas obras antes de hacerla cliente."
 )
+CANNOT_CHANGE_OWN_ROLE = "No podés cambiar tu propio rol"
+OWNER_ROLE_IS_FIXED = "El rol de propietario no se puede cambiar"
 
 
 class RosterError(Exception):
@@ -53,6 +61,15 @@ class RosterError(Exception):
     def __init__(self, detail: str) -> None:
         super().__init__(detail)
         self.detail = detail
+
+
+class MemberNotFoundError(Exception):
+    """No active member with that account in this firm.
+
+    One error for "never on this roster", "on another firm's roster", "left"
+    and "no such account", because the API answers all of them with the same
+    404 and must not hint at which one it was.
+    """
 
 
 def list_assignable_roles(db: Session) -> list[Role]:
@@ -71,7 +88,7 @@ def list_assignable_roles(db: Session) -> list[Role]:
     )
 
 
-def _firm_role(db: Session, code: AssignableFirmRole) -> Role:
+def _firm_role(db: Session, code: str) -> Role:
     """The seeded firm role with this code. Missing means a broken seed: a 500."""
     return db.scalars(select(Role).where(Role.scope == "firm", Role.code == code)).one()
 
@@ -140,5 +157,50 @@ def add_member(
         member.is_active = True
         member.role_id = role.id
 
+    db.flush()
+    return member
+
+
+def change_member_role(
+    db: Session,
+    firm_id: int,
+    *,
+    actor_id: int,
+    account_id: int,
+    role_code: AssignableFirmRole,
+) -> FirmMember:
+    """Give an active member of this firm another firm role.
+
+    Only the role changes. The email is the person's global identity and HU-2
+    keeps it out of the firm's reach, and so is the name.
+
+    The checks, in the order they run:
+
+    - no active member with that account here: MemberNotFoundError;
+    - it is the caller themselves: HU-2 and ADR-002 section 11.5, nobody takes
+      away the role that gives them access;
+    - it is the owner: owner is never assigned, so it is never taken away
+      either, and that is what keeps exactly one active owner per firm
+      (section 11.1). Today only the owner holds member.edit_role, so this and
+      the previous check are the same case. They are kept apart for the day a
+      firm_admin role gets member.edit_role (ADR-002, pending review): then the
+      owner stops being covered by "not yourself";
+    - becoming a firm client while holding a non-client project role
+      (section 11.2): refused rather than downgrading their project roles here,
+      which would break "one client per project" and "never without a lead".
+    """
+    members = FirmMemberRepository(db, firm_id=firm_id)
+    member = members.get(account_id)
+    if member is None:
+        raise MemberNotFoundError
+
+    if account_id == actor_id:
+        raise RosterError(CANNOT_CHANGE_OWN_ROLE)
+    if member.role_id == _firm_role(db, OWNER).id:
+        raise RosterError(OWNER_ROLE_IS_FIXED)
+    if role_code == FIRM_CLIENT and members.has_non_client_project_roles(account_id):
+        raise RosterError(CLIENT_WITH_PROJECT_ROLES)
+
+    member.role_id = _firm_role(db, role_code).id
     db.flush()
     return member

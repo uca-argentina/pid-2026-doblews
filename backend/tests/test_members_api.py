@@ -10,7 +10,12 @@ from datetime import datetime
 
 import pytest
 
-from app.services.roster import ALREADY_MEMBER
+from app.api.routes.members import MEMBER_NOT_FOUND
+from app.services.roster import (
+    ALREADY_MEMBER,
+    CANNOT_CHANGE_OWN_ROLE,
+    CLIENT_WITH_PROJECT_ROLES,
+)
 
 
 def members_url(firm_id: int) -> str:
@@ -246,3 +251,84 @@ class TestAddMember:
         )
 
         assert response.status_code == 404
+
+
+class TestChangeRole:
+    def url(self, world, account_id: int) -> str:
+        return f"{members_url(world.firm_a)}/{account_id}"
+
+    def test_the_owner_changes_a_members_role(self, client, world, auth_header):
+        response = client.patch(
+            self.url(world, world.account_a2),
+            json={"role_code": "client"},
+            headers=auth_header(world.account_a),
+        )
+
+        assert response.status_code == 200
+        assert response.json()["role"] == {"code": "client", "name": "Cliente"}
+
+    def test_the_email_is_not_editable(self, client, world, auth_header):
+        """HU-2: the email is a global identity. Sent anyway, it is not read."""
+        response = client.patch(
+            self.url(world, world.account_a2),
+            json={"role_code": "client", "email": "otra@test.com", "name": "Otra"},
+            headers=auth_header(world.account_a),
+        )
+
+        assert (response.json()["email"], response.json()["name"]) == ("alba@test.com", "alba")
+
+    def test_the_owner_cannot_change_their_own_role(self, client, world, auth_header):
+        response = client.patch(
+            self.url(world, world.account_a),
+            json={"role_code": "architect"},
+            headers=auth_header(world.account_a),
+        )
+
+        assert response.status_code == 409
+        assert response.json() == {"detail": CANNOT_CHANGE_OWN_ROLE}
+
+    def test_a_lead_cannot_become_a_client(self, client, world, auth_header, add_project_member):
+        add_project_member(world.project_a, world.account_a2, world.firm_a, "lead")
+
+        response = client.patch(
+            self.url(world, world.account_a2),
+            json={"role_code": "client"},
+            headers=auth_header(world.account_a),
+        )
+
+        assert response.status_code == 409
+        assert response.json() == {"detail": CLIENT_WITH_PROJECT_ROLES}
+
+    def test_owner_is_not_a_role_that_can_be_given(self, client, world, auth_header):
+        response = client.patch(
+            self.url(world, world.account_a2),
+            json={"role_code": "owner"},
+            headers=auth_header(world.account_a),
+        )
+
+        assert response.status_code == 422
+
+    def test_a_member_of_another_firm_is_not_found(self, client, world, auth_header):
+        """Bruno exists, but not in firm_a: the same 404 as an id that does not."""
+        headers = auth_header(world.account_a)
+
+        someone_elses = client.patch(
+            self.url(world, world.account_b), json={"role_code": "client"}, headers=headers
+        )
+        nonexistent = client.patch(
+            self.url(world, 999999), json={"role_code": "client"}, headers=headers
+        )
+
+        assert someone_elses.status_code == nonexistent.status_code == 404
+        assert someone_elses.json() == nonexistent.json() == {"detail": MEMBER_NOT_FOUND}
+
+    def test_an_architect_cannot_change_roles(self, client, world, auth_header, new_member):
+        firm_client = new_member(world.firm_a, "cliente@test.com", "client")
+
+        response = client.patch(
+            self.url(world, firm_client),
+            json={"role_code": "architect"},
+            headers=auth_header(world.account_a2),
+        )
+
+        assert response.status_code == 403

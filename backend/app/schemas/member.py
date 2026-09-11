@@ -88,3 +88,14 @@ class MemberCreate(BaseModel):
         if len(value.encode("utf-8")) > MAX_PASSWORD_BYTES:
             raise ValueError(f"la contraseña no puede superar los {MAX_PASSWORD_BYTES} bytes")
         return value
+
+
+class MemberRoleUpdate(BaseModel):
+    """The edit form: the role, and nothing else.
+
+    No email and no name. HU-2: "el email no se edita — es su identidad global,
+    no un dato de mi estudio", and the name belongs to the same account. A body
+    that sends them anyway is not refused; the fields are simply never read.
+    """
+
+    role_code: AssignableFirmRole

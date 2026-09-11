@@ -5,26 +5,38 @@ from contextlib import contextmanager
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.deps import CurrentMembership, DbSession, requires
+from app.api.deps import CurrentAccount, CurrentMembership, DbSession, requires
 from app.repositories.member import FirmMemberRepository, RosterEntry
 from app.schemas.firm import RoleOut
-from app.schemas.member import MemberCreate, MemberOut
-from app.services.roster import RosterError, add_member, list_assignable_roles
+from app.schemas.member import MemberCreate, MemberOut, MemberRoleUpdate
+from app.services.roster import (
+    MemberNotFoundError,
+    RosterError,
+    add_member,
+    change_member_role,
+    list_assignable_roles,
+)
 
 router = APIRouter(prefix="/firms/{firm_id}/members", tags=["members"])
+
+MEMBER_NOT_FOUND = "Miembro no encontrado"
 
 
 @contextmanager
 def _roster_rules() -> Iterator[None]:
     """Where a broken roster rule becomes a status code, for every write here.
 
-    409 Conflict and not 422: the request was well formed, it is the roster's
-    current state that refuses it. 422 stays for what Pydantic rejects.
+    409 Conflict and not 422 for a refused rule: the request was well formed, it
+    is the roster's current state that refuses it. 422 stays for what Pydantic
+    rejects. A member that is not there — in this firm, active — is a 404, the
+    same one whatever the reason.
     """
     try:
         yield
+    except MemberNotFoundError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=MEMBER_NOT_FOUND) from None
     except RosterError as error:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error.detail) from None
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=error.detail) from None
 
 
 def _to_member_out(entry: RosterEntry) -> MemberOut:
@@ -107,3 +119,34 @@ def list_member_roles(db: DbSession) -> list[RoleOut]:
     people; the edit form sits beside it, behind the same section.
     """
     return [RoleOut(code=role.code, name=role.name) for role in list_assignable_roles(db)]
+
+
+@router.patch(
+    "/{account_id}",
+    response_model=MemberOut,
+    dependencies=[Depends(requires("member.edit_role", "firm"))],
+)
+def change_role(
+    account_id: int,
+    payload: MemberRoleUpdate,
+    account: CurrentAccount,
+    membership: CurrentMembership,
+    db: DbSession,
+) -> MemberOut:
+    """Change an active member's firm role. The only field this edits.
+
+    The caller's own account comes in as the actor, because "you cannot change
+    your own role" needs to know who is asking. CurrentAccount is already
+    resolved for the permission check, so it costs nothing here.
+    """
+    with _roster_rules():
+        change_member_role(
+            db,
+            membership.firm_id,
+            actor_id=account.id,
+            account_id=account_id,
+            role_code=payload.role_code,
+        )
+    db.commit()
+
+    return _to_member_out(FirmMemberRepository(db, firm_id=membership.firm_id).entry(account_id))
