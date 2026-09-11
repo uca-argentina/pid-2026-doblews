@@ -45,13 +45,23 @@ class FirmScopedRepository[ModelT: Base]:
         self.db = db
         self.firm_id = firm_id
 
-    def select(self) -> Select:
+    def select(self, *, include_inactive: bool = False) -> Select:
         """The starting point of every read: this firm's live rows, and nothing else.
 
-        Subclasses narrow it further; none of them may widen it, because there
-        is no way to remove a where() from a Select.
+        The two filters are not equally negotiable.
+
+        The firm filter is unconditional. Subclasses narrow the statement
+        further, and none of them can widen it past its tenant, because there is
+        no way to remove a where() from a Select.
+
+        The is_active filter is on by default, and dropping it takes asking by
+        name. Some reads are about the logically deleted rows themselves: HU-2's
+        roster lists the people who left, because that is where the owner finds
+        someone to bring back. Making them spell out include_inactive=True keeps
+        every such read one grep away, and keyword-only means it can never be
+        switched off by a stray positional argument.
         """
-        return select(self.model).where(
-            self.model.firm_id == self.firm_id,
-            self.model.is_active,
-        )
+        statement = select(self.model).where(self.model.firm_id == self.firm_id)
+        if include_inactive:
+            return statement
+        return statement.where(self.model.is_active)

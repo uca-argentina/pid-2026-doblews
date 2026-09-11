@@ -11,16 +11,41 @@ information we do not hand out.
 
 from sqlalchemy import text
 
+# The three permissions HU-2's roster section is gated on.
+ROSTER_MANAGEMENT = {"member.add", "member.edit_role", "member.remove"}
+
 
 def test_a_member_sees_their_own_firm(client, world, auth_header):
     response = client.get(f"/firms/{world.firm_a}", headers=auth_header(world.account_a))
 
     assert response.status_code == 200
-    assert response.json() == {
+    body = response.json()
+    # The permission set is checked on its own below. Pinning the whole list
+    # here would restate the seed, which test_rbac_catalog_seed.py already owns.
+    body.pop("permissions")
+    assert body == {
         "id": world.firm_a,
         "name": "norte",
         "role": {"code": "owner", "name": "Propietario"},
     }
+
+
+def test_the_owner_is_told_they_can_manage_the_roster(client, world, auth_header):
+    response = client.get(f"/firms/{world.firm_a}", headers=auth_header(world.account_a))
+    permissions = response.json()["permissions"]
+
+    assert ROSTER_MANAGEMENT <= set(permissions)
+    assert permissions == sorted(permissions)
+
+
+def test_an_architect_can_see_the_roster_but_not_manage_it(client, world, auth_header):
+    """What HU-2 needs from this endpoint: the frontend can tell the architect
+    apart from the owner without ever looking at a role code."""
+    response = client.get(f"/firms/{world.firm_a}", headers=auth_header(world.account_a2))
+    permissions = set(response.json()["permissions"])
+
+    assert "member.view" in permissions
+    assert not ROSTER_MANAGEMENT & permissions
 
 
 def test_another_firm_is_not_found(client, world, auth_header):

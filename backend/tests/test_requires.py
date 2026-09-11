@@ -1,10 +1,12 @@
 """The requires() dependency: the door that turns a missing permission into 403.
 
-Tested against a throwaway app rather than the real one, because no production
-route can answer 403 yet: the only guarded endpoint demands firm.view, and all
-three firm roles hold it. The first real 403 arrives with HU-2. Mounting a route
-here is what lets the rule be proved now, in the story that owns it, instead of
-being discovered later inside another one.
+Tested against a throwaway app rather than the real one, so that what is proved
+here is the dependency itself and not any one endpoint: one route per scope,
+each demanding a permission one role holds and another lacks.
+
+It was also the only way to prove it when T-03 wrote it, since no production
+route could answer 403 yet. They can now: HU-2's roster writes refuse an
+architect, and test_members_api.py covers those through the real routes.
 """
 
 from collections.abc import Iterator

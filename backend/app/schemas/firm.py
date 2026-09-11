@@ -28,3 +28,21 @@ class FirmSummary(BaseModel):
     id: int
     name: str
     role: RoleOut
+
+
+class FirmDetail(FirmSummary):
+    """The active firm, plus what the caller may do inside it.
+
+    permissions exists to paint the UI — hiding the roster section from someone
+    without member.add, say — so the frontend asks can("member.add") instead of
+    branching on role.code. Nothing is authorized with it: every request
+    resolves the set again against the database (ADR-002 section 9), so a stale
+    copy in the browser can hide a button but never open a door.
+
+    Not on FirmSummary, because /auth/me lists every firm the caller belongs
+    to, and resolving permissions there would cost a query per firm to answer a
+    question the picker never asks.
+    """
+
+    # Sorted, so the payload does not reshuffle between requests.
+    permissions: list[str]

@@ -295,8 +295,8 @@ No hay autoregistro público.
 Van en la capa de servicio, **cada una con su test**:
 
 1. Todo estudio activo tiene **exactamente un** `owner` activo. El dueño no puede salir del padrón sin transferir la propiedad.
-2. Un miembro con rol de estudio `client` solo puede recibir el rol de obra `client`.
-3. Si la fila de padrón está inactiva, las filas de `project_member` de ese estudio quedan **inertes** — no se borran. Si la persona se reincorpora, sus obras vuelven solas. Borrarlas obligaría a reasignar obra por obra a alguien que se tomó tres semanas de licencia.
+2. Un miembro con rol de estudio `client` solo puede recibir el rol de obra `client`. Vale en las dos direcciones: tampoco se puede pasar a `client` en el padrón a quien ya tiene otro rol en una obra del estudio. Se rechaza, no se degradan sus roles de obra: degradarlos rompería "un solo `client` por obra" y dejaría obras sin `lead`.
+3. Si la fila de padrón está inactiva, las filas de `project_member` de ese estudio quedan **inertes** — no se borran. Si la persona se reincorpora, sus obras vuelven solas. Borrarlas obligaría a reasignar obra por obra a alguien que se tomó tres semanas de licencia. La contracara: la fila inerte del `lead` sigue ocupando el índice parcial `UNIQUE (project_id) WHERE role_code = 'lead'`, así que dar de baja al `lead` de una obra activa la dejaría sin responsable y sin forma de nombrar otro. Por eso esa baja se rechaza hasta que se transfiera la responsabilidad.
 4. El `support` no puede asignarse roles de estudio ni de obra.
 5. Un usuario no puede quitarse a sí mismo el último rol que le da acceso, ni desactivarse a sí mismo.
 6. Un usuario sin ninguna asignación es un **estado válido**: se loguea bien y no tiene nada que ver. La UI necesita una pantalla de "todavía no perteneces a ningún estudio", no un listado vacío ni un error.

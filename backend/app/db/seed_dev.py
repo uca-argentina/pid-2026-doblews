@@ -24,6 +24,14 @@ FIRMS = [
     ("Estudio Sur", "contacto@estudiosur.test", "Bruno Díaz", "bruno@estudiosur.test"),
 ]
 
+# The rest of Estudio Norte's roster, so the roster screen (HU-2) does not open
+# with only its owner in it, and HU-3's client picker has a client to offer.
+# (firm, name, email, firm role)
+MEMBERS = [
+    ("Estudio Norte", "Alba Ruiz", "alba@estudionorte.test", "architect"),
+    ("Estudio Norte", "Carla Méndez", "carla@estudionorte.test", "client"),
+]
+
 
 def _role(session: Session, code: str, scope: str) -> Role:
     role = session.scalar(select(Role).where(Role.code == code, Role.scope == scope))
@@ -71,8 +79,10 @@ def seed(session: Session, password: str) -> None:
         session.add(PlatformMember(account_id=support.id, role_id=support_role.id))
         print(f"creada    rol      {email} -> support (platform)")
 
+    firms: dict[str, Firm] = {}
     for firm_name, firm_email, owner_name, owner_email in FIRMS:
         firm, created = _firm(session, firm_name, firm_email)
+        firms[firm_name] = firm
         print(f"{'creado  ' if created else 'ya estaba'}  estudio  {firm_name}")
 
         owner, created = _account(session, owner_name, owner_email, password)
@@ -81,6 +91,20 @@ def seed(session: Session, password: str) -> None:
         if not session.get(FirmMember, (firm.id, owner.id)):
             session.add(FirmMember(firm_id=firm.id, account_id=owner.id, role_id=owner_role.id))
             print(f"creada    padron   {owner_email} -> owner de {firm_name}")
+
+    for firm_name, member_name, member_email, role_code in MEMBERS:
+        firm = firms[firm_name]
+        role = _role(session, role_code, "firm")
+
+        member, created = _account(session, member_name, member_email, password)
+        print(f"{'creada ' if created else 'ya estaba'}  cuenta   {member_email}")
+
+        # Only a missing row is added. One that exists is left as it is, active
+        # or not: whoever removed that person from the roster by hand while
+        # trying the app did it on purpose, and re-seeding should not undo it.
+        if not session.get(FirmMember, (firm.id, member.id)):
+            session.add(FirmMember(firm_id=firm.id, account_id=member.id, role_id=role.id))
+            print(f"creada    padron   {member_email} -> {role_code} de {firm_name}")
 
 
 def main() -> None:
