@@ -9,6 +9,7 @@ route could answer 403 yet. They can now: HU-2's roster writes refuse an
 architect, and test_members_api.py covers those through the real routes.
 """
 
+import inspect
 from collections.abc import Iterator
 
 import pytest
@@ -17,7 +18,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Connection
 from sqlalchemy.orm import Session
 
-from app.api.deps import FORBIDDEN, requires
+from app.api.deps import FORBIDDEN, REQUIRED_PERMISSION, requires, requires_any
 from app.db.session import get_db
 
 
@@ -27,6 +28,9 @@ def guarded_client(db: Connection) -> Iterator[TestClient]:
 
     member.add is held by owner and not by architect; project.edit by lead and
     not by viewer. Both pairs come straight from the table in ADR-002 section 7.
+
+    The third route is the OR: the same shape HU-3's project detail has, where a
+    project permission and a firm one each open it on their own.
     """
     guarded = FastAPI()
 
@@ -42,6 +46,20 @@ def guarded_client(db: Connection) -> Iterator[TestClient]:
         dependencies=[Depends(requires("project.edit", "project"))],
     )
     def edit_project() -> dict[str, bool]:
+        return {"reached": True}
+
+    @guarded.get(
+        "/firms/{firm_id}/projects/{project_id}/detail",
+        dependencies=[
+            Depends(
+                requires_any(
+                    ("project.view", "project"),
+                    ("project.view_all", "firm"),
+                )
+            )
+        ],
+    )
+    def read_project() -> dict[str, bool]:
         return {"reached": True}
 
     def override_get_db() -> Iterator[Session]:
@@ -129,17 +147,31 @@ class TestProjectScope:
 
         assert response.status_code == 403
 
-    def test_a_firm_member_with_no_seat_on_the_project_is_forbidden(
+    def test_the_owner_sees_every_work_but_may_not_edit_one_they_are_not_on(
         self, guarded_client, world, auth_header
     ):
-        """Belonging to the firm opens the door to the firm, not to every work
-        inside it: HU-3 says each person sees only the projects they are on."""
+        """403 and not 404: Ana holds project.view_all, so the work is visible
+        to her and hiding it would protect nothing. What she lacks is the
+        action. The other way round — no view_all and no seat — is a 404, and
+        TestEitherScope covers it."""
         response = guarded_client.get(
             f"/firms/{world.firm_a}/projects/{world.project_a}",
             headers=auth_header(world.account_a),
         )
 
         assert response.status_code == 403
+
+    def test_a_member_with_neither_a_seat_nor_view_all_is_not_found(
+        self, guarded_client, world, auth_header
+    ):
+        """Alba is an architect: no project row here and no firm-wide grant, so
+        the work does not exist as far as she can tell."""
+        response = guarded_client.get(
+            f"/firms/{world.firm_a}/projects/{world.project_a}",
+            headers=auth_header(world.account_a2),
+        )
+
+        assert response.status_code == 404
 
     def test_a_project_of_another_firm_grants_nothing(
         self, guarded_client, world, add_project_member, auth_header
@@ -156,7 +188,105 @@ class TestProjectScope:
         assert response.status_code == 404
 
 
+class TestEitherScope:
+    """requires_any: the shape HU-3's project detail needs.
+
+    Ana owns firm A, so she holds project.view_all there and no project role at
+    all. Alba is an architect: she holds neither, and only gets in through a
+    project_member row. One route, two ways in, and each is exercised alone.
+    """
+
+    def test_the_project_permission_alone_opens_it(
+        self, guarded_client, world, add_project_member, auth_header
+    ):
+        """Alba is on the project as a viewer, and holds no firm-wide grant."""
+        add_project_member(world.project_a, world.account_a2, world.firm_a, "viewer")
+
+        response = guarded_client.get(
+            f"/firms/{world.firm_a}/projects/{world.project_a}/detail",
+            headers=auth_header(world.account_a2),
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"reached": True}
+
+    def test_the_firm_permission_alone_opens_it(self, guarded_client, world, auth_header):
+        """Ana has no project_member row here, which is the whole point: without
+        the OR she would get a 403 on her own firm's work (HU-3)."""
+        response = guarded_client.get(
+            f"/firms/{world.firm_a}/projects/{world.project_a}/detail",
+            headers=auth_header(world.account_a),
+        )
+
+        assert response.status_code == 200
+
+    def test_neither_is_not_found(self, guarded_client, world, auth_header):
+        """Alba belongs to the firm and to nothing inside it, so the work is
+        invisible to her rather than forbidden. HU-3: "Si pido por URL una obra
+        ajena —de otro miembro o de otro estudio— recibo 404 (no 403 — no
+        revelamos que existe)." A colleague's work is exactly "de otro miembro"."""
+        response = guarded_client.get(
+            f"/firms/{world.firm_a}/projects/{world.project_a}/detail",
+            headers=auth_header(world.account_a2),
+        )
+
+        assert response.status_code == 404
+
+    def test_an_outsider_is_still_not_found(self, guarded_client, world, auth_header):
+        """The OR is about permissions, not about the tenant: Bruno is refused
+        by the roster before either branch is looked at."""
+        response = guarded_client.get(
+            f"/firms/{world.firm_a}/projects/{world.project_a}/detail",
+            headers=auth_header(world.account_b),
+        )
+
+        assert response.status_code == 404
+
+    def test_an_anonymous_caller_is_unauthorized_before_anything_else(self, guarded_client, world):
+        response = guarded_client.get(f"/firms/{world.firm_a}/projects/{world.project_a}/detail")
+
+        assert response.status_code == 401
+
+
+class TestTheDeclaration:
+    """What the guard carries for the route audit to read."""
+
+    def test_one_permission_is_stamped_as_a_tuple_of_pairs(self):
+        """The shape test_route_permissions walks. Uniform across both builders,
+        so an auditor never has to tell a pair from a tuple of pairs."""
+        guard = requires("member.add", "firm")
+
+        assert getattr(guard, REQUIRED_PERMISSION) == (("member.add", "firm"),)
+
+    def test_several_permissions_are_stamped_in_the_order_declared(self):
+        guard = requires_any(("project.view", "project"), ("project.view_all", "firm"))
+
+        assert getattr(guard, REQUIRED_PERMISSION) == (
+            ("project.view", "project"),
+            ("project.view_all", "firm"),
+        )
+
+    def test_one_query_per_scope_however_many_permissions(self):
+        """Two permissions of the same scope resolve that scope once: FastAPI
+        caches a dependency per request, and both pairs read the same set."""
+        guard = requires_any(("project.view", "project"), ("project.edit", "project"))
+
+        assert list(inspect.signature(guard).parameters) == ["project"]
+
+
 def test_an_unknown_scope_fails_when_the_route_is_declared():
     """At import time, not on the first request that happens to reach it."""
     with pytest.raises(ValueError, match="unknown scope"):
         requires("member.add", "estudio")  # type: ignore[arg-type]
+
+
+def test_an_unknown_scope_fails_the_same_way_among_several():
+    with pytest.raises(ValueError, match="unknown scope"):
+        requires_any(("project.view", "project"), ("member.add", "estudio"))  # type: ignore[arg-type]
+
+
+def test_declaring_no_permission_at_all_is_refused():
+    """An empty requires_any() would let everyone through while still looking
+    guarded, and the route audit would count it as a declaration."""
+    with pytest.raises(ValueError, match="at least one"):
+        requires_any()
