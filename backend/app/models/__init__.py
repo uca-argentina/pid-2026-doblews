@@ -5,9 +5,11 @@ the whole schema; without it they see an empty one and propose dropping every ta
 """
 
 from app.models.account import Account
+from app.models.catalog import Recipe, RecipeResource, Resource
 from app.models.firm import Firm
 from app.models.membership import FirmMember, PlatformMember
 from app.models.project import Project, ProjectMember
+from app.models.project_recipe import ProjectRecipe
 from app.models.role import Permission, Role, RolePermission
 from app.models.unit_of_measure import UnitOfMeasure
 
@@ -21,6 +23,10 @@ __all__ = [
     "PlatformMember",
     "Project",
     "ProjectMember",
+    "ProjectRecipe",
+    "Recipe",
+    "RecipeResource",
+    "Resource",
     "Role",
     "RolePermission",
     "UnitOfMeasure",
