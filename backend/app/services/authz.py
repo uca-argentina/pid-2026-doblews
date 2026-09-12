@@ -23,6 +23,13 @@ from app.models import FirmMember, Permission, PlatformMember, ProjectMember, Ro
 # the CHECK constraint in models/role.py.
 Scope = Literal["platform", "firm", "project"]
 
+# The one permission code this application branches on outside a requires(...)
+# declaration, so it is spelled once here rather than in each place that reads
+# it. Firm-scope, held by the owner: it widens which *project* rows a read
+# returns, and it is what decides whether a work the caller is not on is
+# invisible to them or merely read-only (ADR-002 section 7).
+VIEW_ALL = "project.view_all"
+
 
 def _granted_codes(scope: Scope) -> Select:
     """Permission codes granted by a role, within one scope.

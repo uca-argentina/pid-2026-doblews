@@ -147,17 +147,31 @@ class TestProjectScope:
 
         assert response.status_code == 403
 
-    def test_a_firm_member_with_no_seat_on_the_project_is_forbidden(
+    def test_the_owner_sees_every_work_but_may_not_edit_one_they_are_not_on(
         self, guarded_client, world, auth_header
     ):
-        """Belonging to the firm opens the door to the firm, not to every work
-        inside it: HU-3 says each person sees only the projects they are on."""
+        """403 and not 404: Ana holds project.view_all, so the work is visible
+        to her and hiding it would protect nothing. What she lacks is the
+        action. The other way round — no view_all and no seat — is a 404, and
+        TestEitherScope covers it."""
         response = guarded_client.get(
             f"/firms/{world.firm_a}/projects/{world.project_a}",
             headers=auth_header(world.account_a),
         )
 
         assert response.status_code == 403
+
+    def test_a_member_with_neither_a_seat_nor_view_all_is_not_found(
+        self, guarded_client, world, auth_header
+    ):
+        """Alba is an architect: no project row here and no firm-wide grant, so
+        the work does not exist as far as she can tell."""
+        response = guarded_client.get(
+            f"/firms/{world.firm_a}/projects/{world.project_a}",
+            headers=auth_header(world.account_a2),
+        )
+
+        assert response.status_code == 404
 
     def test_a_project_of_another_firm_grants_nothing(
         self, guarded_client, world, add_project_member, auth_header
@@ -206,15 +220,17 @@ class TestEitherScope:
 
         assert response.status_code == 200
 
-    def test_neither_is_forbidden(self, guarded_client, world, auth_header):
-        """Alba belongs to the firm and to nothing inside it."""
+    def test_neither_is_not_found(self, guarded_client, world, auth_header):
+        """Alba belongs to the firm and to nothing inside it, so the work is
+        invisible to her rather than forbidden. HU-3: "Si pido por URL una obra
+        ajena —de otro miembro o de otro estudio— recibo 404 (no 403 — no
+        revelamos que existe)." A colleague's work is exactly "de otro miembro"."""
         response = guarded_client.get(
             f"/firms/{world.firm_a}/projects/{world.project_a}/detail",
             headers=auth_header(world.account_a2),
         )
 
-        assert response.status_code == 403
-        assert response.json()["detail"] == FORBIDDEN
+        assert response.status_code == 404
 
     def test_an_outsider_is_still_not_found(self, guarded_client, world, auth_header):
         """The OR is about permissions, not about the tenant: Bruno is refused

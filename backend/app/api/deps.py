@@ -25,7 +25,13 @@ from app.core.token import decode_access_token
 from app.db.session import get_db
 from app.models import Account
 from app.services.auth import FirmMembership, get_firm_membership
-from app.services.authz import Scope, firm_permissions, platform_permissions, project_permissions
+from app.services.authz import (
+    VIEW_ALL,
+    Scope,
+    firm_permissions,
+    platform_permissions,
+    project_permissions,
+)
 
 # auto_error=False because with the default FastAPI answers a missing header
 # with 403, and the frontend tells the two apart: 401 means the session is gone
@@ -35,6 +41,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 CREDENTIALS_ERROR = "No pudimos validar tu sesión"
 FIRM_NOT_FOUND = "Estudio no encontrado"
+PROJECT_NOT_FOUND = "Obra no encontrada"
 FORBIDDEN = "No tenés permiso para hacer esto"
 
 # Stamped on every dependency requires_any() builds, so the route table can be
@@ -149,10 +156,27 @@ def get_project_permissions(
     The firm comes from the already-resolved membership and never from the
     request, so a project belonging to another firm resolves to no permissions
     at all rather than to someone else's.
+
+    An empty set is where the work stops being a 403 and becomes a 404. HU-3:
+    "Si pido por URL una obra ajena —de otro miembro o de otro estudio— recibo
+    404 (no 403 — no revelamos que existe)." Nothing at all in this project, and
+    no firm-wide project.view_all to widen it, means the caller cannot see the
+    work exists, and four situations collapse into the same answer: no such
+    project, another firm's project, an archived one, and one of this firm they
+    were never put on.
+
+    Holding *something* here and not the permission the route demands is the
+    other case, and stays a 403: they can already see the work, so hiding it
+    protects nothing. That is what HU-6 asks for when a collaborator tries to
+    change the team.
     """
-    return project_permissions(
+    granted = project_permissions(
         db, account_id=account.id, project_id=project_id, firm_id=membership.firm_id
     )
+    if not granted and VIEW_ALL not in firm_permissions(db, membership.role_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=PROJECT_NOT_FOUND)
+
+    return granted
 
 
 # Routes that need to read the set — the repositories do, to answer "which rows?"

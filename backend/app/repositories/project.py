@@ -18,12 +18,13 @@ from sqlalchemy.orm import aliased
 
 from app.models import Account, FirmMember, Project, ProjectMember
 from app.repositories.base import FirmScopedRepository
+from app.services.authz import VIEW_ALL
 
-# A firm-scope permission that changes which *project* rows a read returns, which
-# is exactly why the two levels of enforcement are separate. ADR-002 section 7:
-# giving the owner project.view_all is what keeps "el dueño ve todas las obras de
-# su estudio" a row in the seed instead of an `if is_owner` buried in here.
-VIEW_ALL = "project.view_all"
+# VIEW_ALL is a firm-scope permission that changes which *project* rows a read
+# returns, which is exactly why the two levels of enforcement are separate.
+# ADR-002 section 7: giving the owner project.view_all is what keeps "el dueño ve
+# todas las obras de su estudio" a row in the seed instead of an `if is_owner`
+# buried in here.
 
 # The project role that makes someone the client of a work. Compared as a literal
 # for the same reason the partial index uq_project_member_client does it:
