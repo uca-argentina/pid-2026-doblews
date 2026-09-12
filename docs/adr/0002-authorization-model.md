@@ -1,7 +1,7 @@
 # ADR-002: Modelo de autorización — RBAC con permisos y alcance
 
 **Estado:** Aceptada
-**Fecha:** 2026-09-06 (aceptada 2026-09-07, al implementarse T-02; afinada 2026-09-12 al implementarse el backend de HU-3 — §6, §7 y las nuevas §9.1 y §9.2)
+**Fecha:** 2026-09-06 (aceptada 2026-09-07, al implementarse T-02; afinada 2026-09-12 al implementarse HU-3 — §6, §7 y las nuevas §9.1 y §9.2)
 **Contexto:** Modelo de usuarios, roles y permisos de la plataforma. Afecta a HU-1, HU-2 y HU-3 del Sprint 1, y a todo módulo posterior que lea o escriba datos de una obra.
 
 ---
@@ -258,7 +258,13 @@ Cuatro cosas que la tabla dice y conviene leer explícitamente:
 
 **`client` de obra hoy tiene lo mismo que `viewer`.** Existen separados porque la diferencia aparece cuando entren presupuestos: `viewer` va a tener `budget.view_costs` y `client` no. Un cliente no es "ve menos": **ve otra cosa**. Tenerlos separados desde ahora hace que ese día sea una fila y no una migración.
 
-Y una nota sobre lo que la tabla **no** dice, que apareció al implementar HU-3: **el listado de obras se guarda con `firm.view`, no con un permiso de obra.** No hay `project_id` en la URL contra el cual resolver uno, y la pregunta que el endpoint hace es sobre el estudio: "¿podés listar obras acá?". *Cuáles* vuelven lo contesta el repositorio (§8), que por eso recibe el conjunto de permisos: es lo que le permite a `project.view_all` ensanchar la lectura del dueño. Los tres roles de estudio tienen `firm.view`, así que un `client` recibe 200 con las obras a las que lo asignaron —ninguna hasta que HU-6 lo haga— y nunca un 403 sobre una pantalla que le corresponde.
+Y dos notas sobre lo que la tabla **no** dice, que aparecieron al implementar HU-3.
+
+**El detalle de una obra devuelve los permisos del que pide sobre ella**, como `permissions`, igual que `GET /firms/{id}` los devuelve para el estudio. Son **para pintar**: sirven para no ofrecer un botón que el backend va a rechazar, y no autorizan nada — cada request los resuelve de nuevo, así que una copia vieja en el navegador puede esconder un botón y nunca abrir una puerta. Una lista vacía es una respuesta legítima y es el caso que obligó a agregarlo: el `owner` tiene `project.view_all`, así que ve todas las obras de su estudio, y esta tabla no le da ningún rol sobre las que no integra.
+
+Va en el detalle y no en el listado porque el listado no tiene `project_id` en su URL contra el cual resolver permisos de ámbito obra. La consecuencia para la interfaz es que **las acciones de una obra viven en su propia pantalla**, nunca como menú en una fila del listado.
+
+**El listado de obras se guarda con `firm.view`, no con un permiso de obra.** No hay `project_id` en la URL contra el cual resolver uno, y la pregunta que el endpoint hace es sobre el estudio: "¿podés listar obras acá?". *Cuáles* vuelven lo contesta el repositorio (§8), que por eso recibe el conjunto de permisos: es lo que le permite a `project.view_all` ensanchar la lectura del dueño. Los tres roles de estudio tienen `firm.view`, así que un `client` recibe 200 con las obras a las que lo asignaron —ninguna hasta que HU-6 lo haga— y nunca un 403 sobre una pantalla que le corresponde.
 
 ### 8. El aislamiento entre estudios no es un permiso
 

@@ -267,21 +267,23 @@ Dos avisos sobre este plan:
 
 ### Dónde estamos (2026-09-12)
 
-**Terminadas:** T-01, T-02, T-03, **T-04**, HU-0, HU-1, HU-2 y el **backend de HU-3** (el front de HU-2 y el de HU-3 esperan).
+**Terminadas:** T-01, T-02, T-03, **T-04**, HU-0, HU-1, HU-2 y **HU-3 entera** (el front de HU-2 espera su merge).
 
 **Queda,** en este orden, y en dos carriles que no se pisan:
 
 | Carril | Historias |
 |---|---|
-| Obras | **HU-3 front** → **HU-6** |
+| Obras | **HU-6** |
 | Catálogo | **HU-4** → **HU-5** (HU-5 ya tiene las obras que necesitaba) |
 
-**Lo que el backend de HU-3 dejó decidido** (ver [ADR-002 §6, §7 y §9.1-9.2](../adr/0002-authorization-model.md)), porque el front y HU-6 se apoyan en ello:
+**Lo que HU-3 dejó decidido** (ver [ADR-002 §6, §7 y §9.1-9.2](../adr/0002-authorization-model.md)), porque HU-6 y HU-5 se apoyan en ello:
 
 - Cinco endpoints bajo `/firms/{firm_id}/projects`. La edición es un **PUT** con el formulario entero: el campo que no viene, se vacía.
 - En ámbito de obra, **sin permisos es 404 y no 403**. Una obra de un colega es indistinguible de una que no existe, que es lo que pide el criterio de aceptación.
 - El cliente se valida contra el padrón: tiene que ser miembro **activo** con rol de estudio `client`. Si no, 409 con un mensaje que dice qué hacer.
 - El selector de clientes del front se llena con `GET /firms/{id}/members` filtrando por `role.code == "client"`; no hay endpoint aparte.
+- **El detalle de la obra devuelve `permissions`**, los del que pide sobre esa obra, igual que `GET /firms/{id}`. Es lo que permite ocultar acciones que el backend rechazaría: el dueño del estudio ve todas las obras y no puede editar las que no integra.
+- **`ProjectLayout` es el enganche de HU-6 y HU-5.** La pantalla de una obra es una ruta anidada: `projects/:projectId` resuelve la obra y sus permisos una vez y los deja en contexto, y su `index` es la pantalla de datos. La sección "Equipo" de HU-6 entra como hermana del index —no adentro de él— y lee la obra de `useCurrentProject()` sin volver a pedirla, con su visibilidad atada a `can("project.member.manage")`.
 
 Y aparte, sin bloquear a nadie y bloqueadas por nadie: **HU-7**, la primera candidata a quedar afuera, y el **deploy**.
 

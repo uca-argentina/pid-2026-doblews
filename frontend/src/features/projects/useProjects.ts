@@ -76,13 +76,26 @@ export function useUpdateProject(firmId: number) {
 }
 
 /** Archives a work. It leaves the listing and its own screen stops answering,
- * but the row and the team it had are untouched. */
+ * but the row and the team it had are untouched.
+ *
+ * exact: true, and this is the one mutation that needs it. Every other write
+ * wants the whole subtree refreshed, because a work's own key hangs below the
+ * listing's. Here that would refetch the work we just archived — from the
+ * screen that is still mounted and showing it — and the backend would rightly
+ * answer 404, which ProjectLayout reads as "this work is not yours" and turns
+ * into a "no encontrada" notice on top of the success one.
+ *
+ * Narrowing it to the listing leaves the detail's cache entry untouched, so
+ * nothing refetches it and the screen is gone a moment later anyway. */
 export function useArchiveProject(firmId: number) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (projectId: number) => archiveProject(firmId, projectId),
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: projectKeys.all(firmId) }),
+      queryClient.invalidateQueries({
+        queryKey: projectKeys.all(firmId),
+        exact: true,
+      }),
   });
 }
