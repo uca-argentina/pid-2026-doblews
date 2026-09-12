@@ -1,7 +1,7 @@
 # ADR-002: Modelo de autorización — RBAC con permisos y alcance
 
 **Estado:** Aceptada
-**Fecha:** 2026-09-06 (aceptada 2026-09-07, al implementarse T-02)
+**Fecha:** 2026-09-06 (aceptada 2026-09-07, al implementarse T-02; afinada 2026-09-12 al implementarse el backend de HU-3 — §6, §7 y las nuevas §9.1 y §9.2)
 **Contexto:** Modelo de usuarios, roles y permisos de la plataforma. Afecta a HU-1, HU-2 y HU-3 del Sprint 1, y a todo módulo posterior que lea o escriba datos de una obra.
 
 ---
@@ -229,6 +229,12 @@ La primera garantiza que la fila apunta a una obra que efectivamente es de ese e
 
 El cliente de una obra es su fila en `project_member` con rol `client`, y el índice parcial garantiza que haya uno solo. Tener además una FK directa significaría la misma verdad en dos lugares, que tarde o temprano se contradicen: una obra cuyo `client_id` apunta a alguien que ya no es miembro.
 
+Dos consecuencias que aparecieron al implementar HU-3:
+
+**Vaciar el cliente borra la fila, y eso no contradice la baja lógica.** `project_member` no tiene `is_active` a propósito: §11.3 vuelve inerte una asignación a través de la fila de padrón, no de una bandera propia. Así que acá no hay baja lógica disponible, y quitar a alguien de una obra es un `DELETE`. La regla del equipo es sobre las **entidades del ABM** —la obra se archiva, nunca se borra— y una asignación no es una de ellas.
+
+**El cliente que se fue del padrón no se muestra.** Su fila queda ahí, inerte. El listado de obras la lee con un join contra `firm_member` activo, así que la obra aparece *sin cliente* en vez de mostrar el nombre de alguien a quien el estudio ya no alcanza. El día que vuelve al padrón, vuelve a figurar sola.
+
 ### 7. Catálogo cerrado de roles
 
 | Ámbito | Rol | Permisos |
@@ -251,6 +257,8 @@ Cuatro cosas que la tabla dice y conviene leer explícitamente:
 **El permiso de *crear* vive siempre en el ámbito del padre.** `project.create` es de ámbito estudio, no de obra: todavía no hay obra a la cual referirlo. Es la misma lógica de IAM y es lo que evita el bug clásico de "creé algo y ahora no lo puedo ver".
 
 **`client` de obra hoy tiene lo mismo que `viewer`.** Existen separados porque la diferencia aparece cuando entren presupuestos: `viewer` va a tener `budget.view_costs` y `client` no. Un cliente no es "ve menos": **ve otra cosa**. Tenerlos separados desde ahora hace que ese día sea una fila y no una migración.
+
+Y una nota sobre lo que la tabla **no** dice, que apareció al implementar HU-3: **el listado de obras se guarda con `firm.view`, no con un permiso de obra.** No hay `project_id` en la URL contra el cual resolver uno, y la pregunta que el endpoint hace es sobre el estudio: "¿podés listar obras acá?". *Cuáles* vuelven lo contesta el repositorio (§8), que por eso recibe el conjunto de permisos: es lo que le permite a `project.view_all` ensanchar la lectura del dueño. Los tres roles de estudio tienen `firm.view`, así que un `client` recibe 200 con las obras a las que lo asignaron —ninguna hasta que HU-6 lo haga— y nunca un 403 sobre una pantalla que le corresponde.
 
 ### 8. El aislamiento entre estudios no es un permiso
 
@@ -283,6 +291,42 @@ Y dos niveles de enforcement, ambos necesarios:
 - **Scoping de datos**, en el repositorio: `list_projects(account, firm)` filtra por membresía. Un `GET /projects` sin filtro no lo salva ningún decorador, porque el chequeo de acción dice "podés listar obras", no "podés listar *estas* obras".
 
 Recurso al que no se tiene acceso → **404, no 403**. Un 403 confirma que el recurso existe.
+
+#### 9.1. Un endpoint que acepta cualquiera de dos permisos
+
+*Agregado al implementar HU-3.*
+
+Una misma capacidad puede estar otorgada a dos alturas distintas. Leer **una** obra es un permiso de obra (`project.view`); el derecho del dueño a leer **todas** las de su estudio es uno de estudio (`project.view_all`, §7), y el dueño no tiene fila en `project_member` de la cual resolver el primero. Guardar el detalle solo con `project.view` le daría 403 sobre obras de su propio estudio.
+
+Se resuelve declarando la alternativa en la ruta, con `requires_any`:
+
+```python
+@router.get("/{project_id}", dependencies=[Depends(requires_any(
+    ("project.view", "project"),
+    ("project.view_all", "firm"),
+))])
+```
+
+La otra salida —enseñarle al resolutor que un permiso implica otro— movería un otorgamiento al código, que es justamente lo que §7 evita al dejar `project.view_all` como fila del seed. `requires(code, scope)` pasa a ser el caso de un solo permiso de `requires_any`.
+
+Declarar la alternativa **no** es ensanchar el tenant: entre por la rama que entre, *qué filas* ve después lo sigue contestando el repositorio (§8).
+
+#### 9.2. En ámbito de obra, "sin permisos" es 404 y no 403
+
+*Agregado al implementar HU-3, que lo pide con todas las letras: "Si pido por URL una obra ajena —de otro miembro o de otro estudio— recibo 404 (no 403 — no revelamos que existe)".*
+
+El 403 de §9 vale cuando el que pide **ya sabe que el recurso existe**. Dentro del estudio eso es cierto: es miembro del padrón, la pantalla existe para él, y esconderle el estudio no protege nada. Dentro de una obra no: una obra de un colega es precisamente lo que no debe ser observable.
+
+La regla, entonces, se parte en dos y vive en la resolución de permisos de obra, no en cada ruta:
+
+| Situación | Respuesta |
+|---|---|
+| Ningún permiso de obra **y** el estudio no otorga `project.view_all` | **404** — la obra es invisible |
+| Tiene algún permiso de obra, pero no el que la ruta exige | **403** — la ve, no puede hacer *eso* |
+
+La primera fila colapsa cuatro casos en una sola respuesta —la obra no existe, es de otro estudio, está archivada, es de este estudio y nunca lo asignaron— que es exactamente lo que hace falta para que ninguno sea distinguible. La segunda es la que HU-6 necesita: un `collaborator` que intenta tocar el equipo recibe 403, porque ya está viendo la obra.
+
+Al vivir en la dependencia y no en los endpoints, vale para toda ruta de obra que se agregue después sin que nadie tenga que acordarse.
 
 ### 10. Alta de un estudio
 
