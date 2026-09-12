@@ -12,17 +12,22 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
-import { Link, useLocation, useNavigate, type Location } from "react-router-dom";
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  type Location,
+} from "react-router-dom";
 import { isAxiosError } from "axios";
 import { useAuth } from "../features/auth/AuthContext";
 import { resolveHomePath } from "../features/auth/navigation";
+import { CONNECTION_ERROR } from "../lib/apiError";
 
 // Same string the backend returns for every way a login can fail (see
 // backend/app/api/routes/auth.py) — kept as a constant here too, rather than
 // read off the response body, so a network failure that never reaches the
 // backend still shows something sensible instead of an empty message.
 const INVALID_CREDENTIALS = "Email o contraseña incorrectos";
-const CONNECTION_ERROR = "No pudimos conectar con el servidor. Probá de nuevo en otro momento.";
 
 interface LocationState {
   from?: Location;
@@ -38,7 +43,8 @@ export function LoginPage() {
   const form = useForm({
     initialValues: { email: "", password: "" },
     validate: {
-      email: (value) => (/^\S+@\S+\.\S+$/.test(value) ? null : "Ingresá un email válido"),
+      email: (value) =>
+        /^\S+@\S+\.\S+$/.test(value) ? null : "Ingresá un email válido",
       password: (value) => (value.length > 0 ? null : "Ingresá tu contraseña"),
     },
   });
@@ -103,7 +109,13 @@ export function LoginPage() {
             </Stack>
           </form>
 
-          <Anchor component={Link} to="/forgot-password" size="sm" c="dimmed" ta="center">
+          <Anchor
+            component={Link}
+            to="/forgot-password"
+            size="sm"
+            c="dimmed"
+            ta="center"
+          >
             ¿Olvidaste tu contraseña?
           </Anchor>
         </Stack>

@@ -14,6 +14,15 @@ export interface FirmSummary {
   role: RoleOut;
 }
 
+/** What GET /firms/{id} returns: the firm plus what the caller may do in it.
+ *
+ * permissions is for painting only — which sections and buttons to show. The
+ * backend resolves them again on every request, so a stale copy here can hide
+ * a button but never open a door. */
+export interface FirmDetail extends FirmSummary {
+  permissions: string[];
+}
+
 export interface MeResponse {
   id: number;
   name: string;

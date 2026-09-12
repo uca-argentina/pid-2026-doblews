@@ -5,8 +5,16 @@ repos:
       - id: ruff
         args: [--fix]
       - id: ruff-format
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v3.1.0
+  # Prettier corre desde frontend/node_modules, no desde un mirror con su
+  # propia versión. mirrors-prettier quedó archivado en la 3.1.0 y el proyecto
+  # usa la 3.9.6: las dos formatean distinto (3.1.0 parte un template literal
+  # largo en varias líneas y 3.9.6 lo vuelve a unir), así que el hook y
+  # `npm run format` se reescribían mutuamente en cada commit.
+  # Requiere haber corrido `npm install` en frontend/, igual que `npm run dev`.
+  - repo: local
     hooks:
       - id: prettier
+        name: prettier
+        entry: frontend/node_modules/.bin/prettier --write --ignore-unknown
+        language: system
         files: ^frontend/
