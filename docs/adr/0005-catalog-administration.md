@@ -85,6 +85,16 @@ Se mitiga mostrando de cuándo es el precio, que es el dato que `resource.price_
 - **Una receta dada de baja no se ofrece más para cargar**, pero las líneas de cómputo que ya la usan siguen calculando. Borrarla cambiaría el presupuesto de obras ajenas al cambio.
 - Nada se borra físicamente, como en todo el proyecto.
 
+### 7. Reglas que la base no puede garantizar
+
+Es el equivalente de [ADR-002 §11](0002-authorization-model.md) para este módulo, y hace falta escribirlo porque las reglas de §6 **se leen como si el esquema las sostuviera, y no lo hace**. Van en la capa de servicio, **cada una con su test**:
+
+1. **Un recurso usado por una receta activa no se puede dar de baja.** Ninguna constraint puede expresarlo: es una condición sobre las filas de otra tabla, no sobre la fila que se está escribiendo. Hoy un `UPDATE resource SET is_active = false` deja recetas activas apuntando a un material de baja, y el cómputo de una obra lo sigue sumando. El índice `ix_recipe_resource_resource_id` existe para que esa verificación sea barata.
+2. **Una receta activa tiene al menos una línea.** Mismo motivo: la condición vive en `recipe_resource`. Una receta vacía no da error, da cero materiales, que es la trampa silenciosa que HU-8 declara como criterio de aceptación. La restricción tiene que aplicarse al guardar la receta, no al leerla.
+3. **`price_updated_at` se mueve cuando cambia el precio, y solo entonces.** Acá el esquema garantiza la mitad y la capa de servicio la otra: el trigger de `updated_at` deja esa columna quieta —editar el nombre de un material no ensucia la fecha de su precio, y hay un test de esquema que lo prueba—, pero nada obliga a actualizarla cuando el precio sí cambia. Si el `UPDATE` del precio se olvida de tocarla, la pantalla del cómputo miente con una fecha vieja, que es exactamente lo que §5 quiere evitar.
+
+Lo que la base **sí** garantiza sola, desde T-04: que un precio no sea negativo, que una moneda sea un código ISO de tres letras, que un rendimiento y una cantidad computada sean mayores que cero, que dos materiales activos no compartan nombre ni siquiera con otra capitalización, y —vía la FK compuesta contra `project (id, firm_id)`— que una línea de cómputo no pueda apuntar a la obra de otro estudio.
+
 ## Consecuencias
 
 **Se desbloquea:**

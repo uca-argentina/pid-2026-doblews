@@ -267,20 +267,20 @@ Dos avisos sobre este plan:
 
 ### Dónde estamos (2026-09-12)
 
-**Terminadas:** T-01, T-02, T-03, HU-0, HU-1 y HU-2 (backend mergeado; el front espera el merge de su PR).
+**Terminadas:** T-01, T-02, T-03, **T-04**, HU-0, HU-1 y HU-2 (backend mergeado; el front espera el merge de su PR).
 
 **Queda,** en este orden, y en dos carriles que no se pisan:
 
 | Carril | Historias |
 |---|---|
 | Obras | **HU-3** → **HU-6** |
-| Catálogo | **T-04** → **HU-4** → **HU-5** (HU-5 necesita además HU-3) |
+| Catálogo | **HU-4** → **HU-5** (HU-5 necesita además HU-3) |
 
 Y aparte, sin bloquear a nadie y bloqueadas por nadie: **HU-7**, la primera candidata a quedar afuera, y el **deploy**.
 
 Dos cosas que este plan original no tenía y conviene no perder de vista:
 
-- **T-04 apareció después** (ver Habilitadoras técnicas). Sin ella, HU-4 y HU-5 no tienen tablas contra las cuales trabajar.
+- **T-04 apareció después** (ver Habilitadoras técnicas) y ya está hecha: las cuatro tablas existen con sus invariantes, y el catálogo arranca con 7 materiales y 3 recetas. HU-4 y HU-5 tienen contra qué trabajar.
 - **El deploy sigue sin existir.** El CI corre lint, migraciones, tests y build, pero no deploya. Mientras eso siga así, **ninguna historia cumple la Definition of Done**, cuyo punto 4 pide probarla en el ambiente de deploy, y la demo se muestra desde localhost.
 
 ## Habilitadoras técnicas
@@ -289,8 +289,10 @@ No son historias de usuario, pero ocupan días del sprint y sin ellas no hay nad
 
 - **T-02 — Esquema inicial y seeds.** Las tablas de ADR-002 más `unit_of_measure`; seeds de `permission`, `role`, `role_permission`, las 7 unidades, el usuario de soporte y **dos estudios** con su propietario. Dos estudios desde el día uno hacen que el aislamiento entre tenants sea demostrable en la defensa. *2 días.*
 - **T-03 — Motor de autorización.** Resolución del estudio activo desde la URL con verificación de padrón; dependencia `requires(permission, ámbito)`; repositorio base que inyecta `firm_id` en toda lectura; tests de aislamiento parametrizados sobre la tabla de rutas de FastAPI. *1 día, de a dos.*
-- **T-04 — Esquema y seed del catálogo del sistema.** Las cuatro tablas de [ADR-003 §2](../adr/0003-recipe-catalog.md) que todavía no existen —`resource`, `recipe`, `recipe_resource` y `project_recipe`— más el seed del catálogo: materiales con su unidad y precio de referencia, y recetas con sus proporciones. *1 día.*
+- **T-04 — Esquema y seed del catálogo del sistema.** Las cuatro tablas de [ADR-003 §2](../adr/0003-recipe-catalog.md) que faltaban —`resource`, `recipe`, `recipe_resource` y `project_recipe`— más el seed del catálogo: materiales con su unidad y precio de referencia, y recetas con sus proporciones. *1 día.* **Terminada el 2026-09-12.**
 
   Apareció al revisar el estado del sprint el 2026-09-12: T-02 creó las tablas de ADR-002 y `unit_of_measure`, y una migración posterior sembró el permiso `catalog.view`, pero **las tablas del catálogo nunca se crearon**. No es trabajo de ninguna historia y bloquea a dos: HU-4 no tiene qué listar y HU-5 no tiene recetas que computar.
 
   La mitad cara no es el DDL, que es mecánico: es **curar los datos**. Qué materiales entran, con qué precios y, sobre todo, qué lleva cada receta. Ese contenido es lo que hace que la aplicación sirva desde el primer login, que es el argumento con el que ADR-003 decidió que el catálogo fuera del sistema y no de cada estudio. Conviene arrancar con pocas recetas bien hechas —las de pared, contrapiso y carpeta— antes que con muchas a medias.
+
+  **Cómo quedó.** Siete materiales y las tres recetas sugeridas —pared, contrapiso y carpeta—, cada una con el espesor y la dosificación anotados en su `description`, porque una receta por m² sin espesor declarado es ambigua. La pared reproduce el ejemplo de ADR-003 (60 ladrillos y 0,25 bolsa de cemento por m²), así que el cómputo de 120 m² devuelve los **7.200 ladrillos y 30 bolsas** que esa ADR promete en sus Consecuencias. Los precios de referencia son plausibles y redondos, no un relevamiento: están para corregirse. Queda pendiente de la discusión del equipo si los materiales `labor` y `equipment` se siembran alguna vez — hoy existen en el `CHECK` y no tienen filas.
