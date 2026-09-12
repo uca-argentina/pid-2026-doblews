@@ -9,12 +9,16 @@ import {
   Text,
   Title,
 } from "@mantine/core";
+import { useState } from "react";
 import { useDisclosure } from "@mantine/hooks";
 import { useCurrentFirm } from "../features/firms/firmContext";
 import { AddMemberModal } from "../features/members/AddMemberModal";
+import { ChangeRoleModal } from "../features/members/ChangeRoleModal";
 import { MemberCard } from "../features/members/MemberCard";
 import { MembersTable } from "../features/members/MembersTable";
+import { RemoveMemberModal } from "../features/members/RemoveMemberModal";
 import { useMembers } from "../features/members/useMembers";
+import type { MemberOut } from "../features/members/types";
 
 /** HU-2: the people of this firm, with their role and their state.
  *
@@ -24,6 +28,11 @@ export function MembersPage() {
   const { firm } = useCurrentFirm();
   const { data: members, isLoading, isError } = useMembers(firm.id);
   const [addOpened, addModal] = useDisclosure(false);
+  // Which member a modal is about, and null when it is closed. Kept here and
+  // not inside each row so there is one modal of each kind on the screen
+  // rather than one per person.
+  const [roleTarget, setRoleTarget] = useState<MemberOut | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<MemberOut | null>(null);
 
   return (
     <Stack gap="md">
@@ -40,6 +49,14 @@ export function MembersPage() {
       </Group>
 
       <AddMemberModal opened={addOpened} onClose={addModal.close} />
+      <ChangeRoleModal
+        member={roleTarget}
+        onClose={() => setRoleTarget(null)}
+      />
+      <RemoveMemberModal
+        member={removeTarget}
+        onClose={() => setRemoveTarget(null)}
+      />
 
       {isLoading && (
         <Center>
@@ -59,11 +76,20 @@ export function MembersPage() {
               which is how Mantine's responsive props work: no window
               measurement, and nothing to re-render on resize. */}
           <Box visibleFrom="sm">
-            <MembersTable members={members} />
+            <MembersTable
+              members={members}
+              onChangeRole={setRoleTarget}
+              onRemove={setRemoveTarget}
+            />
           </Box>
           <Stack gap="sm" hiddenFrom="sm">
             {members.map((member) => (
-              <MemberCard key={member.account_id} member={member} />
+              <MemberCard
+                key={member.account_id}
+                member={member}
+                onChangeRole={setRoleTarget}
+                onRemove={setRemoveTarget}
+              />
             ))}
           </Stack>
         </>

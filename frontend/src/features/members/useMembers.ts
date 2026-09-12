@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { addMember, fetchMemberRoles, fetchMembers } from "./memberService";
-import type { MemberCreate } from "./types";
+import {
+  addMember,
+  changeMemberRole,
+  fetchMemberRoles,
+  fetchMembers,
+  removeMember,
+} from "./memberService";
+import type { AssignableFirmRole, MemberCreate } from "./types";
 
 /** Query keys for everything about one firm's roster.
  *
@@ -47,6 +53,35 @@ export function useAddMember(firmId: number) {
 
   return useMutation({
     mutationFn: (payload: MemberCreate) => addMember(firmId, payload),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: memberKeys.all(firmId) }),
+  });
+}
+
+/** Gives an active member another firm role. The only field that can change. */
+export function useChangeMemberRole(firmId: number) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (variables: {
+      accountId: number;
+      roleCode: AssignableFirmRole;
+    }) =>
+      changeMemberRole(firmId, variables.accountId, {
+        role_code: variables.roleCode,
+      }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: memberKeys.all(firmId) }),
+  });
+}
+
+/** Takes someone off the roster. The row stays in the listing, as inactive:
+ * that is where they are found again to be brought back. */
+export function useRemoveMember(firmId: number) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (accountId: number) => removeMember(firmId, accountId),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: memberKeys.all(firmId) }),
   });

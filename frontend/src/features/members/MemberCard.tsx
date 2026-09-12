@@ -1,13 +1,24 @@
 import { Card, Group, Stack, Text } from "@mantine/core";
+import { MemberActionsMenu } from "./MemberActionsMenu";
 import { MemberStatus } from "./MemberStatus";
 import type { MemberOut } from "./types";
+
+interface MemberCardProps {
+  member: MemberOut;
+  onChangeRole: (member: MemberOut) => void;
+  onRemove: (member: MemberOut) => void;
+}
 
 /** One roster row on a phone. Same data as a table row, stacked instead of
  * side by side, so 375px needs no horizontal scrolling.
  *
  * The email is truncated rather than wrapped: it is the longest field by far,
  * and letting it wrap pushes the rest of the card around. */
-export function MemberCard({ member }: { member: MemberOut }) {
+export function MemberCard({
+  member,
+  onChangeRole,
+  onRemove,
+}: MemberCardProps) {
   return (
     <Card
       withBorder
@@ -20,7 +31,14 @@ export function MemberCard({ member }: { member: MemberOut }) {
           <Text fw={600} truncate>
             {member.name}
           </Text>
-          <MemberStatus isActive={member.is_active} />
+          <Group gap="xs" wrap="nowrap">
+            <MemberStatus isActive={member.is_active} />
+            <MemberActionsMenu
+              member={member}
+              onChangeRole={onChangeRole}
+              onRemove={onRemove}
+            />
+          </Group>
         </Group>
         <Text size="sm" c="dimmed" truncate>
           {member.email}

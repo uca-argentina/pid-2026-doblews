@@ -1,13 +1,24 @@
 import { Table, Text } from "@mantine/core";
+import { MemberActionsMenu } from "./MemberActionsMenu";
 import { MemberStatus } from "./MemberStatus";
 import type { MemberOut } from "./types";
+
+interface MembersTableProps {
+  members: MemberOut[];
+  onChangeRole: (member: MemberOut) => void;
+  onRemove: (member: MemberOut) => void;
+}
 
 /** The roster as a table, for screens wide enough to read one. Mobile gets
  * MemberCard instead (frontend/CLAUDE.md: cards, never a horizontal table).
  *
  * The order is the backend's — active first, then by name — so it does not
  * reshuffle between reloads and does not need sorting here. */
-export function MembersTable({ members }: { members: MemberOut[] }) {
+export function MembersTable({
+  members,
+  onChangeRole,
+  onRemove,
+}: MembersTableProps) {
   return (
     <Table.ScrollContainer minWidth={600}>
       <Table verticalSpacing="sm" highlightOnHover>
@@ -17,6 +28,10 @@ export function MembersTable({ members }: { members: MemberOut[] }) {
             <Table.Th>Email</Table.Th>
             <Table.Th>Rol</Table.Th>
             <Table.Th>Estado</Table.Th>
+            {/* The actions column has no heading: "Acciones" would name the
+                ⋯ button rather than the column, and each button already says
+                who it belongs to through its aria-label. */}
+            <Table.Th w={60} />
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
@@ -36,6 +51,13 @@ export function MembersTable({ members }: { members: MemberOut[] }) {
               <Table.Td>{member.role.name}</Table.Td>
               <Table.Td>
                 <MemberStatus isActive={member.is_active} />
+              </Table.Td>
+              <Table.Td>
+                <MemberActionsMenu
+                  member={member}
+                  onChangeRole={onChangeRole}
+                  onRemove={onRemove}
+                />
               </Table.Td>
             </Table.Tr>
           ))}
