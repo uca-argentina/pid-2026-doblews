@@ -64,6 +64,8 @@ Y una distinción que conviene tener a mano: **agrupar no es componer**. Los *ca
 
 Los recursos y las recetas se **siembran por migración**, son iguales para todos los estudios y son **de solo lectura en runtime**. Ningún endpoint escribe en ellos.
 
+> **Parcialmente reemplazado por [ADR-005](0005-catalog-administration.md) (2026-09-12).** Lo de "solo lectura en runtime" dejó de valer: el catálogo se administra por pantalla, porque crece de a poco y sus precios envejecen, y con el catálogo cerrado actualizar un precio era una migración y un deploy. Todo lo demás de esta sección sigue vigente —el catálogo es único, global y sembrado— y el seed sigue existiendo como contenido inicial.
+
 Lo único que pertenece a una obra es **qué recetas usa y en qué cantidad**.
 
 ```

@@ -141,7 +141,7 @@ Tarea de equipo, no historia de usuario. Timebox: 30 minutos. Bloquea el repo, F
 - El listado se ve bien en 375px de ancho.
 
 **Fuera de alcance:** alta, edición y baja de materiales por pantalla; catálogo o precios propios de cada estudio; precios por proveedor; importación CSV; historial de precios; categorías/rubros; multi-moneda real.
-**Depende de:** HU-0 y HU-1. Se desarrolla en paralelo con HU-2/HU-3.
+**Depende de:** HU-0, HU-1 y **T-04** (sin las tablas y el seed del catálogo no hay nada que listar). Se desarrolla en paralelo con HU-2/HU-3.
 **Estimación:** 0,5 día — bajó de 1,5 al dejar de ser un ABM.
 **Definida por:** [ADR-003](../adr/0003-recipe-catalog.md). El catálogo pasó a ser de la plataforma para que la aplicación sirva desde el minuto cero: si fuera de cada estudio, cada uno arrancaría con una pantalla en blanco pidiendo cargar a mano las proporciones del rubro.
 
@@ -164,7 +164,7 @@ Tarea de equipo, no historia de usuario. Timebox: 30 minutos. Bloquea el repo, F
 - El alta se puede completar entera desde el celular.
 
 **Fuera de alcance:** crear o editar recetas (el catálogo es del sistema); personalizar una receta para una obra; composición de recetas dentro de recetas; mano de obra y equipo; jerarquía EDT; costos indirectos y utilidad.
-**Depende de:** HU-0, HU-1, HU-3 y T-03 (el permiso de costo).
+**Depende de:** HU-0, HU-1, HU-3, T-03 (el permiso de costo) y **T-04** (las recetas que se computan).
 **Estimación:** 2 días — subió de 1,5 porque además del alta ahora entrega el cómputo.
 **Definida por:** [ADR-003](../adr/0003-recipe-catalog.md). Las recetas pasaron de estar fuera de alcance a ser el centro de la historia: son la promesa del producto. Se descartó la composición de componentes dentro de componentes.
 
@@ -217,6 +217,35 @@ Tarea de equipo, no historia de usuario. Timebox: 30 minutos. Bloquea el repo, F
 
 ---
 
+## HU-8 — Administrar el catálogo del sistema
+
+> **Backlog: no entra en el Sprint 1.** Se documenta ahora para no perderla; se implementa después de la entrega, o en lugar de HU-7 si el sprint respira.
+
+> Como **soporte del sistema**, quiero dar de alta, editar y dar de baja los materiales y las recetas del catálogo para que crezca y sus precios se mantengan al día sin depender de un deploy.
+
+**Criterios de aceptación**
+
+- La sección exige el permiso de plataforma `catalog.manage`, que solo tiene el rol `support` ([ADR-005](../adr/0005-catalog-administration.md)). Un `owner` o un `architect` que entre por URL directa recibe 403: el catálogo no cuelga de ningún estudio.
+- **Materiales:** listado con nombre, tipo, unidad de medida, precio de referencia y **desde cuándo rige ese precio**, con buscador por nombre.
+- Alta y edición de un material con nombre, tipo, unidad y precio. El nombre es único entre los activos, el precio no puede ser negativo, y la unidad se elige del catálogo cerrado de HU-0 — nunca texto libre.
+- Al cambiar el precio se actualiza `price_updated_at`. Editar el nombre o la unidad no lo toca: esa fecha responde "¿de cuándo es este precio?", no "¿cuándo se editó la fila?".
+- **No puedo dar de baja un material que use alguna receta activa.** El mensaje dice en cuáles, para poder sacarlo de ahí primero.
+- **Recetas:** listado con nombre y unidad. El alta y la edición son de cabecera más líneas: por cada línea, un material del catálogo y la cantidad que lleva **1 unidad** de la receta (numérica > 0).
+- Una receta activa tiene **al menos una línea**: una sin líneas computa cero materiales y es una trampa silenciosa en el cómputo.
+- Baja lógica en las dos pantallas. Una receta dada de baja deja de ofrecerse para cargar, pero las obras que ya la usan siguen calculando: borrarla les cambiaría el presupuesto sin que nadie las haya tocado.
+- El precio es **vivo**: al actualizarlo cambia el costo de todas las obras ya computadas. Por eso el cómputo de HU-5 muestra que sus importes son "precios de referencia al \<fecha\>".
+- El seed sigue sembrando el contenido inicial y **no pisa** lo que se haya editado por pantalla.
+- El listado se ve bien en 375px. **La edición de recetas está pensada para desktop** — un maestro-detalle en un teléfono no es usable, y quien administra el catálogo trabaja sentado. Es una excepción deliberada a la regla mobile-first del equipo, y hay que confirmarla entre todos antes de implementarla.
+
+**Fuera de alcance:** ABM de unidades de medida (sigue cerrado por migración); precios por estudio o por proveedor; historial de precios con vigencia; importación por CSV; auditoría de quién cambió qué; recetas propias de cada estudio; composición de recetas dentro de recetas.
+**Depende de:** HU-1 y **T-04** (las tablas y el seed del catálogo).
+**Estimación:** 2,5 días — 1 los materiales, 1,5 las recetas, que son maestro-detalle.
+**Definida por:** [ADR-005](../adr/0005-catalog-administration.md).
+
+> **Cambia el alcance de HU-4.** Esa historia dice hoy que el catálogo es "de solo lectura" y pone en Fuera de alcance el "alta, edición y baja de materiales por pantalla". Si HU-8 se implementa, esas dos frases dejan de valer. **HU-4 no se tocó**: es un cambio de alcance y el equipo lo discute antes, como pide [reglas-de-trabajo §5](../reglas-de-trabajo.md).
+
+---
+
 ## Orden de ejecución propuesto
 
 | Días | Persona A | Persona B |
@@ -236,9 +265,32 @@ Dos avisos sobre este plan:
 - **T-03 va antes del primer endpoint que lea datos de una obra.** Si va después es retrofit, y el retrofit de autorización es de donde salen los agujeros.
 - Si el día 6 T-03 no está terminado, lo que se suelta es **HU-4 entera**, no el motor de autorización.
 
+### Dónde estamos (2026-09-12)
+
+**Terminadas:** T-01, T-02, T-03, HU-0, HU-1 y HU-2 (backend mergeado; el front espera el merge de su PR).
+
+**Queda,** en este orden, y en dos carriles que no se pisan:
+
+| Carril | Historias |
+|---|---|
+| Obras | **HU-3** → **HU-6** |
+| Catálogo | **T-04** → **HU-4** → **HU-5** (HU-5 necesita además HU-3) |
+
+Y aparte, sin bloquear a nadie y bloqueadas por nadie: **HU-7**, la primera candidata a quedar afuera, y el **deploy**.
+
+Dos cosas que este plan original no tenía y conviene no perder de vista:
+
+- **T-04 apareció después** (ver Habilitadoras técnicas). Sin ella, HU-4 y HU-5 no tienen tablas contra las cuales trabajar.
+- **El deploy sigue sin existir.** El CI corre lint, migraciones, tests y build, pero no deploya. Mientras eso siga así, **ninguna historia cumple la Definition of Done**, cuyo punto 4 pide probarla en el ambiente de deploy, y la demo se muestra desde localhost.
+
 ## Habilitadoras técnicas
 
 No son historias de usuario, pero ocupan días del sprint y sin ellas no hay nada que demostrar.
 
 - **T-02 — Esquema inicial y seeds.** Las tablas de ADR-002 más `unit_of_measure`; seeds de `permission`, `role`, `role_permission`, las 7 unidades, el usuario de soporte y **dos estudios** con su propietario. Dos estudios desde el día uno hacen que el aislamiento entre tenants sea demostrable en la defensa. *2 días.*
 - **T-03 — Motor de autorización.** Resolución del estudio activo desde la URL con verificación de padrón; dependencia `requires(permission, ámbito)`; repositorio base que inyecta `firm_id` en toda lectura; tests de aislamiento parametrizados sobre la tabla de rutas de FastAPI. *1 día, de a dos.*
+- **T-04 — Esquema y seed del catálogo del sistema.** Las cuatro tablas de [ADR-003 §2](../adr/0003-recipe-catalog.md) que todavía no existen —`resource`, `recipe`, `recipe_resource` y `project_recipe`— más el seed del catálogo: materiales con su unidad y precio de referencia, y recetas con sus proporciones. *1 día.*
+
+  Apareció al revisar el estado del sprint el 2026-09-12: T-02 creó las tablas de ADR-002 y `unit_of_measure`, y una migración posterior sembró el permiso `catalog.view`, pero **las tablas del catálogo nunca se crearon**. No es trabajo de ninguna historia y bloquea a dos: HU-4 no tiene qué listar y HU-5 no tiene recetas que computar.
+
+  La mitad cara no es el DDL, que es mecánico: es **curar los datos**. Qué materiales entran, con qué precios y, sobre todo, qué lleva cada receta. Ese contenido es lo que hace que la aplicación sirva desde el primer login, que es el argumento con el que ADR-003 decidió que el catálogo fuera del sistema y no de cada estudio. Conviene arrancar con pocas recetas bien hechas —las de pared, contrapiso y carpeta— antes que con muchas a medias.
