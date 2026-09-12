@@ -194,6 +194,10 @@ def test_updated_at_is_maintained_by_the_database(db: Connection, world) -> None
 #
 # T-04's four tables. The unit is looked up by code rather than passed in: which
 # one it is never matters here, only that it exists.
+#
+# The names below are deliberately not trade names. These tables arrive seeded,
+# and a test that inserts "Ladrillo común" would collide with the catalogue's own
+# row — turning a rule about the schema into a fact about the seed's contents.
 
 INSERT_RESOURCE = (
     "INSERT INTO resource (type, name, unit_of_measure_id, reference_price, currency)"
@@ -206,7 +210,7 @@ INSERT_RECIPE = (
 )
 
 
-def new_resource(db: Connection, name: str = "Ladrillo común", **overrides) -> int:
+def new_resource(db: Connection, name: str = "Material de prueba", **overrides) -> int:
     """A valid material, plus whatever the caller wants wrong about it."""
     row = {"type": "material", "name": name, "price": 230, "currency": "ARS"} | overrides
     db.execute(text(INSERT_RESOURCE), row)
@@ -216,7 +220,7 @@ def new_resource(db: Connection, name: str = "Ladrillo común", **overrides) -> 
     ).scalar_one()
 
 
-def new_recipe(db: Connection, name: str = "Pared de ladrillo común 15cm") -> int:
+def new_recipe(db: Connection, name: str = "Receta de prueba") -> int:
     return db.execute(text(INSERT_RECIPE), {"name": name}).scalar_one()
 
 
@@ -241,10 +245,10 @@ def test_a_currency_must_be_an_iso_4217_code(db: Connection) -> None:
 
 def test_two_active_resources_cannot_share_a_name_in_any_capitalisation(db: Connection) -> None:
     """The lower() in the index is what stops the catalogue from holding both."""
-    new_resource(db, name="Cemento portland")
+    new_resource(db, name="Material de prueba")
 
     with pytest.raises(IntegrityError, match="uq_resource_name_active"):
-        new_resource(db, name="CEMENTO PORTLAND")
+        new_resource(db, name="MATERIAL DE PRUEBA")
 
 
 def test_a_deactivated_resource_frees_its_name(db: Connection) -> None:
@@ -253,13 +257,13 @@ def test_a_deactivated_resource_frees_its_name(db: Connection) -> None:
     A resource's name is a label and not an identity: if one was deactivated by
     mistake, nothing should stop it from being loaded again.
     """
-    new_resource(db, name="Cemento portland")
-    db.execute(text("UPDATE resource SET is_active = false WHERE name = 'Cemento portland'"))
+    new_resource(db, name="Material de prueba")
+    db.execute(text("UPDATE resource SET is_active = false WHERE name = 'Material de prueba'"))
 
-    new_resource(db, name="Cemento portland")
+    new_resource(db, name="Material de prueba")
 
     active = db.execute(
-        text("SELECT count(*) FROM resource WHERE name = 'Cemento portland' AND is_active")
+        text("SELECT count(*) FROM resource WHERE name = 'Material de prueba' AND is_active")
     ).scalar_one()
     assert active == 1
 
@@ -268,7 +272,7 @@ def test_two_active_recipes_cannot_share_a_name(db: Connection) -> None:
     new_recipe(db)
 
     with pytest.raises(IntegrityError, match="uq_recipe_name_active"):
-        new_recipe(db, name="PARED DE LADRILLO COMÚN 15CM")
+        new_recipe(db, name="RECETA DE PRUEBA")
 
 
 def test_a_recipe_line_must_carry_a_positive_yield(db: Connection) -> None:
@@ -329,7 +333,9 @@ def test_editing_a_resource_moves_updated_at_but_not_the_price_date(db: Connecti
         {"id": resource},
     )
 
-    db.execute(text("UPDATE resource SET name = 'Ladrillo hueco' WHERE id = :id"), {"id": resource})
+    db.execute(
+        text("UPDATE resource SET name = 'Material renombrado' WHERE id = :id"), {"id": resource}
+    )
 
     row = db.execute(
         text(
