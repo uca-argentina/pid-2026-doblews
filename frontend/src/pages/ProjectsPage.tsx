@@ -1,15 +1,19 @@
 import {
   Alert,
   Box,
+  Button,
   Card,
   Center,
+  Group,
   Loader,
   Stack,
   Text,
   Title,
 } from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
 import { useCurrentFirm } from "../features/firms/firmContext";
 import { ProjectCard } from "../features/projects/ProjectCard";
+import { ProjectFormModal } from "../features/projects/ProjectFormModal";
 import { ProjectsTable } from "../features/projects/ProjectsTable";
 import { useProjects } from "../features/projects/useProjects";
 
@@ -22,20 +26,34 @@ import { useProjects } from "../features/projects/useProjects";
  * The firm comes already resolved from FirmLayout, which also answers a
  * foreign firm id with "not found" before this ever renders. */
 export function ProjectsPage() {
-  const { firm } = useCurrentFirm();
+  const { firm, can } = useCurrentFirm();
   const { data: projects, isLoading, isError } = useProjects(firm.id);
+  const [formOpened, form] = useDisclosure(false);
 
   const hrefFor = (projectId: number) =>
     `/firms/${firm.id}/projects/${projectId}`;
+  // Firm-scope, so it is answered by the permissions this screen already has.
+  // The permission to *edit* a work is project-scope and lives on its own
+  // screen, which is why this is the only action offered from the listing.
+  const mayCreate = can("project.create");
 
   return (
     <Stack gap="md">
-      <div>
-        <Title order={3}>Obras</Title>
-        <Text c="dimmed" size="sm">
-          Las obras de {firm.name} en las que participás.
-        </Text>
-      </div>
+      <Group justify="space-between" align="flex-start" wrap="nowrap">
+        <div>
+          <Title order={3}>Obras</Title>
+          <Text c="dimmed" size="sm">
+            Las obras de {firm.name} en las que participás.
+          </Text>
+        </div>
+        {mayCreate && <Button onClick={form.open}>Nueva obra</Button>}
+      </Group>
+
+      <ProjectFormModal
+        opened={formOpened}
+        project={null}
+        onClose={form.close}
+      />
 
       {isLoading && (
         <Center>
@@ -58,8 +76,15 @@ export function ProjectsPage() {
           <Stack gap={4} align="center">
             <Text fw={500}>Todavía no hay obras</Text>
             <Text size="sm" c="dimmed" ta="center">
-              Cada obra guarda por separado sus datos, su equipo y su cómputo.
+              {mayCreate
+                ? "Cada obra guarda por separado sus datos, su equipo y su cómputo."
+                : "Vas a ver acá las obras en las que te asignen."}
             </Text>
+            {mayCreate && (
+              <Button mt="sm" onClick={form.open}>
+                Crear la primera obra
+              </Button>
+            )}
           </Stack>
         </Card>
       )}
