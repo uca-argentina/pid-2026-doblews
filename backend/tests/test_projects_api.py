@@ -347,3 +347,60 @@ class TestArchive:
         )
 
         assert response.status_code == 403
+
+
+class TestWhatTheCallerMayDo:
+    """The detail says what this person may do to this work, for painting.
+
+    It is what lets the screen offer "Editar" and "Dar de baja" only when they
+    would be accepted, the same way the sidebar hides a section the caller has
+    no permission for.
+    """
+
+    def detail(self, client, world, auth_header, account_id, project_id):
+        return client.get(
+            projects_url(world.firm_a, project_id), headers=auth_header(account_id)
+        ).json()
+
+    def test_the_lead_may_edit_and_archive(self, client, world, auth_header):
+        created = create(client, world, auth_header, world.account_a2).json()
+
+        body = self.detail(client, world, auth_header, world.account_a2, created["id"])
+
+        assert {"project.edit", "project.archive"} <= set(body["permissions"])
+
+    def test_the_owner_of_the_firm_may_do_nothing_to_a_work_they_are_not_on(
+        self, client, world, auth_header
+    ):
+        """The case this field exists for. Ana sees every work of her firm
+        through project.view_all, and ADR-002 section 7 gives her no project
+        role on this one, so the screen must offer her no actions."""
+        created = create(client, world, auth_header, world.account_a2).json()
+
+        body = self.detail(client, world, auth_header, world.account_a, created["id"])
+
+        assert body["permissions"] == []
+
+    def test_the_codes_come_back_sorted(self, client, world, auth_header):
+        """So the payload does not reshuffle between two identical requests."""
+        created = create(client, world, auth_header, world.account_a2).json()
+
+        body = self.detail(client, world, auth_header, world.account_a2, created["id"])
+
+        assert body["permissions"] == sorted(body["permissions"])
+
+    def test_the_listing_does_not_carry_them(self, client, world, auth_header):
+        """There is no project_id in its path to resolve project permissions
+        against, which is why the actions of a work live on its own screen."""
+        create(client, world, auth_header, world.account_a2)
+
+        [row] = client.get(projects_url(world.firm_a), headers=auth_header(world.account_a2)).json()
+
+        assert "permissions" not in row
+
+    def test_a_write_answers_without_them(self, client, world, auth_header):
+        """A write answers before there is anything to paint; the screen reads
+        the detail again afterwards."""
+        created = create(client, world, auth_header, world.account_a2)
+
+        assert "permissions" not in created.json()

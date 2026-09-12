@@ -11,12 +11,19 @@ from app.api.deps import (
     CurrentMembership,
     DbSession,
     FirmPermissions,
+    ProjectPermissions,
     requires,
     requires_any,
 )
 from app.models import Project
 from app.repositories.project import ProjectEntry, ProjectRepository
-from app.schemas.project import ProjectClientOut, ProjectOut, ProjectSummary, ProjectWrite
+from app.schemas.project import (
+    ProjectClientOut,
+    ProjectDetail,
+    ProjectOut,
+    ProjectSummary,
+    ProjectWrite,
+)
 from app.services.project import ProjectError, archive_project, create_project, update_project
 
 router = APIRouter(prefix="/firms/{firm_id}/projects", tags=["projects"])
@@ -182,7 +189,7 @@ def create(
 
 @router.get(
     "/{project_id}",
-    response_model=ProjectOut,
+    response_model=ProjectDetail,
     dependencies=[
         Depends(
             requires_any(
@@ -197,18 +204,25 @@ def read_project(
     account: CurrentAccount,
     membership: CurrentMembership,
     granted: FirmPermissions,
+    on_project: ProjectPermissions,
     db: DbSession,
-) -> ProjectOut:
+) -> ProjectDetail:
     """One work in full, for its detail screen.
 
     Two ways in, because the right to read a work is granted at two heights:
     being on it, or owning the firm it belongs to. HU-3 promises both, and the
     owner has no project_member row for the first one to resolve from.
+
+    Declaring on_project costs no query: the guard above already resolves that
+    same dependency, and FastAPI caches one result per request. It is the only
+    endpoint that hands the set to the caller, so the screen can hide the
+    actions it would be refused.
     """
     entry = _projects(db, membership).entry(project_id, account.id, granted)
     if entry is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=PROJECT_NOT_FOUND)
-    return _to_out(entry)
+
+    return ProjectDetail(**_to_out(entry).model_dump(), permissions=sorted(on_project))
 
 
 @router.put(

@@ -38,9 +38,32 @@ class ProjectSummary(BaseModel):
 
 
 class ProjectOut(ProjectSummary):
-    """One work in full, for its detail screen."""
+    """One work in full. What a write answers with."""
 
     description: str | None
+
+
+class ProjectDetail(ProjectOut):
+    """The work as its own screen reads it, plus what the caller may do to it.
+
+    permissions is for painting only — whether to offer "Editar" and "Dar de
+    baja" — exactly like FirmDetail.permissions in schemas/firm.py. The backend
+    resolves them again on every request, so a stale copy in the browser can
+    hide a button but never open a door.
+
+    It is here and not on ProjectSummary because the listing has no project_id
+    in its path to resolve project-scope permissions against, and not on
+    ProjectOut because a write answers before there is anything to paint. The
+    one consequence for the UI: the actions of a work live on its own screen,
+    never as a menu on a row of the listing.
+
+    An empty list is a real answer, and the reason this field exists. The owner
+    of the firm holds project.view_all, so they see every work of their firm
+    and hold nothing on the ones they are not part of (ADR-002 section 7).
+    """
+
+    # Sorted, so the payload does not reshuffle between requests.
+    permissions: list[str]
 
 
 class ProjectWrite(BaseModel):

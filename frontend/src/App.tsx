@@ -1,11 +1,13 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShellLayout } from "./layout/AppShellLayout";
 import { FirmLayout } from "./layout/FirmLayout";
+import { ProjectLayout } from "./layout/ProjectLayout";
 import { FirmPickerPage } from "./pages/FirmPickerPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { HomeRedirect } from "./pages/HomeRedirect";
 import { LoginPage } from "./pages/LoginPage";
 import { MembersPage } from "./pages/MembersPage";
+import { ProjectDetailPage } from "./pages/ProjectDetailPage";
 import { NoFirmPage } from "./pages/NoFirmPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { ProtectedRoute } from "./routes/ProtectedRoute";
@@ -41,6 +43,13 @@ function App() {
         <Route path="/firms/:firmId" element={<FirmLayout />}>
           <Route index element={<Navigate to="projects" replace />} />
           <Route path="projects" element={<ProjectsPage />} />
+          {/* One work, with its name as the context of everything inside it
+              (HU-3). The index is its data; HU-6's team and HU-5's take-off
+              become siblings of it, which is why this is a layout and not a
+              single page. */}
+          <Route path="projects/:projectId" element={<ProjectLayout />}>
+            <Route index element={<ProjectDetailPage />} />
+          </Route>
           <Route
             path="members"
             element={
