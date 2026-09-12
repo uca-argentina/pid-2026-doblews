@@ -1,5 +1,17 @@
-import { Alert, Box, Center, Loader, Stack, Text, Title } from "@mantine/core";
+import {
+  Alert,
+  Box,
+  Button,
+  Center,
+  Group,
+  Loader,
+  Stack,
+  Text,
+  Title,
+} from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
 import { useCurrentFirm } from "../features/firms/firmContext";
+import { AddMemberModal } from "../features/members/AddMemberModal";
 import { MemberCard } from "../features/members/MemberCard";
 import { MembersTable } from "../features/members/MembersTable";
 import { useMembers } from "../features/members/useMembers";
@@ -11,15 +23,23 @@ import { useMembers } from "../features/members/useMembers";
 export function MembersPage() {
   const { firm } = useCurrentFirm();
   const { data: members, isLoading, isError } = useMembers(firm.id);
+  const [addOpened, addModal] = useDisclosure(false);
 
   return (
     <Stack gap="md">
-      <div>
-        <Title order={3}>Padrón</Title>
-        <Text c="dimmed" size="sm">
-          Las personas de {firm.name} y su rol en el estudio.
-        </Text>
-      </div>
+      <Group justify="space-between" align="flex-start" wrap="nowrap">
+        <div>
+          <Title order={3}>Padrón</Title>
+          <Text c="dimmed" size="sm">
+            Las personas de {firm.name} y su rol en el estudio.
+          </Text>
+        </div>
+        {/* No permission check: this whole screen already sits behind
+            member.add, the permission the add itself demands. */}
+        <Button onClick={addModal.open}>Agregar miembro</Button>
+      </Group>
+
+      <AddMemberModal opened={addOpened} onClose={addModal.close} />
 
       {isLoading && (
         <Center>

@@ -1,8 +1,10 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "@mantine/core/styles.css";
+import "@mantine/notifications/styles.css";
 import "./index.css";
 import { MantineProvider } from "@mantine/core";
+import { Notifications } from "@mantine/notifications";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import { AuthProvider } from "./features/auth/AuthContext";
@@ -21,6 +23,10 @@ createRoot(document.getElementById("root")!).render(
       // dark scheme, which "verde obra" has no values for.
       defaultColorScheme="light"
     >
+      {/* Mounted once, at the root: notifications.show() can then be called
+          from anywhere — a modal that is closing included, which is exactly
+          when the roster confirms what it just did. */}
+      <Notifications />
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <AuthProvider>
