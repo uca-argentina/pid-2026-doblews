@@ -13,6 +13,7 @@ FastAPI's own recommended style, it keeps ruff's B008 happy, and it lets a route
 declare `account: CurrentAccount` instead of restating the Depends() every time.
 """
 
+import inspect
 from collections.abc import Callable
 from typing import Annotated
 
@@ -36,9 +37,14 @@ CREDENTIALS_ERROR = "No pudimos validar tu sesión"
 FIRM_NOT_FOUND = "Estudio no encontrado"
 FORBIDDEN = "No tenés permiso para hacer esto"
 
-# Stamped on every dependency requires() builds, so the route table can be asked
-# which permission each endpoint demands. Nothing authorizes with it; it is what
-# makes the deny-by-default rule in backend/CLAUDE.md a test instead of a promise.
+# Stamped on every dependency requires_any() builds, so the route table can be
+# asked which permission each endpoint demands. Nothing authorizes with it; it is
+# what makes the deny-by-default rule in backend/CLAUDE.md a test instead of a
+# promise.
+#
+# Always a tuple of (code, scope) pairs, even for the one-permission case, so an
+# auditor walking the route table reads one shape and never has to tell "a pair"
+# from "a tuple of pairs" by inspecting it.
 REQUIRED_PERMISSION = "required_permission"
 
 DbSession = Annotated[Session, Depends(get_db)]
@@ -162,6 +168,64 @@ _PERMISSIONS_BY_SCOPE: dict[str, object] = {
 }
 
 
+def requires_any(*needed: tuple[str, Scope]) -> Callable[..., None]:
+    """Declare that any one of these permissions opens the endpoint.
+
+        @router.get("/{firm_id}/projects/{project_id}",
+                    dependencies=[Depends(requires_any(
+                        ("project.view", "project"),
+                        ("project.view_all", "firm"),
+                    ))])
+
+    The OR exists because a capability can be granted at two different heights.
+    That is the case HU-3 puts on the table: reading one project is a project
+    permission, but the owner's right to read *every* project of their firm is a
+    firm one (ADR-002 section 7, "project.view_all es de ámbito estudio"), and
+    the owner has no project_member row to resolve a project permission from.
+    Writing the alternative here keeps both halves as rows of the seed; the
+    other way out — teaching the resolver that one permission implies another —
+    would move a grant into code, which is exactly what that section avoids.
+
+    Declaring the alternative is not the same as widening the tenant. Whichever
+    branch lets the caller in, which *rows* they then see is still the
+    repository's answer, never this one (section 8).
+
+    The signature is built rather than written because the parameters depend on
+    the scopes asked for, and FastAPI resolves dependencies by reading
+    inspect.signature(). One parameter per distinct scope, so a route naming the
+    same scope twice still costs a single query.
+    """
+    if not needed:
+        raise ValueError("requires_any() needs at least one (code, scope) pair")
+
+    scopes = sorted({scope for _, scope in needed})
+    unknown = [scope for scope in scopes if scope not in _PERMISSIONS_BY_SCOPE]
+    if unknown:
+        raise ValueError(
+            f"unknown scope {unknown[0]!r}; expected one of {sorted(_PERMISSIONS_BY_SCOPE)}"
+        )
+
+    def guard(**granted: frozenset[str]) -> None:
+        if not any(code in granted[scope] for code, scope in needed):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=FORBIDDEN)
+
+    # Keyword-only, and named after the scope, so guard() can look each set up by
+    # the same string the (code, scope) pairs carry.
+    guard.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
+        [
+            inspect.Parameter(
+                scope,
+                inspect.Parameter.KEYWORD_ONLY,
+                annotation=_PERMISSIONS_BY_SCOPE[scope],
+            )
+            for scope in scopes
+        ]
+    )
+
+    setattr(guard, REQUIRED_PERMISSION, tuple(needed))
+    return guard
+
+
 def requires(code: str, scope: Scope) -> Callable[..., None]:
     """Declare the permission an endpoint demands. Deny by default.
 
@@ -190,17 +254,9 @@ def requires(code: str, scope: Scope) -> Callable[..., None]:
 
     An unknown scope raises at import time, when the route is declared, rather
     than on the first request that reaches it.
+
+    The single-permission case of requires_any, which is the common one by far:
+    most endpoints answer to exactly one capability, and reading the OR version
+    at every route would suggest a choice that is not being made.
     """
-    try:
-        permissions = _PERMISSIONS_BY_SCOPE[scope]
-    except KeyError:
-        raise ValueError(
-            f"unknown scope {scope!r}; expected one of {sorted(_PERMISSIONS_BY_SCOPE)}"
-        ) from None
-
-    def guard(granted: permissions) -> None:  # type: ignore[valid-type]
-        if code not in granted:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=FORBIDDEN)
-
-    setattr(guard, REQUIRED_PERMISSION, (code, scope))
-    return guard
+    return requires_any((code, scope))
