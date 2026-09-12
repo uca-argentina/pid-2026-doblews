@@ -16,6 +16,7 @@ import { AddMemberModal } from "../features/members/AddMemberModal";
 import { ChangeRoleModal } from "../features/members/ChangeRoleModal";
 import { MemberCard } from "../features/members/MemberCard";
 import { MembersTable } from "../features/members/MembersTable";
+import { ReinstateMemberModal } from "../features/members/ReinstateMemberModal";
 import { RemoveMemberModal } from "../features/members/RemoveMemberModal";
 import { useMembers } from "../features/members/useMembers";
 import type { MemberOut } from "../features/members/types";
@@ -33,6 +34,9 @@ export function MembersPage() {
   // rather than one per person.
   const [roleTarget, setRoleTarget] = useState<MemberOut | null>(null);
   const [removeTarget, setRemoveTarget] = useState<MemberOut | null>(null);
+  const [reinstateTarget, setReinstateTarget] = useState<MemberOut | null>(
+    null,
+  );
 
   return (
     <Stack gap="md">
@@ -57,6 +61,10 @@ export function MembersPage() {
         member={removeTarget}
         onClose={() => setRemoveTarget(null)}
       />
+      <ReinstateMemberModal
+        member={reinstateTarget}
+        onClose={() => setReinstateTarget(null)}
+      />
 
       {isLoading && (
         <Center>
@@ -80,6 +88,7 @@ export function MembersPage() {
               members={members}
               onChangeRole={setRoleTarget}
               onRemove={setRemoveTarget}
+              onReinstate={setReinstateTarget}
             />
           </Box>
           <Stack gap="sm" hiddenFrom="sm">
@@ -89,6 +98,7 @@ export function MembersPage() {
                 member={member}
                 onChangeRole={setRoleTarget}
                 onRemove={setRemoveTarget}
+                onReinstate={setReinstateTarget}
               />
             ))}
           </Stack>

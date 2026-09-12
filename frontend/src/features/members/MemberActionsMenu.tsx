@@ -7,6 +7,13 @@ interface MemberActionsMenuProps {
   member: MemberOut;
   onChangeRole: (member: MemberOut) => void;
   onRemove: (member: MemberOut) => void;
+  onReinstate: (member: MemberOut) => void;
+}
+
+interface MemberAction {
+  label: string;
+  color?: string;
+  onClick: () => void;
 }
 
 /** What can be done to one person, in one place: the table and the cards both
@@ -27,23 +34,37 @@ export function MemberActionsMenu({
   member,
   onChangeRole,
   onRemove,
+  onReinstate,
 }: MemberActionsMenuProps) {
   const { account } = useAuth();
   const { can } = useCurrentFirm();
 
-  // Someone who left has a different set of actions — bringing them back —
-  // which arrives with the reinstate step.
-  if (!member.is_active) {
-    return null;
-  }
-
   const isSelf = account?.id === member.account_id;
   const isOwner = member.role.code === "owner";
-  const editable = can("member.edit_role") && !isSelf && !isOwner;
-  const removable = can("member.remove") && !isSelf && !isOwner;
+  const actions: MemberAction[] = [];
+
+  if (member.is_active) {
+    if (can("member.edit_role") && !isSelf && !isOwner) {
+      actions.push({
+        label: "Cambiar rol",
+        onClick: () => onChangeRole(member),
+      });
+    }
+    if (can("member.remove") && !isSelf && !isOwner) {
+      actions.push({
+        label: "Dar de baja",
+        color: "red",
+        onClick: () => onRemove(member),
+      });
+    }
+  } else if (can("member.add")) {
+    // Bringing someone back is an add: same endpoint, same permission. The
+    // self and owner checks do not apply, because neither can be inactive.
+    actions.push({ label: "Reincorporar", onClick: () => onReinstate(member) });
+  }
 
   // No empty ⋯ button: a menu that opens onto nothing reads as a bug.
-  if (!editable && !removable) {
+  if (actions.length === 0) {
     return null;
   }
 
@@ -59,16 +80,15 @@ export function MemberActionsMenu({
         </ActionIcon>
       </Menu.Target>
       <Menu.Dropdown>
-        {editable && (
-          <Menu.Item onClick={() => onChangeRole(member)}>
-            Cambiar rol
+        {actions.map((action) => (
+          <Menu.Item
+            key={action.label}
+            color={action.color}
+            onClick={action.onClick}
+          >
+            {action.label}
           </Menu.Item>
-        )}
-        {removable && (
-          <Menu.Item color="red" onClick={() => onRemove(member)}>
-            Dar de baja
-          </Menu.Item>
-        )}
+        ))}
       </Menu.Dropdown>
     </Menu>
   );

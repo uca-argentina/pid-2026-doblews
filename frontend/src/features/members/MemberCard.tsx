@@ -7,6 +7,7 @@ interface MemberCardProps {
   member: MemberOut;
   onChangeRole: (member: MemberOut) => void;
   onRemove: (member: MemberOut) => void;
+  onReinstate: (member: MemberOut) => void;
 }
 
 /** One roster row on a phone. Same data as a table row, stacked instead of
@@ -18,6 +19,7 @@ export function MemberCard({
   member,
   onChangeRole,
   onRemove,
+  onReinstate,
 }: MemberCardProps) {
   return (
     <Card
@@ -37,6 +39,7 @@ export function MemberCard({
               member={member}
               onChangeRole={onChangeRole}
               onRemove={onRemove}
+              onReinstate={onReinstate}
             />
           </Group>
         </Group>

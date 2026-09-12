@@ -7,6 +7,7 @@ interface MembersTableProps {
   members: MemberOut[];
   onChangeRole: (member: MemberOut) => void;
   onRemove: (member: MemberOut) => void;
+  onReinstate: (member: MemberOut) => void;
 }
 
 /** The roster as a table, for screens wide enough to read one. Mobile gets
@@ -18,6 +19,7 @@ export function MembersTable({
   members,
   onChangeRole,
   onRemove,
+  onReinstate,
 }: MembersTableProps) {
   return (
     <Table.ScrollContainer minWidth={600}>
@@ -57,6 +59,7 @@ export function MembersTable({
                   member={member}
                   onChangeRole={onChangeRole}
                   onRemove={onRemove}
+                  onReinstate={onReinstate}
                 />
               </Table.Td>
             </Table.Tr>
