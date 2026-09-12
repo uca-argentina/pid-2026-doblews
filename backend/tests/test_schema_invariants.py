@@ -188,3 +188,155 @@ def test_updated_at_is_maintained_by_the_database(db: Connection, world) -> None
         {"f": world.firm_a},
     ).scalar_one()
     assert overwritten is True
+
+
+# --- the system catalogue ---------------------------------------------------
+#
+# T-04's four tables. The unit is looked up by code rather than passed in: which
+# one it is never matters here, only that it exists.
+
+INSERT_RESOURCE = (
+    "INSERT INTO resource (type, name, unit_of_measure_id, reference_price, currency)"
+    " VALUES (:type, :name, (SELECT id FROM unit_of_measure WHERE code = 'u'), :price, :currency)"
+)
+
+INSERT_RECIPE = (
+    "INSERT INTO recipe (name, unit_of_measure_id)"
+    " VALUES (:name, (SELECT id FROM unit_of_measure WHERE code = 'm2')) RETURNING id"
+)
+
+
+def new_resource(db: Connection, name: str = "Ladrillo común", **overrides) -> int:
+    """A valid material, plus whatever the caller wants wrong about it."""
+    row = {"type": "material", "name": name, "price": 230, "currency": "ARS"} | overrides
+    db.execute(text(INSERT_RESOURCE), row)
+    return db.execute(
+        text("SELECT id FROM resource WHERE name = :name ORDER BY id DESC LIMIT 1"),
+        {"name": name},
+    ).scalar_one()
+
+
+def new_recipe(db: Connection, name: str = "Pared de ladrillo común 15cm") -> int:
+    return db.execute(text(INSERT_RECIPE), {"name": name}).scalar_one()
+
+
+def test_a_resource_type_outside_the_three_is_refused(db: Connection) -> None:
+    """The CHECK is what lets labor and equipment arrive as rows, not as tables."""
+    with pytest.raises(IntegrityError, match="ck_resource_type_valid"):
+        new_resource(db, type="materials")
+
+
+def test_a_resource_price_cannot_be_negative(db: Connection) -> None:
+    """Zero is legitimate — something the client supplies — below zero never is."""
+    with pytest.raises(IntegrityError, match="ck_resource_reference_price_not_negative"):
+        new_resource(db, price=-1)
+
+
+def test_a_currency_must_be_an_iso_4217_code(db: Connection) -> None:
+    """Three uppercase letters, so the day a second currency exists the old rows
+    already say what they are expressed in."""
+    with pytest.raises(IntegrityError, match="ck_resource_currency_iso_4217"):
+        new_resource(db, currency="ars")
+
+
+def test_two_active_resources_cannot_share_a_name_in_any_capitalisation(db: Connection) -> None:
+    """The lower() in the index is what stops the catalogue from holding both."""
+    new_resource(db, name="Cemento portland")
+
+    with pytest.raises(IntegrityError, match="uq_resource_name_active"):
+        new_resource(db, name="CEMENTO PORTLAND")
+
+
+def test_a_deactivated_resource_frees_its_name(db: Connection) -> None:
+    """The positive half of modelo-datos 3.4, and the reason the index is partial.
+
+    A resource's name is a label and not an identity: if one was deactivated by
+    mistake, nothing should stop it from being loaded again.
+    """
+    new_resource(db, name="Cemento portland")
+    db.execute(text("UPDATE resource SET is_active = false WHERE name = 'Cemento portland'"))
+
+    new_resource(db, name="Cemento portland")
+
+    active = db.execute(
+        text("SELECT count(*) FROM resource WHERE name = 'Cemento portland' AND is_active")
+    ).scalar_one()
+    assert active == 1
+
+
+def test_two_active_recipes_cannot_share_a_name(db: Connection) -> None:
+    new_recipe(db)
+
+    with pytest.raises(IntegrityError, match="uq_recipe_name_active"):
+        new_recipe(db, name="PARED DE LADRILLO COMÚN 15CM")
+
+
+def test_a_recipe_line_must_carry_a_positive_yield(db: Connection) -> None:
+    """A line of zero contributes nothing to the take-off while reading as if it did."""
+    recipe, resource = new_recipe(db), new_resource(db)
+
+    with pytest.raises(IntegrityError, match="ck_recipe_resource_quantity_per_unit_positive"):
+        db.execute(
+            text(
+                "INSERT INTO recipe_resource (recipe_id, resource_id, quantity_per_unit)"
+                " VALUES (:recipe, :resource, 0)"
+            ),
+            {"recipe": recipe, "resource": resource},
+        )
+
+
+def test_a_take_off_line_must_carry_a_positive_quantity(db: Connection, world) -> None:
+    with pytest.raises(IntegrityError, match="ck_project_recipe_quantity_positive"):
+        db.execute(
+            text(
+                "INSERT INTO project_recipe (project_id, firm_id, recipe_id, quantity)"
+                " VALUES (:project, :firm, :recipe, 0)"
+            ),
+            {"project": world.project_a, "firm": world.firm_a, "recipe": new_recipe(db)},
+        )
+
+
+def test_a_take_off_line_cannot_point_at_another_firms_project(db: Connection, world) -> None:
+    """The isolation invariant of the only catalogue table holding a firm's data.
+
+    project_a belongs to firm A, so claiming it under firm B's id is refused by
+    the composite FK against project (id, firm_id) — no service involved, and no
+    endpoint needed for the rule to hold.
+    """
+    with pytest.raises(IntegrityError, match="fk_project_recipe_project_id"):
+        db.execute(
+            text(
+                "INSERT INTO project_recipe (project_id, firm_id, recipe_id, quantity)"
+                " VALUES (:project, :firm, :recipe, 120)"
+            ),
+            {"project": world.project_a, "firm": world.firm_b, "recipe": new_recipe(db)},
+        )
+
+
+def test_editing_a_resource_moves_updated_at_but_not_the_price_date(db: Connection) -> None:
+    """HU-8 asks for exactly this split, and the schema is what delivers it.
+
+    price_updated_at answers "how old is this price?", not "when was this row
+    touched?", so the trigger must leave it alone: renaming a material cannot
+    make its price look freshly checked.
+    """
+    resource = new_resource(db)
+    db.execute(
+        text(
+            "UPDATE resource SET updated_at = '2000-01-01', price_updated_at = '2000-01-01'"
+            " WHERE id = :id"
+        ),
+        {"id": resource},
+    )
+
+    db.execute(text("UPDATE resource SET name = 'Ladrillo hueco' WHERE id = :id"), {"id": resource})
+
+    row = db.execute(
+        text(
+            "SELECT updated_at = now() AS touched, price_updated_at AS priced FROM resource"
+            " WHERE id = :id"
+        ),
+        {"id": resource},
+    ).one()
+    assert row.touched is True
+    assert row.priced.year == 2000
