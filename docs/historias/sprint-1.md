@@ -127,23 +127,29 @@ Tarea de equipo, no historia de usuario. Timebox: 30 minutos. Bloquea el repo, F
 
 ---
 
-## HU-4 — Consultar el catálogo de materiales
+## HU-4 — Consultar el catálogo
 
-> Como **arquitecto**, quiero consultar el catálogo de materiales del sistema con su unidad y precio de referencia, para saber con qué insumos y a qué costo se calculan los cómputos de mis obras.
+> Como **arquitecto**, quiero consultar el catálogo del sistema —las recetas con lo que lleva cada una, y los materiales con su unidad y precio de referencia— para saber qué puedo computar en mis obras y a qué costo se calcula.
 
 **Criterios de aceptación**
 
-- Listado de materiales con nombre, unidad de medida y precio de referencia.
+- Dentro del estudio hay una sección "Catálogo" con dos vistas: **Recetas** y **Materiales**.
+- **Recetas:** nombre, unidad y descripción. Cada una se expande y muestra sus líneas: qué material lleva, cuánto por unidad de receta y su precio de referencia.
+- **Materiales:** nombre, unidad de medida y precio de referencia, con la fecha desde la que rige ese precio.
+- Buscador por nombre en las dos vistas, que no distingue mayúsculas ni tildes: "comun" encuentra "Ladrillo común".
 - El catálogo es **del sistema**, igual para todos los estudios y de **solo lectura**: se carga por migración/seed, no por pantalla. Ningún endpoint escribe en él.
-- Buscador por nombre en el listado.
-- El precio se guarda como decimal (nunca float) y se muestra formateado en pesos. La moneda es ARS fija, con el campo modelado para el futuro.
-- La sección exige el permiso `catalog.view`.
-- El listado se ve bien en 375px de ancho.
+- El precio se guarda como decimal (nunca float), viaja como string decimal y se muestra formateado en pesos. La moneda es ARS fija, con el campo modelado para el futuro.
+- La sección exige el permiso `catalog.view`. Los endpoints cuelgan del estudio (`/firms/{firm_id}/catalog/...`), porque ese permiso es de ámbito estudio; los datos son los mismos para todos.
+- El rol `client` también la ve, **precios incluidos**: son precios de referencia globales, no costos del estudio. Lo que el cliente no ve es el costo de *su obra*, que HU-5 oculta con `project.cost.view`.
+- **El buscador de recetas se construye reutilizable**, con un lugar para una acción por receta. HU-5 lo monta dentro de la obra con un botón "Agregar": a la obra se agregan **recetas**, nunca materiales sueltos ([ADR-003 §1 y §6](../adr/0003-recipe-catalog.md)). En HU-4 se usa sin acciones.
+- El listado se ve bien en 375px de ancho: tarjetas en mobile, no tabla horizontal.
 
-**Fuera de alcance:** alta, edición y baja de materiales por pantalla; catálogo o precios propios de cada estudio; precios por proveedor; importación CSV; historial de precios; categorías/rubros; multi-moneda real.
-**Depende de:** HU-0, HU-1 y **T-04** (sin las tablas y el seed del catálogo no hay nada que listar). Se desarrolla en paralelo con HU-2/HU-3.
-**Estimación:** 0,5 día — bajó de 1,5 al dejar de ser un ABM.
+**Fuera de alcance:** alta, edición y baja de materiales o recetas por pantalla (HU-8); agregar recetas a una obra (HU-5); agregar materiales sueltos a una obra; catálogo o precios propios de cada estudio; precios por proveedor; importación CSV; historial de precios; categorías/rubros; multi-moneda real; búsqueda del lado del servidor (con el tamaño actual del catálogo filtra el front).
+**Depende de:** HU-0, HU-1 y **T-04** (sin las tablas y el seed del catálogo no hay nada que listar).
+**Estimación:** 1 día — subió de 0,5 al sumar las recetas con sus líneas y el buscador reutilizable.
 **Definida por:** [ADR-003](../adr/0003-recipe-catalog.md). El catálogo pasó a ser de la plataforma para que la aplicación sirva desde el minuto cero: si fuera de cada estudio, cada uno arrancaría con una pantalla en blanco pidiendo cargar a mano las proporciones del rubro.
+
+> **Alcance ampliado el 2026-09-12**, antes de implementarla: además de los materiales, la historia muestra las recetas con sus líneas y deja el buscador listo para el alta de HU-5. Lo que se agrega a una obra es una receta, así que un catálogo de solo materiales no servía para elegir qué computar. Es un cambio de alcance: se avisa al equipo ([reglas-de-trabajo §5](../reglas-de-trabajo.md)).
 
 ---
 
@@ -267,7 +273,7 @@ Dos avisos sobre este plan:
 
 ### Dónde estamos (2026-09-12)
 
-**Terminadas:** T-01, T-02, T-03, **T-04**, HU-0, HU-1, HU-2 y **HU-3 entera** (el front de HU-2 espera su merge).
+**Terminadas:** T-01, T-02, T-03, **T-04**, HU-0, HU-1, HU-2 y **HU-3 entera**. En curso: **HU-4**.
 
 **Queda,** en este orden, y en dos carriles que no se pisan:
 

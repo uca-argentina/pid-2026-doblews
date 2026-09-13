@@ -5,6 +5,9 @@ import { useCurrentFirm } from "../features/firms/firmContext";
 interface RequirePermissionProps {
   /** The firm permission the screen demands, e.g. "member.add". */
   code: string;
+  /** Why the section is closed, in the section's own terms. Defaults to the
+   * roster's explanation, which was the first screen gated here. */
+  message?: string;
   children: ReactNode;
 }
 
@@ -19,13 +22,17 @@ interface RequirePermissionProps {
  * the backend, which demands the same permission on every request. A firm that
  * is not the caller's never gets this far — FirmLayout has already answered it
  * with "not found", so nothing here confirms that a foreign firm exists. */
-export function RequirePermission({ code, children }: RequirePermissionProps) {
+export function RequirePermission({
+  code,
+  message = "Esta sección la administra el propietario del estudio.",
+  children,
+}: RequirePermissionProps) {
   const { can } = useCurrentFirm();
 
   if (!can(code)) {
     return (
       <Alert color="red" variant="light" title="No tenés permiso">
-        Esta sección la administra el propietario del estudio.
+        {message}
       </Alert>
     );
   }
