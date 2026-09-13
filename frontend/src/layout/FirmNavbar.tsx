@@ -17,6 +17,11 @@ export function FirmNavbar({ onNavigate }: FirmNavbarProps) {
   const base = `/firms/${firm.id}`;
   const sections = [
     { to: `${base}/projects`, label: "Obras", visible: true },
+    {
+      to: `${base}/catalog`,
+      label: "Catálogo",
+      visible: can("catalog.view"),
+    },
     { to: `${base}/members`, label: "Padrón", visible: can("member.add") },
   ];
 

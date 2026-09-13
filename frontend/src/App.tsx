@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShellLayout } from "./layout/AppShellLayout";
+import { CatalogPage } from "./pages/CatalogPage";
 import { FirmLayout } from "./layout/FirmLayout";
 import { ProjectLayout } from "./layout/ProjectLayout";
 import { FirmPickerPage } from "./pages/FirmPickerPage";
@@ -50,6 +51,19 @@ function App() {
           <Route path="projects/:projectId" element={<ProjectLayout />}>
             <Route index element={<ProjectDetailPage />} />
           </Route>
+          {/* Every firm role holds catalog.view today, so the gate is for the
+              role that someday will not, not for anyone who exists now. */}
+          <Route
+            path="catalog"
+            element={
+              <RequirePermission
+                code="catalog.view"
+                message="Tu rol en este estudio no incluye ver el catálogo."
+              >
+                <CatalogPage />
+              </RequirePermission>
+            }
+          />
           <Route
             path="members"
             element={
