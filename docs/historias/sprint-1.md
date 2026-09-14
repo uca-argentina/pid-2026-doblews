@@ -273,14 +273,9 @@ Dos avisos sobre este plan:
 
 ### Dónde estamos (2026-09-14)
 
-**Terminadas:** T-01, T-02, T-03, T-04, HU-0, HU-1, HU-2, HU-3 y **HU-4**. En curso: **HU-5**, con el backend hecho y el front pendiente.
+**Terminadas:** T-01, T-02, T-03, T-04, HU-0, HU-1, HU-2, HU-3 y HU-4. **HU-5** está implementada, back y front, y le falta la revisión visual para darla por cerrada.
 
-**Queda,** en dos carriles que no se pisan:
-
-| Carril | Historias |
-|---|---|
-| Obras | **HU-6** |
-| Catálogo | **HU-5 front** |
+**Queda:** **HU-6**. El carril del catálogo terminó con HU-5.
 
 **Lo que HU-3 dejó decidido** (ver [ADR-002 §6, §7 y §9.1-9.2](../adr/0002-authorization-model.md)), porque HU-6 y HU-5 se apoyan en ello:
 
@@ -302,6 +297,14 @@ Dos avisos sobre este plan:
 - **El owner ve el cómputo con costos en las obras que no integra y no lo modifica.** Ojo en el front: en esas obras el `permissions` del detalle viene vacío, así que la sección "Cómputo" se muestra con `can("project.recipe.view")` **o** con `project.view_all` en los permisos del estudio. Los botones de carga y edición, solo con `can("project.recipe.manage")`.
 - **Errores:** obra archivada, ajena o línea de otra obra → 404; cantidad ≤ 0 o con más de 3 decimales → 422; receta dada de baja mientras el formulario estaba abierto → 409 con un mensaje que dice qué hacer.
 - **Una receta dada de baja** deja de poder cargarse, pero las líneas que ya la usan siguen computando (ADR-005 §6).
+
+**Lo que el front de HU-5 dejó decidido**, porque HU-6 entra por el mismo lugar:
+
+- **Las secciones de una obra son pestañas que son rutas.** `ProjectLayout` pinta "Datos" (el index) y "Cómputo" (`projects/:projectId/takeoff`). "Equipo" de HU-6 es una entrada más en `ProjectTabs` y una ruta hermana en `App.tsx`. Con una sola pestaña visible no se pinta ninguna.
+- **Una pestaña puede abrirse desde el estudio, no solo desde la obra.** "Cómputo" se muestra con `project.recipe.view` en la obra **o** con `project.view_all` en el estudio (`useTakeoffAccess`), porque el owner no tiene permisos de obra en las que solo audita. HU-6 tiene que decidir lo mismo para "Equipo".
+- **El costo no se decide en el front:** se pinta si la respuesta trae `total_cost`. El cliente ve cantidades sin columna de costo y sin la fecha de precios.
+- **El alta usa `RecipeBrowser` con `renderAction`**, en un modal de dos pasos que es de pantalla completa en mobile. La cantidad se tipea con coma, con hasta 3 decimales, y viaja como string.
+- **Obra de demo:** `seed_dev` crea "Casa Rodríguez" (Alba lead, Carla cliente, tres líneas) si el padrón sembrado sigue como está. Si alguien cambió esos roles a mano, la saltea con un aviso.
 
 Y aparte, sin bloquear a nadie y bloqueadas por nadie: **HU-7**, la primera candidata a quedar afuera, y el **deploy**.
 
