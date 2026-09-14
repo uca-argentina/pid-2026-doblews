@@ -284,6 +284,45 @@ def add_project_member(db: Connection, role_id: dict[tuple[str, str], int]):
     return _add
 
 
+@pytest.fixture
+def recipe_id(db: Connection) -> dict[str, int]:
+    """name -> id for the seeded recipes.
+
+    By name and not by a hard-coded id, like role_id: the ids are whatever the
+    identity column handed out, and the name is what the seed promises.
+    """
+    return {row.name: row.id for row in db.execute(text("SELECT id, name FROM recipe"))}
+
+
+@pytest.fixture
+def add_takeoff_line(db: Connection):
+    """Insert one project_recipe row: this much of this recipe on this work.
+
+    Raw SQL for the same reason as add_project_member: the repository and API
+    tests need lines to read, and writing them through the service under test
+    would make a broken write look like a broken read.
+    """
+
+    def _add(
+        project: int,
+        firm: int,
+        recipe: int,
+        quantity: str,
+        note: str | None = None,
+        is_active: bool = True,
+    ) -> int:
+        return db.execute(
+            text(
+                "INSERT INTO project_recipe"
+                " (project_id, firm_id, recipe_id, quantity, note, is_active)"
+                " VALUES (:p, :f, :r, :q, :n, :a) RETURNING id"
+            ),
+            {"p": project, "f": firm, "r": recipe, "q": quantity, "n": note, "a": is_active},
+        ).scalar_one()
+
+    return _add
+
+
 # The password every account in the API tests answers to.
 TEST_PASSWORD = "test-password"
 
