@@ -94,12 +94,21 @@ def list_assignable_roles(db: Session) -> list[Role]:
     )
 
 
-def _firm_role(db: Session, code: str) -> Role:
-    """The seeded firm role with this code. Missing means a broken seed: a 500."""
+def firm_role(db: Session, code: str) -> Role:
+    """The seeded firm role with this code. Missing means a broken seed: a 500.
+
+    Public because HU-7's firm creation needs the owner role this module keeps
+    out of every add and edit.
+    """
     return db.scalars(select(Role).where(Role.scope == "firm", Role.code == code)).one()
 
 
-def _is_staff(db: Session, account_id: int) -> bool:
+def is_staff(db: Session, account_id: int) -> bool:
+    """Whether the account holds any platform role (ADR-002 section 11.4).
+
+    Staff and firm members are separate populations, so both a roster add and
+    a firm creation refuse to hand a firm role to one of them.
+    """
     return bool(db.scalar(select(exists().where(PlatformMember.account_id == account_id))))
 
 
@@ -137,14 +146,14 @@ def add_member(
     # than "existing address" — the enumeration oracle _DUMMY_HASH closes on the
     # login, reopened here.
     password_hash = hash_password(password)
-    role = _firm_role(db, role_code)
+    role = firm_role(db, role_code)
 
     account = db.scalar(select(Account).where(Account.email == email))
     if account is None:
         account = Account(name=name, email=email, password_hash=password_hash)
         db.add(account)
         db.flush()  # assigns the id the roster row needs
-    elif _is_staff(db, account.id):
+    elif is_staff(db, account.id):
         raise RosterError(STAFF_ACCOUNT)
 
     members = FirmMemberRepository(db, firm_id=firm_id)
@@ -202,12 +211,12 @@ def change_member_role(
 
     if account_id == actor_id:
         raise RosterError(CANNOT_CHANGE_OWN_ROLE)
-    if member.role_id == _firm_role(db, OWNER).id:
+    if member.role_id == firm_role(db, OWNER).id:
         raise RosterError(OWNER_ROLE_IS_FIXED)
     if role_code == FIRM_CLIENT and members.has_non_client_project_roles(account_id):
         raise RosterError(CLIENT_WITH_PROJECT_ROLES)
 
-    member.role_id = _firm_role(db, role_code).id
+    member.role_id = firm_role(db, role_code).id
     db.flush()
     return member
 
@@ -240,7 +249,7 @@ def remove_member(db: Session, firm_id: int, *, actor_id: int, account_id: int) 
 
     if account_id == actor_id:
         raise RosterError(CANNOT_REMOVE_YOURSELF)
-    if member.role_id == _firm_role(db, OWNER).id:
+    if member.role_id == firm_role(db, OWNER).id:
         raise RosterError(OWNER_CANNOT_BE_REMOVED)
     if members.leads_active_projects(account_id):
         raise RosterError(LEADS_ACTIVE_PROJECTS)
