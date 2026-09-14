@@ -10,11 +10,16 @@ import {
   Title,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
+import { useState } from "react";
 import { useCurrentFirm } from "../features/firms/firmContext";
 import { useCurrentProject } from "../features/projects/projectContext";
 import { AddLineModal } from "../features/takeoff/AddLineModal";
+import { EditLineModal } from "../features/takeoff/EditLineModal";
+import { LineActionsMenu } from "../features/takeoff/LineActionsMenu";
+import { RemoveLineModal } from "../features/takeoff/RemoveLineModal";
 import { TakeoffLines } from "../features/takeoff/TakeoffLines";
 import { TakeoffMaterials } from "../features/takeoff/TakeoffMaterials";
+import type { TakeoffLineOut } from "../features/takeoff/types";
 import { useTakeoff } from "../features/takeoff/useTakeoff";
 import { useTakeoffAccess } from "../features/takeoff/useTakeoffAccess";
 
@@ -60,6 +65,9 @@ function TakeoffView({
 }) {
   const { data: takeoff, isLoading, isError } = useTakeoff(firmId, projectId);
   const [adding, add] = useDisclosure(false);
+  // The line each modal is open for; null means that modal is closed.
+  const [editing, setEditing] = useState<TakeoffLineOut | null>(null);
+  const [removing, setRemoving] = useState<TakeoffLineOut | null>(null);
 
   if (isLoading) {
     return (
@@ -93,23 +101,50 @@ function TakeoffView({
               <Title order={4}>Recetas cargadas</Title>
               {canManage && <Button onClick={add.open}>Agregar receta</Button>}
             </Group>
-            <TakeoffLines lines={takeoff.lines} />
+            <TakeoffLines
+              lines={takeoff.lines}
+              renderActions={
+                canManage
+                  ? (line) => (
+                      <LineActionsMenu
+                        line={line}
+                        onEdit={setEditing}
+                        onRemove={setRemoving}
+                      />
+                    )
+                  : undefined
+              }
+            />
           </Stack>
         </Stack>
       )}
 
       {/* Outside both branches on purpose: adding the first line flips the
           screen from empty to full while the modal is still closing, and a
-          modal rendered inside either branch would be torn down mid-way.
-          Only for those who may load lines: a button that fails is worse
-          than none. */}
+          modal rendered inside either branch would be torn down mid-way — as
+          would removing the last line. Only for those who may manage the
+          take-off: a button that fails is worse than none. */}
       {canManage && (
-        <AddLineModal
-          opened={adding}
-          firmId={firmId}
-          projectId={projectId}
-          onClose={add.close}
-        />
+        <>
+          <AddLineModal
+            opened={adding}
+            firmId={firmId}
+            projectId={projectId}
+            onClose={add.close}
+          />
+          <EditLineModal
+            line={editing}
+            firmId={firmId}
+            projectId={projectId}
+            onClose={() => setEditing(null)}
+          />
+          <RemoveLineModal
+            line={removing}
+            firmId={firmId}
+            projectId={projectId}
+            onClose={() => setRemoving(null)}
+          />
+        </>
       )}
     </>
   );
