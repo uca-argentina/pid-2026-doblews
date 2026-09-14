@@ -6,11 +6,18 @@ import {
   Group,
   Loader,
   Stack,
+  Tabs,
   Text,
   Title,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { Link, Outlet, useNavigate, useParams } from "react-router-dom";
+import {
+  Link,
+  Outlet,
+  useLocation,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
 import { useCurrentFirm } from "../features/firms/firmContext";
 import { ArchiveProjectModal } from "../features/projects/ArchiveProjectModal";
 import { ProjectFormModal } from "../features/projects/ProjectFormModal";
@@ -19,6 +26,7 @@ import {
   type CurrentProject,
 } from "../features/projects/projectContext";
 import { useProject } from "../features/projects/useProjects";
+import type { ProjectDetail } from "../features/projects/types";
 
 const NOT_FOUND = "No encontramos esa obra, o no formás parte de ella.";
 
@@ -43,7 +51,7 @@ const NOT_FOUND = "No encontramos esa obra, o no formás parte de ella.";
  * the message is the same and says nothing about whether the work exists
  * (HU-3: 404, "no revelamos que existe"). */
 export function ProjectLayout() {
-  const { firm } = useCurrentFirm();
+  const { firm, can } = useCurrentFirm();
   const { projectId: param = "" } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
 
@@ -150,10 +158,75 @@ export function ProjectLayout() {
           onArchived={() => navigate(listingPath, { replace: true })}
         />
 
-        {/* HU-6's team and HU-5's take-off become siblings of the index route
-            here, and read the work from the context above. */}
+        <ProjectTabs
+          basePath={`${listingPath}/${current.project.id}`}
+          project={current.project}
+          firmCan={can}
+        />
+
+        {/* The tab's own screen, reading the work from the context above. */}
         <Outlet />
       </Stack>
     </ProjectContext.Provider>
+  );
+}
+
+interface ProjectTabsProps {
+  /** The work's own URL, /firms/:firmId/projects/:projectId. */
+  basePath: string;
+  project: ProjectDetail;
+  firmCan: (permission: string) => boolean;
+}
+
+/** The sections of one work, as tabs that are routes.
+ *
+ * Routes and not local state, so a take-off can be linked to and survives a
+ * reload, and so each section is a child of this layout as HU-3 left it ready
+ * for: HU-6's team becomes one more entry here.
+ *
+ * The take-off tab follows the same rule as useTakeoffAccess — a permission on
+ * the work, or the owner's project.view_all on the firm. It is spelled out
+ * here rather than calling that hook because the hook reads the project
+ * context, and this renders inside the component that provides it.
+ *
+ * With only the data tab to show there are no tabs at all: a single tab is a
+ * heading pretending to be navigation. */
+function ProjectTabs({ basePath, project, firmCan }: ProjectTabsProps) {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+
+  const tabs = [
+    { value: "", label: "Datos", visible: true },
+    {
+      value: "takeoff",
+      label: "Cómputo",
+      visible:
+        project.permissions.includes("project.recipe.view") ||
+        firmCan("project.view_all"),
+    },
+  ].filter((tab) => tab.visible);
+
+  if (tabs.length < 2) {
+    return null;
+  }
+
+  // The segment after the work's id, or "" on the index. Anything unknown
+  // falls back to the data tab rather than to no tab selected.
+  const segment = pathname.slice(basePath.length).split("/")[1] ?? "";
+  const active = tabs.some((tab) => tab.value === segment) ? segment : "";
+
+  return (
+    <Tabs
+      value={active}
+      onChange={(value) => navigate(value ? `${basePath}/${value}` : basePath)}
+    >
+      <Tabs.List>
+        {tabs.map((tab) => (
+          <Tabs.Tab key={tab.value} value={tab.value}>
+            {tab.label}
+          </Tabs.Tab>
+        ))}
+      </Tabs.List>
+    </Tabs>
   );
 }
