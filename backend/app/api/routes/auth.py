@@ -7,6 +7,7 @@ from app.core.token import create_access_token
 from app.schemas.auth import LoginRequest, MeResponse, TokenResponse
 from app.schemas.firm import FirmSummary, RoleOut
 from app.services.auth import authenticate, list_firm_memberships, list_platform_roles
+from app.services.authz import platform_permissions
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -57,6 +58,7 @@ def read_current_account(account: CurrentAccount, db: DbSession) -> MeResponse:
         name=account.name,
         email=account.email,
         platform_roles=list_platform_roles(db, account_id=account.id),
+        platform_permissions=sorted(platform_permissions(db, account.id)),
         firms=[
             FirmSummary(
                 id=membership.firm_id,
