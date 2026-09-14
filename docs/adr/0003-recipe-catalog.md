@@ -215,6 +215,8 @@ Este es el primer módulo que agrega capacidades después de ADR-002, y es la co
 
 Ninguna de estas cuatro filas requiere tocar código de autorización: entran en la migración de seed del catálogo.
 
+**El `owner` lee el cómputo y sus costos por `project.view_all`, y no lo modifica** (precisado al implementar HU-5, 2026-09-14). La tabla no le da ningún permiso de obra, y es correcto: no tiene fila en `project_member` en las obras que no integra. Pero ya puede abrir esas obras (HU-3), y un 403 sobre el cómputo de una obra de su propio estudio no protege nada. Por eso el `GET` del cómputo acepta cualquiera de las dos alturas, `requires_any(("project.recipe.view", "project"), ("project.view_all", "firm"))`, con el mismo argumento que el detalle de la obra en [ADR-002 §9](0002-authorization-model.md). El costo sigue la misma regla: se muestra con `project.cost.view` **o** con `project.view_all`. Las escrituras piden solo `project.recipe.manage`, así que auditar una obra no habilita a editarla. Ninguna fila del seed cambia.
+
 ### 9. Fuera de alcance
 
 Composición de recetas dentro de recetas (los *auxiliares* de Presto) · capítulos o rubros para agrupar recetas · que un estudio edite una receta y la haga propia · recursos de tipo `labor` y `equipment` sembrados · precios por estudio o por proveedor · histórico de precios · costos indirectos, AIU y utilidad · importación de bancos de precios externos · conversión entre unidades.

@@ -271,16 +271,16 @@ Dos avisos sobre este plan:
 - **T-03 va antes del primer endpoint que lea datos de una obra.** Si va después es retrofit, y el retrofit de autorización es de donde salen los agujeros.
 - Si el día 6 T-03 no está terminado, lo que se suelta es **HU-4 entera**, no el motor de autorización.
 
-### Dónde estamos (2026-09-12)
+### Dónde estamos (2026-09-14)
 
-**Terminadas:** T-01, T-02, T-03, **T-04**, HU-0, HU-1, HU-2 y **HU-3 entera**. En curso: **HU-4**.
+**Terminadas:** T-01, T-02, T-03, T-04, HU-0, HU-1, HU-2, HU-3 y **HU-4**. En curso: **HU-5**, con el backend hecho y el front pendiente.
 
-**Queda,** en este orden, y en dos carriles que no se pisan:
+**Queda,** en dos carriles que no se pisan:
 
 | Carril | Historias |
 |---|---|
 | Obras | **HU-6** |
-| Catálogo | **HU-4** → **HU-5** (HU-5 ya tiene las obras que necesitaba) |
+| Catálogo | **HU-5 front** |
 
 **Lo que HU-3 dejó decidido** (ver [ADR-002 §6, §7 y §9.1-9.2](../adr/0002-authorization-model.md)), porque HU-6 y HU-5 se apoyan en ello:
 
@@ -290,6 +290,18 @@ Dos avisos sobre este plan:
 - El selector de clientes del front se llena con `GET /firms/{id}/members` filtrando por `role.code == "client"`; no hay endpoint aparte.
 - **El detalle de la obra devuelve `permissions`**, los del que pide sobre esa obra, igual que `GET /firms/{id}`. Es lo que permite ocultar acciones que el backend rechazaría: el dueño del estudio ve todas las obras y no puede editar las que no integra.
 - **`ProjectLayout` es el enganche de HU-6 y HU-5.** La pantalla de una obra es una ruta anidada: `projects/:projectId` resuelve la obra y sus permisos una vez y los deja en contexto, y su `index` es la pantalla de datos. La sección "Equipo" de HU-6 entra como hermana del index —no adentro de él— y lee la obra de `useCurrentProject()` sin volver a pedirla, con su visibilidad atada a `can("project.member.manage")`.
+
+**Lo que el backend de HU-5 dejó decidido** (ver [ADR-003 §8](../adr/0003-recipe-catalog.md)), porque el front se apoya en ello:
+
+- **Un solo `GET /firms/{firm_id}/projects/{project_id}/takeoff`** devuelve `lines`, `materials`, `total_cost`, `currency` y `prices_as_of`. Las líneas y los totales salen de la misma respuesta para que no se contradigan: después de cualquier escritura, el front vuelve a pedir este GET.
+- **Las escrituras cuelgan de `.../takeoff/lines`:** `POST` (201, con `recipe_id`, `quantity` y `note`), `PUT /{line_id}` (200, con `quantity` y `note`) y `DELETE /{line_id}` (204, baja lógica).
+- **La edición es un PUT de cantidad y nota.** La nota que no viene se borra. La receta no se edita, porque cambiarla cambia la unidad: para eso se da de baja la línea y se carga otra.
+- **Los decimales viajan como string**: la cantidad con 3 decimales (`"7200.000"`) y el costo con 2 (`"1656000.00"`). `total_cost` es la suma de los costos por material ya redondeados, así la columna suma exacto.
+- **El costo oculto es `null`, no un campo ausente.** Un `client` de obra recibe `cost: null` y `total_cost: null`, y las cantidades completas.
+- **`prices_as_of` es la fecha del precio más viejo** del cómputo, para el "precios de referencia al \<fecha\>" de ADR-005 §5. Es `null` si el cómputo está vacío.
+- **El owner ve el cómputo con costos en las obras que no integra y no lo modifica.** Ojo en el front: en esas obras el `permissions` del detalle viene vacío, así que la sección "Cómputo" se muestra con `can("project.recipe.view")` **o** con `project.view_all` en los permisos del estudio. Los botones de carga y edición, solo con `can("project.recipe.manage")`.
+- **Errores:** obra archivada, ajena o línea de otra obra → 404; cantidad ≤ 0 o con más de 3 decimales → 422; receta dada de baja mientras el formulario estaba abierto → 409 con un mensaje que dice qué hacer.
+- **Una receta dada de baja** deja de poder cargarse, pero las líneas que ya la usan siguen computando (ADR-005 §6).
 
 Y aparte, sin bloquear a nadie y bloqueadas por nadie: **HU-7**, la primera candidata a quedar afuera, y el **deploy**.
 
