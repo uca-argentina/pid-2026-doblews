@@ -277,6 +277,25 @@ Dos avisos sobre este plan:
 
 **Queda:** **HU-6**. El carril del catálogo terminó con HU-5.
 
+**En curso, en paralelo con HU-6:** **HU-7**. El backend está hecho y el front sigue.
+
+**Lo que el backend de HU-7 dejó decidido** (ver [ADR-002 §10.1 y §10.2](../adr/0002-authorization-model.md)), porque el front se apoya en ello:
+
+- **Las rutas del soporte cuelgan de `/platform`, no de `/firms/{firm_id}`**, porque el soporte no está en ningún padrón:
+  - `GET /platform/firms`: listado con `member_count` e `is_active`, suspendidos incluidos.
+  - `POST /platform/firms`: 201, con el estudio y el `owner` anidado.
+  - `PATCH /platform/firms/{firm_id}`: solo `{is_active}`, y responde la fila nueva.
+  - `PUT /platform/accounts/password`: 204, con `{email, password}`.
+- **`/auth/me` trae `platform_permissions`.** El front decide con `firm.view`, `firm.create`, `firm.suspend` y `account.reset_password`, nunca con `platform_roles`. Hoy el soporte cae en "no pertenecés a ningún estudio", y ahí es donde el front lo tiene que redirigir.
+- **El alta devuelve el `owner` como quedó guardado.** Si el email ya tenía cuenta, `owner.name` es el de esa persona y no el tipeado, y la UI tiene que avisarlo.
+- **Errores:**
+  - `owner` staff o con la cuenta dada de baja → 409 con el motivo;
+  - estudio inexistente → 404;
+  - reset de un email desconocido o de staff → 404 "No hay una cuenta con ese email";
+  - body inválido → 422.
+- **El teléfono vacío se guarda como `null`.** El front puede mandar `""`.
+- **La auditoría de rutas ahora separa dos familias:** `/firms/{firm_id}` resuelve el padrón y `/platform/` no, y solo acepta permisos de plataforma. Si HU-6 agrega rutas, van bajo `/firms/{firm_id}` como siempre, y la auditoría las cubre sola.
+
 **Lo que HU-3 dejó decidido** (ver [ADR-002 §6, §7 y §9.1-9.2](../adr/0002-authorization-model.md)), porque HU-6 y HU-5 se apoyan en ello:
 
 - Cinco endpoints bajo `/firms/{firm_id}/projects`. La edición es un **PUT** con el formulario entero: el campo que no viene, se vacía.
@@ -306,7 +325,7 @@ Dos avisos sobre este plan:
 - **El alta usa `RecipeBrowser` con `renderAction`**, en un modal de dos pasos que es de pantalla completa en mobile. La cantidad se tipea con coma, con hasta 3 decimales, y viaja como string.
 - **Obra de demo:** `seed_dev` crea "Casa Rodríguez" (Alba lead, Carla cliente, tres líneas) si el padrón sembrado sigue como está. Si alguien cambió esos roles a mano, la saltea con un aviso.
 
-Y aparte, sin bloquear a nadie y bloqueadas por nadie: **HU-7**, la primera candidata a quedar afuera, y el **deploy**.
+Y aparte, sin bloquear a nadie y bloqueado por nadie: el **deploy**.
 
 Dos cosas que este plan original no tenía y conviene no perder de vista:
 

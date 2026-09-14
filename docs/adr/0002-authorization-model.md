@@ -340,6 +340,49 @@ La crea el **soporte**, en una sola transacción: estudio + su primer `owner`. U
 
 No hay autoregistro público.
 
+#### 10.1. Las rutas del soporte no cuelgan de un estudio
+
+*Agregado al implementar HU-7.*
+
+El soporte no está en ningún padrón. Una ruta bajo `/firms/{firm_id}` resuelve primero la fila de padrón (§9, paso 2), así que al soporte le respondería 404, y es la única persona que tiene que usarla. Por eso sus rutas viven bajo **`/platform/...`** y exigen permisos de **ámbito plataforma**:
+
+| Ruta | Permiso |
+|---|---|
+| `GET /platform/firms` | `firm.view` |
+| `POST /platform/firms` | `firm.create` |
+| `PATCH /platform/firms/{firm_id}` (solo `is_active`) | `firm.suspend` |
+| `PUT /platform/accounts/password` | `account.reset_password` |
+
+El ámbito no es un detalle. `firm.view` existe en los dos (§4), y el `owner` tiene el de estudio: si una ruta de `/platform` se protegiera con ese, se abriría a todos los propietarios.
+
+La auditoría sobre la tabla de rutas separa ahora dos familias por prefijo y chequea las dos mitades:
+
+- **`/firms/{firm_id}`:** resuelven el padrón, como hasta ahora.
+- **`/platform/`:** declaran solo permisos de ámbito `platform` y **no** resuelven ningún padrón. Un owner recibe 403 en todos sus `GET`.
+- **Toda ruta con `{firm_id}` fuera de esas dos familias falla.** Agrupar por prefijo no puede dejar un hueco por donde una ruta nueva escape de las dos auditorías.
+
+Tener permisos de plataforma no abre ningún estudio. El soporte sigue recibiendo 404 en `/firms/{id}` y en sus obras, que es §7 visto desde afuera.
+
+#### 10.2. Qué decide el alta, y qué decide el reset
+
+*Agregado al implementar HU-7.*
+
+**Alta.** El estudio y la fila `firm_member` del `owner` se escriben en el mismo flush y con un solo commit. El dueño sale de su email:
+
+- **No existe:** se crea la cuenta con el nombre y la contraseña que tipea el soporte, que la entrega en persona.
+- **Existe:** esa cuenta pasa a ser la dueña **tal como está**. El nombre y la contraseña tipeados se ignoran, porque son de esa persona. La respuesta devuelve el nombre guardado, para que la UI avise.
+- **Es staff:** 409. Es §11.4: el soporte no puede asignarse roles de estudio.
+- **Está dada de baja** (`account.is_active = FALSE`): 409. No podría loguearse, y el estudio nuevo sería uno al que nadie puede entrar, que es justo lo que esta sección prohíbe.
+
+**Suspensión.** Solo cambia `firm.is_active`. El bloqueo ya lo hacía la consulta que decide dónde puede actuar cada persona, así que tiene efecto en el próximo request de cada miembro. Reactivar devuelve todo como estaba, porque no se borró nada.
+
+**Reset de contraseña.** El soporte busca la cuenta **por email**, porque parte del dato que le da la persona y no tiene una pantalla de cuentas de donde sacar un id. El email viaja en el body, no en la URL, para no quedar en logs de acceso. El reset no toca `account.is_active`: no reactiva a nadie de rebote.
+
+- **Las cuentas staff se tratan como inexistentes.** Resetear la contraseña de otro soporte sería una forma de apropiarse del poder de `platform_member` sin escribir en esa tabla, que ningún endpoint escribe (§5).
+- **Un 404 que dice "no hay una cuenta con ese email" no es un oráculo de enumeración acá.** En el login o en el padrón sí lo sería. A esta ruta solo llega el soporte, que ya puede listar todos los estudios.
+
+**Qué ve el front.** `/auth/me` devuelve `platform_permissions`. El front abre las pantallas del soporte con `can("firm.view")` y no leyendo `platform_roles`: permisos, nunca roles, como en el resto de la aplicación. Van en `/auth/me` y no con el estudio porque dependen solo de la cuenta, y es el único endpoint que toda sesión ya llama.
+
 ### 11. Reglas que la base no puede garantizar
 
 Van en la capa de servicio, **cada una con su test**:
