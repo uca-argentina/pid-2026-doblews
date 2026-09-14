@@ -76,6 +76,9 @@ def add_line(
     )
     db.add(line)
     db.flush()  # assigns the id the route reads the line back with
+    # Reload what the database stored: 12.5 is kept as 12.500, and without this
+    # the write would answer "12.5" while every later read says "12.500".
+    db.refresh(line)
     return line
 
 
@@ -97,6 +100,7 @@ def update_line(
     line.quantity = quantity
     line.note = note
     db.flush()
+    db.refresh(line)  # same reason as in add_line: answer with the stored scale
     return line
 
 
