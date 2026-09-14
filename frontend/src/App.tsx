@@ -9,6 +9,7 @@ import { HomeRedirect } from "./pages/HomeRedirect";
 import { LoginPage } from "./pages/LoginPage";
 import { MembersPage } from "./pages/MembersPage";
 import { ProjectDetailPage } from "./pages/ProjectDetailPage";
+import { ProjectTakeoffPage } from "./pages/ProjectTakeoffPage";
 import { NoFirmPage } from "./pages/NoFirmPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { ProtectedRoute } from "./routes/ProtectedRoute";
@@ -45,11 +46,12 @@ function App() {
           <Route index element={<Navigate to="projects" replace />} />
           <Route path="projects" element={<ProjectsPage />} />
           {/* One work, with its name as the context of everything inside it
-              (HU-3). The index is its data; HU-6's team and HU-5's take-off
-              become siblings of it, which is why this is a layout and not a
-              single page. */}
+              (HU-3). Each tab of the work is a child route: the index is its
+              data, "takeoff" is HU-5's take-off, and HU-6's team joins them
+              the same way. */}
           <Route path="projects/:projectId" element={<ProjectLayout />}>
             <Route index element={<ProjectDetailPage />} />
+            <Route path="takeoff" element={<ProjectTakeoffPage />} />
           </Route>
           {/* Every firm role holds catalog.view today, so the gate is for the
               role that someday will not, not for anyone who exists now. */}
