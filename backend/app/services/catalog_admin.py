@@ -25,6 +25,7 @@ RESOURCE_NAME_TAKEN = "Ya existe un material activo con ese nombre"
 RECIPE_NAME_TAKEN = "Ya existe una receta activa con ese nombre"
 UNKNOWN_UNIT_OF_MEASURE = "La unidad de medida elegida no existe"
 UNKNOWN_RECIPE_RESOURCE = "Un material de las líneas no existe o está dado de baja"
+RECIPE_NEEDS_A_LINE = "Una receta activa necesita al menos una línea"
 
 
 class CatalogError(Exception):
@@ -219,10 +220,13 @@ def create_recipe(
 ) -> Recipe:
     """Add a recipe, header and lines together, in the caller's transaction.
 
-    lines is never empty — RecipeWrite enforces that before this runs — but an
-    empty list would still leave a recipe with no line, which is the trap
-    ADR-005 section 7.2 names, so nothing here relaxes that guarantee.
+    RecipeWrite.lines already demands at least one line, but the check is
+    repeated here: ADR-005 section 7.2 is explicit that the guarantee belongs
+    at the point of saving, not only at the request's edge, since this
+    function has its own contract to keep whoever else ends up calling it.
     """
+    if not lines:
+        raise CatalogError(RECIPE_NEEDS_A_LINE)
     _validate_unit_of_measure(db, unit_of_measure_id)
     if _name_taken(db, Recipe, name):
         raise CatalogError(RECIPE_NAME_TAKEN)
@@ -260,6 +264,8 @@ def update_recipe(
     points at the recipe and not at a line (ADR-003 section 2), and the price
     it reads is always the live one (ADR-005 section 5).
     """
+    if not lines:
+        raise CatalogError(RECIPE_NEEDS_A_LINE)
     recipe = get_recipe(db, recipe_id)
     _validate_unit_of_measure(db, unit_of_measure_id)
     if _name_taken(db, Recipe, name, exclude_id=recipe_id):

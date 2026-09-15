@@ -46,7 +46,7 @@ def _catalog_rules() -> Iterator[None]:
     except catalog_admin.RecipeNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=RECIPE_NOT_FOUND) from None
     except catalog_admin.InvalidReferenceError as error:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=error.detail) from None
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=error.detail) from None
     except catalog_admin.CatalogError as error:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=error.detail) from None
 
