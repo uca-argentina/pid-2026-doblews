@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   Alert,
   Box,
@@ -14,7 +14,7 @@ import {
 import dayjs from "dayjs";
 import { formatMoney, matchesSearch } from "../../lib/format";
 import { useAdminResources } from "./useCatalogAdmin";
-import type { ResourceType } from "./types";
+import type { ResourceOut, ResourceType } from "./types";
 
 /** Spanish labels for resource.type (app/models/catalog.py's
  * RESOURCE_TYPE_CHECK). Sprint 1 only seeds "material"; the other two exist
@@ -25,6 +25,12 @@ const TYPE_LABELS: Record<ResourceType, string> = {
   equipment: "Equipo",
 };
 
+interface AdminResourceBrowserProps {
+  /** What each row offers to do with its material. Same render-prop contract
+   * as AdminRecipeBrowser/RecipeBrowser's renderAction. */
+  renderAction?: (resource: ResourceOut) => ReactNode;
+}
+
 /** Search and list the catalogue's materials for support to administer
  * (HU-8).
  *
@@ -34,7 +40,9 @@ const TYPE_LABELS: Record<ResourceType, string> = {
  * ("desde cuándo rige ese precio"), where ResourceBrowser instead computes
  * one aggregate "precios de referencia al <fecha>" footer over the whole
  * visible list — a different question than this screen asks. */
-export function AdminResourceBrowser() {
+export function AdminResourceBrowser({
+  renderAction,
+}: AdminResourceBrowserProps) {
   const { data: resources, isLoading, isError } = useAdminResources();
   const [query, setQuery] = useState("");
 
@@ -85,6 +93,7 @@ export function AdminResourceBrowser() {
                   <Table.Th>Unidad</Table.Th>
                   <Table.Th ta="right">Precio de referencia</Table.Th>
                   <Table.Th>Vigente desde</Table.Th>
+                  <Table.Th w={60} />
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -116,6 +125,7 @@ export function AdminResourceBrowser() {
                         {dayjs(resource.price_updated_at).format("DD/MM/YYYY")}
                       </Text>
                     </Table.Td>
+                    <Table.Td>{renderAction?.(resource)}</Table.Td>
                   </Table.Tr>
                 ))}
               </Table.Tbody>
@@ -127,9 +137,12 @@ export function AdminResourceBrowser() {
               <Card key={resource.id} withBorder padding="md" radius="md">
                 <Group justify="space-between" align="flex-start" wrap="nowrap">
                   <Text fw={600}>{resource.name}</Text>
-                  <Text size="sm" fw={500}>
-                    {formatMoney(resource.reference_price, resource.currency)}
-                  </Text>
+                  <Group gap="xs" wrap="nowrap">
+                    <Text size="sm" fw={500}>
+                      {formatMoney(resource.reference_price, resource.currency)}
+                    </Text>
+                    {renderAction?.(resource)}
+                  </Group>
                 </Group>
                 <Text size="sm" c="dimmed">
                   {TYPE_LABELS[resource.type as ResourceType]} · por{" "}
