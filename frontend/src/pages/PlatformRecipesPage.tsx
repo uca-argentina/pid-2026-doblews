@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button, Group, Stack, Text, Title } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { AdminRecipeBrowser } from "../features/catalog-admin/AdminRecipeBrowser";
+import { DeactivateRecipeModal } from "../features/catalog-admin/DeactivateRecipeModal";
 import { RecipeAdminActionsMenu } from "../features/catalog-admin/RecipeAdminActionsMenu";
 import { RecipeFormModal } from "../features/catalog-admin/RecipeFormModal";
 import type { RecipeOut } from "../features/catalog-admin/types";
@@ -12,6 +13,11 @@ export function PlatformRecipesPage() {
   // resource prop / ProjectFormModal's project prop.
   const [editTarget, setEditTarget] = useState<RecipeOut | null>(null);
   const [formOpened, formModal] = useDisclosure(false);
+  // Which recipe the deactivate modal is about, and null when it is closed —
+  // one shared modal at page level, same pattern as FirmStatusModal.
+  const [deactivateTarget, setDeactivateTarget] = useState<RecipeOut | null>(
+    null,
+  );
 
   const openCreate = () => {
     setEditTarget(null);
@@ -39,10 +45,18 @@ export function PlatformRecipesPage() {
         recipe={editTarget}
         onClose={formModal.close}
       />
+      <DeactivateRecipeModal
+        recipe={deactivateTarget}
+        onClose={() => setDeactivateTarget(null)}
+      />
 
       <AdminRecipeBrowser
         renderAction={(recipe) => (
-          <RecipeAdminActionsMenu recipe={recipe} onEdit={openEdit} />
+          <RecipeAdminActionsMenu
+            recipe={recipe}
+            onEdit={openEdit}
+            onDeactivate={setDeactivateTarget}
+          />
         )}
       />
     </Stack>
