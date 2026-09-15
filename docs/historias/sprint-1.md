@@ -227,7 +227,7 @@ Tarea de equipo, no historia de usuario. Timebox: 30 minutos. Bloquea el repo, F
 
 > **Backlog: no entra en el Sprint 1.** Se documenta ahora para no perderla; se implementa después de la entrega, o en lugar de HU-7 si el sprint respira.
 >
-> **Actualización 2026-09-15:** el sprint respiró y se arrancó antes de la entrega. El **backend está implementado** (permiso `catalog.manage`, servicio y las ocho rutas de `/platform/catalog`, con su suite de tests — ver "Dónde estamos"). Queda el front.
+> **Actualización 2026-09-15:** el sprint respiró y se arrancó antes de la entrega. **HU-8 está implementada de punta a punta** — backend (permiso `catalog.manage`, servicio y las ocho rutas de `/platform/catalog`, con su suite de tests) y front (las pantallas de "Materiales" y "Recetas" bajo `/platform`, ver "Dónde estamos"). El criterio de "edición de recetas pensada para escritorio" **no se aplicó tal cual**: se decidió que el editor maestro-detalle fuera usable en mobile también, no una excepción al mobile-first.
 
 > Como **soporte del sistema**, quiero dar de alta, editar y dar de baja los materiales y las recetas del catálogo para que crezca y sus precios se mantengan al día sin depender de un deploy.
 
@@ -281,7 +281,7 @@ Dos avisos sobre este plan:
 
 **En paralelo con HU-6:** **HU-7** está implementada, back y front, y le falta la revisión visual para darla por cerrada.
 
-**Fuera del orden original, porque el sprint respiró:** el **backend de HU-8** (backlog, ver más abajo) está implementado — permiso, servicio y rutas, con su suite de tests. Falta el front, que sigue siendo la pantalla maestro-detalle de escritorio que la historia pide.
+**Fuera del orden original, porque el sprint respiró:** **HU-8** (backlog, ver más abajo) está implementada de punta a punta — permiso, servicio y rutas en el backend; las pantallas "Materiales" y "Recetas" bajo `/platform` en el front, con el editor maestro-detalle de recetas usable en mobile en vez de la excepción de escritorio que la historia dejaba como posibilidad.
 
 **Lo que el backend de HU-7 dejó decidido** (ver [ADR-002 §10.1 y §10.2](../adr/0002-authorization-model.md)), porque el front se apoya en ello:
 
@@ -348,6 +348,17 @@ Dos avisos sobre este plan:
 - **Tres reglas que el esquema no puede garantizar solo** (ADR-005 §7, cada una con su test): un material usado por una receta activa no se puede dar de baja (409, nombra las recetas); `price_updated_at` se mueve solo cuando cambia el precio, nunca al renombrar; una receta necesita al menos una línea, chequeado tanto en el schema (`RecipeWrite.lines`, `min_length=1`) como en el servicio, porque ADR-005 pide que la garantía viva en el punto de guardado y no solo en el borde del request.
 - **Errores:** nombre repetido (mismo nombre entre activos, sin distinguir mayúsculas) o material en uso → 409; unidad de medida o material de una línea inexistente/inactivo → 422; id inexistente o ya dado de baja → 404. Un `owner` o `architect` que entra por URL directa → 403, igual que cualquier ruta de `/platform`.
 - **Dar de baja una receta no tiene guarda de uso** (ADR-005 §6): las obras que ya la cargaron siguen computando desde sus filas vivas; solo deja de ofrecerse para cargar de nuevo.
+
+**Lo que el front de HU-8 dejó decidido:**
+
+- **`features/catalog-admin/` es una carpeta nueva, separada de `features/catalog/`** (HU-4, firm-scoped) y de `features/platform/` (HU-7, sin catálogo). El motivo es el mismo por el que HU-7 no extendió `features/firms/`: `features/catalog/` pega contra `/firms/{firmId}/catalog/...` y sus query keys llevan el `firmId`, mientras que esto es platform-scoped, sin estudio en la URL. Los tipos de lectura (`ResourceOut`, `RecipeOut`, etc.) se re-exportan desde `features/catalog/types` en vez de duplicarse, porque el backend ya reusa `services/catalog.py` para esas lecturas.
+- **Dos pantallas separadas, "Materiales" y "Recetas"**, cada una con su propia entrada de nav (`PlatformNavbar`) y su propia ruta (`/platform/catalog/materials`, `/platform/catalog/recipes`), ambas gateadas por el mismo permiso `catalog.manage` agregado a `PLATFORM_PERMISSIONS`. Mismo patrón que "Estudios"/"Contraseñas" de HU-7 — no un toggle dentro de una sola pantalla.
+- **`AdminResourceBrowser` y `AdminRecipeBrowser` son componentes nuevos**, no una adaptación de `ResourceBrowser`/`RecipeBrowser` (HU-4): la fuente de datos es otra (el endpoint platform-scoped) y `AdminResourceBrowser` muestra `price_updated_at` **por fila** en vez del footer agregado "precios de referencia al `<fecha>`" que `ResourceBrowser` calcula. `RecipeCard` sí se reusa tal cual, porque ya era puramente presentacional.
+- **El editor de recetas es un modal** (`RecipeFormModal`, `size="lg"`, `fullScreen` en mobile como `AddLineModal`), **no una página aparte**, y está pensado para ser usable a 375px: cada línea se renderiza como fila compacta desde `sm` y como card apilada por debajo, la misma dualidad tabla/card que ya usa cada listado de la app, aplicada a las filas de un formulario. Esto reemplaza la idea original del criterio de aceptación ("edición pensada para escritorio, excepción al mobile-first") — se decidió explícitamente lo contrario.
+- **Primer uso en el repo de `@mantine/form`'s `insertListItem`/`removeListItem`** para el array de líneas. La validación de "material repetido" usa un validador anidado (`validate.lines.resource_id`) que marca **todas** las líneas en conflicto, no solo la segunda. El botón de enviar se deshabilita mientras `lines.length === 0`, reflejando del lado cliente la regla que el backend ya aplica en schema y servicio.
+- **Gotcha real, no hipotético:** `ResourceOut.unit`/`RecipeOut.unit` son `{code, abbreviation}`, sin `id` — pero `ResourceWrite`/`RecipeWrite` necesitan `unit_of_measure_id`. Se resuelve con un helper compartido, `findUnitId(units, code)`, usado por `MaterialFormModal` y `RecipeFormModal` para precargar la unidad al editar. La unidad de cada línea de receta nunca es un campo propio: se lee del material elegido y se muestra como `rightSection` del `NumberInput` de cantidad, porque `RecipeLineWrite` no lleva unidad.
+- **`apiErrorMessage` (`lib/apiError.ts`) se extendió de "pasar el `detail` en un 409" a "pasarlo en un 409 o un 422 con `detail` string"**: los 422 propios de HU-8 (`InvalidReferenceError`, ej. "La unidad de medida elegida no existe") tienen un texto pensado para mostrarse tal cual, igual que un 409. Un 422 estándar de Pydantic trae `detail` como array, nunca como string, así que el cambio no puede filtrar uno de esos por error.
+- **No hay pantalla de reincorporación**, coherente con el backend: un material o receta dado de baja libera su nombre para cargarse de nuevo, no se reactiva la fila vieja.
 
 Y aparte, sin bloquear a nadie y bloqueado por nadie: el **deploy**.
 
