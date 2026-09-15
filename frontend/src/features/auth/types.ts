@@ -28,6 +28,11 @@ export interface MeResponse {
   name: string;
   email: string;
   platform_roles: string[];
+  /** What support may do to the platform (HU-7), e.g. "firm.create". Empty for
+   * everyone else. The support screens are shown by asking this, never by
+   * reading platform_roles. For painting only: every /platform request is
+   * authorized again by the backend. */
+  platform_permissions: string[];
   firms: FirmSummary[];
 }
 
