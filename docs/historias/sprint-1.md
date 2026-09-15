@@ -277,6 +277,36 @@ Dos avisos sobre este plan:
 
 **Queda:** **HU-6**. El carril del catálogo terminó con HU-5.
 
+**En paralelo con HU-6:** **HU-7** está implementada, back y front, y le falta la revisión visual para darla por cerrada.
+
+**Lo que el backend de HU-7 dejó decidido** (ver [ADR-002 §10.1 y §10.2](../adr/0002-authorization-model.md)), porque el front se apoya en ello:
+
+- **Las rutas del soporte cuelgan de `/platform`, no de `/firms/{firm_id}`**, porque el soporte no está en ningún padrón:
+  - `GET /platform/firms`: listado con `member_count` e `is_active`, suspendidos incluidos.
+  - `POST /platform/firms`: 201, con el estudio y el `owner` anidado.
+  - `PATCH /platform/firms/{firm_id}`: solo `{is_active}`, y responde la fila nueva.
+  - `PUT /platform/accounts/password`: 204, con `{email, password}`.
+- **`/auth/me` trae `platform_permissions`.** El front decide con `firm.view`, `firm.create`, `firm.suspend` y `account.reset_password`, nunca con `platform_roles`.
+- **El alta devuelve el `owner` como quedó guardado, con `account_existed`.** Si el email ya tenía cuenta, el flag viene en `true`, `owner.name` es el de esa persona y la contraseña tipeada no se usó. La UI tiene que avisarlo usando el flag, no comparando nombres.
+- **Errores:**
+  - `owner` staff o con la cuenta dada de baja → 409 con el motivo;
+  - estudio inexistente → 404;
+  - reset de un email desconocido o de staff → 404 "No hay una cuenta con ese email";
+  - body inválido → 422.
+- **El teléfono vacío se guarda como `null`.** El front puede mandar `""`.
+- **La auditoría de rutas ahora separa dos familias:** `/firms/{firm_id}` resuelve el padrón y `/platform/` no, y solo acepta permisos de plataforma. Si HU-6 agrega rutas, van bajo `/firms/{firm_id}` como siempre, y la auditoría las cubre sola.
+
+**Lo que el front de HU-7 dejó decidido:**
+
+- **El soporte aterriza en `/platform/firms`.** `resolveHomePath` le pregunta primero por `firm.view` de plataforma y después por los estudios, así que el login, la recarga y `/login` estando logueado lo mandan al mismo lugar. Antes caía en "no pertenecés a ningún estudio".
+- **Las pantallas del soporte viven fuera de `/firms/:firmId`**, bajo `PlatformLayout`, que no pide nada al backend: los permisos ya vinieron con `/auth/me`. Son dos secciones, "Estudios" y "Contraseñas".
+- **`canOnPlatform(account, código)` es el `can()` de plataforma**, y `RequirePlatformPermission` es el `RequirePermission` de plataforma. Los códigos están en `PLATFORM_PERMISSIONS`, tipados: uno mal escrito no compila. Un owner que tipea `/platform/...` ve "No tenés permiso" y no tiene sidebar.
+- **El alta es un solo formulario**, estudio y propietario juntos, porque un asistente de dos pasos tendría un estudio sin dueño entre paso y paso. Es de pantalla completa en mobile. Si `owner.account_existed` viene en `true`, la notificación avisa que la contraseña tipeada no se usó y no se cierra sola.
+- **Suspender y reactivar se confirman** desde un menú ⋯ por estudio, compartido por tabla y tarjetas. El texto dice que los miembros dejan de entrar en su próximo request y que no se borra nada. Los estudios suspendidos se listan atenuados.
+- **El reset es una página y no una acción sobre un estudio:** el soporte parte del email, y la cuenta puede estar en varios estudios o en ninguno. Queda en pantalla después de cada reset y no cierra las sesiones abiertas de esa cuenta.
+- **Las reglas de nombre, email y contraseña viven en `lib/accountFields.ts`**, compartidas por el padrón de HU-2 y las pantallas del soporte. Es el espejo de `TypedPassword` en el back.
+- **Pendiente, sin bloquear:** `AuthContext.tsx` y `authService.ts` no pasan `prettier --check` desde antes de HU-7. El hook de pre-commit los va a reformatear la próxima vez que alguien los toque.
+
 **Lo que HU-3 dejó decidido** (ver [ADR-002 §6, §7 y §9.1-9.2](../adr/0002-authorization-model.md)), porque HU-6 y HU-5 se apoyan en ello:
 
 - Cinco endpoints bajo `/firms/{firm_id}/projects`. La edición es un **PUT** con el formulario entero: el campo que no viene, se vacía.
@@ -306,7 +336,7 @@ Dos avisos sobre este plan:
 - **El alta usa `RecipeBrowser` con `renderAction`**, en un modal de dos pasos que es de pantalla completa en mobile. La cantidad se tipea con coma, con hasta 3 decimales, y viaja como string.
 - **Obra de demo:** `seed_dev` crea "Casa Rodríguez" (Alba lead, Carla cliente, tres líneas) si el padrón sembrado sigue como está. Si alguien cambió esos roles a mano, la saltea con un aviso.
 
-Y aparte, sin bloquear a nadie y bloqueadas por nadie: **HU-7**, la primera candidata a quedar afuera, y el **deploy**.
+Y aparte, sin bloquear a nadie y bloqueado por nadie: el **deploy**.
 
 Dos cosas que este plan original no tenía y conviene no perder de vista:
 

@@ -49,9 +49,10 @@ class MeResponse(BaseModel):
     Flat rather than wrapping the person in an "account" key: on /auth/me the
     top-level object is the account, and the wrapper would buy nothing.
 
-    Deliberately carries no permission list. Resolving permissions is T-03's
-    job, and shipping a half-resolved set now would invite the frontend to
-    branch on it before the engine that fills it exists.
+    Carries the platform permissions and no others. Firm and project
+    permissions depend on where the caller is acting, so they come with
+    GET /firms/{id} and the project detail; platform ones depend on nothing but
+    the account, and this is the only endpoint every session already calls.
     """
 
     id: int
@@ -63,6 +64,13 @@ class MeResponse(BaseModel):
     # and a boolean would need a contract change the day a second one appears.
     # Empty for everyone except support.
     platform_roles: list[str]
+
+    # What support may do to the platform (HU-7), so the frontend decides which
+    # screens to show with can("firm.create") and never by reading
+    # platform_roles. For painting only: every /platform request resolves the
+    # set again against the database (ADR-002 section 9). Sorted, so the payload
+    # does not reshuffle between requests. Empty for everyone except support.
+    platform_permissions: list[str]
 
     # Only the firms whose roster row and firm are both active. Empty is a valid
     # state, not an error: ADR-002 section 11.6 asks for a screen that explains

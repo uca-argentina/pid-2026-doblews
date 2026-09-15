@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Annotated
 
 from email_validator import EmailNotValidError, validate_email
-from pydantic import AfterValidator, BaseModel, Field, StringConstraints, field_validator
+from pydantic import AfterValidator, BaseModel, Field, StringConstraints
 
 from app.core.security import MAX_PASSWORD_BYTES
 from app.schemas.firm import RoleOut
@@ -35,6 +35,24 @@ def _normalize_email(value: str) -> str:
 
 
 Email = Annotated[str, AfterValidator(_normalize_email)]
+
+
+def _fits_bcrypt(value: str) -> str:
+    """bcrypt's limit is in bytes, and Field(max_length=) counts characters.
+
+    Checked here so the caller gets a 422 naming the field, rather than the
+    PasswordTooLongError that core/security.py raises as a last line of defence
+    surfacing as a 500.
+    """
+    if len(value.encode("utf-8")) > MAX_PASSWORD_BYTES:
+        raise ValueError(f"la contraseña no puede superar los {MAX_PASSWORD_BYTES} bytes")
+    return value
+
+
+# A password someone types for another person and hands over in person: the
+# owner for a new member (HU-2), support for a new owner or a reset (HU-7).
+# Never stripped, since a space is a legitimate character in a password.
+TypedPassword = Annotated[str, Field(min_length=8), AfterValidator(_fits_bcrypt)]
 
 
 class MemberOut(BaseModel):
@@ -72,22 +90,8 @@ class MemberCreate(BaseModel):
     # owner is not in the Literal, so asking for it is a 422 before any code runs.
     role_code: AssignableFirmRole
     # Typed by the owner, who hands it over in person: HU-2 has no invitation
-    # email and no password recovery. Never stripped, since a space is a
-    # legitimate character in a password.
-    password: str = Field(min_length=8)
-
-    @field_validator("password")
-    @classmethod
-    def fits_bcrypt(cls, value: str) -> str:
-        """bcrypt's limit is in bytes, and Field(max_length=) counts characters.
-
-        Checked here so the owner gets a 422 naming the field, rather than the
-        PasswordTooLongError that core/security.py raises as a last line of
-        defence surfacing as a 500.
-        """
-        if len(value.encode("utf-8")) > MAX_PASSWORD_BYTES:
-            raise ValueError(f"la contraseña no puede superar los {MAX_PASSWORD_BYTES} bytes")
-        return value
+    # email and no password recovery.
+    password: TypedPassword
 
 
 class MemberRoleUpdate(BaseModel):

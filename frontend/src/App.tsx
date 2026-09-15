@@ -12,8 +12,12 @@ import { ProjectDetailPage } from "./pages/ProjectDetailPage";
 import { ProjectTakeoffPage } from "./pages/ProjectTakeoffPage";
 import { NoFirmPage } from "./pages/NoFirmPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
+import { PlatformLayout } from "./layout/PlatformLayout";
+import { PasswordResetPage } from "./pages/PasswordResetPage";
+import { PlatformFirmsPage } from "./pages/PlatformFirmsPage";
 import { ProtectedRoute } from "./routes/ProtectedRoute";
 import { RequirePermission } from "./routes/RequirePermission";
+import { RequirePlatformPermission } from "./routes/RequirePlatformPermission";
 import { PublicOnlyRoute } from "./routes/PublicOnlyRoute";
 
 function App() {
@@ -38,6 +42,30 @@ function App() {
           <Route path="/" element={<HomeRedirect />} />
           <Route path="/firms" element={<FirmPickerPage />} />
           <Route path="/no-firm" element={<NoFirmPage />} />
+        </Route>
+
+        {/* Support's screens (HU-7). Outside /firms/:firmId on purpose:
+            support belongs to no firm, and FirmLayout would answer "not found".
+            Each screen demands its own platform permission, the same one its
+            endpoint does. */}
+        <Route path="/platform" element={<PlatformLayout />}>
+          <Route index element={<Navigate to="firms" replace />} />
+          <Route
+            path="firms"
+            element={
+              <RequirePlatformPermission code="firm.view">
+                <PlatformFirmsPage />
+              </RequirePlatformPermission>
+            }
+          />
+          <Route
+            path="password-reset"
+            element={
+              <RequirePlatformPermission code="account.reset_password">
+                <PasswordResetPage />
+              </RequirePlatformPermission>
+            }
+          />
         </Route>
 
         {/* Inside a firm the shell gains a sidebar, so FirmLayout renders its

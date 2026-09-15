@@ -41,24 +41,6 @@ def add(db_session, firm_id: int, email: str, role_code: str = "architect", name
     )
 
 
-@pytest.fixture
-def support_account(db, role_id) -> int:
-    account_id = db.execute(
-        text(
-            "INSERT INTO account (name, email, password_hash)"
-            " VALUES ('Soporte', 'soporte@test.com', 'not-a-real-hash') RETURNING id"
-        )
-    ).scalar_one()
-    db.execute(
-        text(
-            "INSERT INTO platform_member (account_id, role_id, role_scope)"
-            " VALUES (:a, :r, 'platform')"
-        ),
-        {"a": account_id, "r": role_id[("support", "platform")]},
-    )
-    return account_id
-
-
 class TestNewAccount:
     def test_creates_the_account_with_the_typed_name_and_password(self, db_session, world):
         member = add(db_session, world.firm_a, "nueva@test.com", name="Nueva Persona")

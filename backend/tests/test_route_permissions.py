@@ -105,7 +105,16 @@ def _depends_on(endpoint: Endpoint, dependency) -> bool:
 
 
 ENDPOINTS = _endpoints(app)
-FIRM_SCOPED = [endpoint for endpoint in ENDPOINTS if "{firm_id}" in endpoint.path]
+
+# Two families of routes that take a firm_id and must never be confused. Inside a
+# firm, the caller acts as a member and the roster decides whether the firm exists
+# for them. On the platform, support acts on firms from outside, belongs to no
+# roster, and resolving one would lock out the only person meant to get in (HU-7).
+FIRM_PREFIX = "/firms/{firm_id}"
+PLATFORM_PREFIX = "/platform/"
+
+FIRM_SCOPED = [endpoint for endpoint in ENDPOINTS if endpoint.path.startswith(FIRM_PREFIX)]
+PLATFORM_SCOPED = [endpoint for endpoint in ENDPOINTS if endpoint.path.startswith(PLATFORM_PREFIX)]
 
 
 def test_the_route_table_was_actually_read():
@@ -113,8 +122,26 @@ def test_the_route_table_was_actually_read():
     routers, every test below would pass by auditing an empty list."""
     paths = {endpoint.path for endpoint in ENDPOINTS}
 
-    assert {"/auth/login", "/auth/me", "/firms/{firm_id}"} <= paths
+    assert {"/auth/login", "/auth/me", "/firms/{firm_id}", "/platform/firms"} <= paths
     assert FIRM_SCOPED, "no firm-scoped route found; the walk is broken"
+    assert PLATFORM_SCOPED, "no platform route found; the walk is broken"
+
+
+@pytest.mark.parametrize("endpoint", ENDPOINTS, ids=str)
+def test_every_route_taking_a_firm_id_belongs_to_an_audited_family(endpoint):
+    """Grouping by prefix must not fail open.
+
+    A route like /reports/{firm_id} would be neither firm-scoped nor platform
+    by prefix, and would escape both audits below while reading a firm_id
+    straight from the URL. It has to pick a family on purpose.
+    """
+    if "{firm_id}" not in endpoint.path:
+        return
+
+    assert endpoint.path.startswith((FIRM_PREFIX, PLATFORM_PREFIX)), (
+        f"{endpoint} takes a firm_id outside {FIRM_PREFIX} and {PLATFORM_PREFIX}, "
+        f"so no audit covers it. Move it under one of them."
+    )
 
 
 def test_the_audit_reports_an_endpoint_that_complies_with_neither():
@@ -178,6 +205,47 @@ def test_a_stranger_gets_404_from_every_firm_scoped_endpoint(endpoint, client, w
     the dependency at all. They are still covered by the two static tests above,
     and the dependency's own behaviour is pinned in test_requires.py.
     """
+    response = client.get(_url(endpoint, world), headers=auth_header(world.account_b))
+
+    assert response.status_code == 404, f"{endpoint} answered {response.status_code} to an outsider"
+
+
+@pytest.mark.parametrize("endpoint", PLATFORM_SCOPED, ids=str)
+def test_every_platform_endpoint_demands_only_platform_permissions(endpoint):
+    """ADR-002 section 4: firm.view exists in platform scope and in firm scope,
+    and they are different permissions. A /platform route guarded with the firm
+    one would open support's screens to every owner, who holds it."""
+    scopes = {scope for declared in _declared_permissions(endpoint) for _, scope in declared}
+
+    assert scopes == {
+        "platform"
+    }, f"{endpoint} demands permissions in {sorted(scopes)}; support routes demand 'platform'."
+
+
+@pytest.mark.parametrize("endpoint", PLATFORM_SCOPED, ids=str)
+def test_no_platform_endpoint_resolves_a_roster(endpoint):
+    """The mirror of the firm-scoped audit. Support is on no roster, so a
+    platform route that resolved one would 404 the only person meant to use it,
+    and would be a sign it is reaching into a firm instead of acting on it."""
+    assert not _depends_on(
+        endpoint, get_current_membership
+    ), f"{endpoint} resolves a firm roster; platform routes act on firms from outside."
+
+
+@pytest.mark.parametrize("endpoint", [e for e in PLATFORM_SCOPED if e.method == "GET"], ids=str)
+def test_an_owner_gets_403_from_every_platform_endpoint(endpoint, client, world, auth_header):
+    """Holding firm.view in one's own firm is not holding it on the platform.
+
+    403 and not 404: support's screens are no secret, and there is no tenant to
+    hide. What must not happen is a 200.
+    """
+    response = client.get(_url(endpoint, world), headers=auth_header(world.account_a))
+
+    assert response.status_code == 403, f"{endpoint} answered {response.status_code} to an owner"
+
+
+def _url(endpoint: Endpoint, world) -> str:
+    """The route's path with every parameter filled in from the world fixture."""
     unknown = [name for name in _path_parameter_names(endpoint.path) if name not in PATH_PARAMETERS]
     assert not unknown, (
         f"{endpoint} takes path parameters this test cannot build: {unknown}. "
@@ -187,10 +255,7 @@ def test_a_stranger_gets_404_from_every_firm_scoped_endpoint(endpoint, client, w
     url = endpoint.path
     for name in _path_parameter_names(endpoint.path):
         url = url.replace(f"{{{name}}}", str(PATH_PARAMETERS[name](world)))
-
-    response = client.get(url, headers=auth_header(world.account_b))
-
-    assert response.status_code == 404, f"{endpoint} answered {response.status_code} to an outsider"
+    return url
 
 
 def _path_parameter_names(path: str) -> list[str]:
