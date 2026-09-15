@@ -226,6 +226,8 @@ Tarea de equipo, no historia de usuario. Timebox: 30 minutos. Bloquea el repo, F
 ## HU-8 — Administrar el catálogo del sistema
 
 > **Backlog: no entra en el Sprint 1.** Se documenta ahora para no perderla; se implementa después de la entrega, o en lugar de HU-7 si el sprint respira.
+>
+> **Actualización 2026-09-15:** el sprint respiró y se arrancó antes de la entrega. El **backend está implementado** (permiso `catalog.manage`, servicio y las ocho rutas de `/platform/catalog`, con su suite de tests — ver "Dónde estamos"). Queda el front.
 
 > Como **soporte del sistema**, quiero dar de alta, editar y dar de baja los materiales y las recetas del catálogo para que crezca y sus precios se mantengan al día sin depender de un deploy.
 
@@ -271,13 +273,15 @@ Dos avisos sobre este plan:
 - **T-03 va antes del primer endpoint que lea datos de una obra.** Si va después es retrofit, y el retrofit de autorización es de donde salen los agujeros.
 - Si el día 6 T-03 no está terminado, lo que se suelta es **HU-4 entera**, no el motor de autorización.
 
-### Dónde estamos (2026-09-14)
+### Dónde estamos (2026-09-15)
 
 **Terminadas:** T-01, T-02, T-03, T-04, HU-0, HU-1, HU-2, HU-3 y HU-4. **HU-5** está implementada, back y front, y le falta la revisión visual para darla por cerrada.
 
 **Queda:** **HU-6**. El carril del catálogo terminó con HU-5.
 
 **En paralelo con HU-6:** **HU-7** está implementada, back y front, y le falta la revisión visual para darla por cerrada.
+
+**Fuera del orden original, porque el sprint respiró:** el **backend de HU-8** (backlog, ver más abajo) está implementado — permiso, servicio y rutas, con su suite de tests. Falta el front, que sigue siendo la pantalla maestro-detalle de escritorio que la historia pide.
 
 **Lo que el backend de HU-7 dejó decidido** (ver [ADR-002 §10.1 y §10.2](../adr/0002-authorization-model.md)), porque el front se apoya en ello:
 
@@ -335,6 +339,15 @@ Dos avisos sobre este plan:
 - **El costo no se decide en el front:** se pinta si la respuesta trae `total_cost`. El cliente ve cantidades sin columna de costo y sin la fecha de precios.
 - **El alta usa `RecipeBrowser` con `renderAction`**, en un modal de dos pasos que es de pantalla completa en mobile. La cantidad se tipea con coma, con hasta 3 decimales, y viaja como string.
 - **Obra de demo:** `seed_dev` crea "Casa Rodríguez" (Alba lead, Carla cliente, tres líneas) si el padrón sembrado sigue como está. Si alguien cambió esos roles a mano, la saltea con un aviso.
+
+**Lo que el backend de HU-8 dejó decidido** (ver [ADR-005 §7](../adr/0005-catalog-administration.md)), porque el front se apoya en ello:
+
+- **Ocho rutas bajo `/platform/catalog`**, nunca bajo `/firms/{firm_id}`: el catálogo no es de ningún estudio y el soporte no está en ningún padrón, mismo criterio que `/platform/firms` de HU-7. Las dos lecturas (`GET /resources`, `GET /recipes`) reusan `services/catalog.py` tal cual: el soporte ve exactamente lo mismo que HU-4 le muestra a cualquiera.
+- **La edición es un `PUT` con el formulario entero**, igual que HU-3 y HU-5: no hay `PATCH` parcial. Una receta se edita reemplazando la cabecera y **todas** sus líneas juntas.
+- **La baja es `DELETE`, 204, y es lógica** — misma forma HTTP que `remove_from_roster` de HU-2. No hay pantalla de reincorporación: un nombre dado de baja queda libre para cargarse de nuevo (el índice `uq_resource_name_active`/`uq_recipe_name_active` ya lo anticipaba).
+- **Tres reglas que el esquema no puede garantizar solo** (ADR-005 §7, cada una con su test): un material usado por una receta activa no se puede dar de baja (409, nombra las recetas); `price_updated_at` se mueve solo cuando cambia el precio, nunca al renombrar; una receta necesita al menos una línea, chequeado tanto en el schema (`RecipeWrite.lines`, `min_length=1`) como en el servicio, porque ADR-005 pide que la garantía viva en el punto de guardado y no solo en el borde del request.
+- **Errores:** nombre repetido (mismo nombre entre activos, sin distinguir mayúsculas) o material en uso → 409; unidad de medida o material de una línea inexistente/inactivo → 422; id inexistente o ya dado de baja → 404. Un `owner` o `architect` que entra por URL directa → 403, igual que cualquier ruta de `/platform`.
+- **Dar de baja una receta no tiene guarda de uso** (ADR-005 §6): las obras que ya la cargaron siguen computando desde sus filas vivas; solo deja de ofrecerse para cargar de nuevo.
 
 Y aparte, sin bloquear a nadie y bloqueado por nadie: el **deploy**.
 
