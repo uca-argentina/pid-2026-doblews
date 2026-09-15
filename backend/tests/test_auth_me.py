@@ -49,6 +49,8 @@ def test_reports_the_account_and_its_firm_with_the_role_label(client, world, aut
     assert body["id"] == world.account_a
     assert body["email"] == "ana@test.com"
     assert body["platform_roles"] == []
+    # An owner holds plenty of firm permissions and none of the platform's.
+    assert body["platform_permissions"] == []
     assert body["firms"] == [
         {
             "id": world.firm_a,
@@ -134,3 +136,30 @@ def test_support_is_reported_by_its_platform_role(client, db, role_id, auth_head
 
     assert body["platform_roles"] == ["support"]
     assert body["firms"] == []
+
+
+def test_support_gets_its_platform_permissions_sorted(client, db, role_id, auth_header):
+    """HU-7: the frontend opens the support screens with can("firm.create"),
+    never by reading the role, so the grants have to travel with the session."""
+    account_id = db.execute(
+        text(
+            "INSERT INTO account (name, email, password_hash)"
+            " VALUES ('Soporte', 'soporte@test.com', 'x') RETURNING id"
+        )
+    ).scalar_one()
+    db.execute(
+        text(
+            "INSERT INTO platform_member (account_id, role_id, role_scope)"
+            " VALUES (:a, :r, 'platform')"
+        ),
+        {"a": account_id, "r": role_id[("support", "platform")]},
+    )
+
+    permissions = me(client, auth_header(account_id)).json()["platform_permissions"]
+
+    assert {"firm.create", "firm.view", "firm.suspend", "account.reset_password"} <= set(
+        permissions
+    )
+    assert permissions == sorted(permissions)
+    # ADR-002 section 7: support administers accounts, never content.
+    assert not [code for code in permissions if code.startswith("project.")]

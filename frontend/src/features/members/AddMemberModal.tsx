@@ -12,20 +12,14 @@ import {
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useCurrentFirm } from "../firms/firmContext";
+import {
+  validateEmail,
+  validateName,
+  validatePassword,
+} from "../../lib/accountFields";
 import { apiErrorMessage } from "../../lib/apiError";
 import { useAddMember, useMemberRoles } from "./useMembers";
 import type { AssignableFirmRole } from "./types";
-
-// The same rules the backend enforces in schemas/member.py, so the usual
-// mistakes are caught before a round trip. They are not the protection: the
-// API validates every field again, and this only spares the user a 422 whose
-// English field errors would not help them.
-const MAX_NAME = 120;
-const MIN_PASSWORD = 8;
-// bcrypt ignores anything past the 72nd byte, so the backend refuses longer
-// passwords. Counted in bytes and not characters for the same reason: "ñ" is
-// two bytes, so 40 of them are already past the limit.
-const MAX_PASSWORD_BYTES = 72;
 
 interface AddMemberModalProps {
   opened: boolean;
@@ -55,24 +49,10 @@ export function AddMemberModal({ opened, onClose }: AddMemberModalProps) {
   const form = useForm<FormValues>({
     initialValues: { name: "", email: "", role_code: null, password: "" },
     validate: {
-      name: (value) => {
-        const name = value.trim();
-        if (name.length === 0) return "Ingresá el nombre";
-        return name.length <= MAX_NAME
-          ? null
-          : `Como máximo ${MAX_NAME} caracteres`;
-      },
-      email: (value) =>
-        /^\S+@\S+\.\S+$/.test(value.trim()) ? null : "Ingresá un email válido",
+      name: validateName,
+      email: validateEmail,
       role_code: (value) => (value ? null : "Elegí un rol"),
-      password: (value) => {
-        if (value.length < MIN_PASSWORD)
-          return `Al menos ${MIN_PASSWORD} caracteres`;
-        const bytes = new TextEncoder().encode(value).length;
-        return bytes <= MAX_PASSWORD_BYTES
-          ? null
-          : "La contraseña es demasiado larga";
-      },
+      password: validatePassword,
     },
   });
 

@@ -195,10 +195,16 @@ function ProjectTabs({ basePath, project, firmCan }: ProjectTabsProps) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
+  // Two names per tab on purpose. `value` identifies the tab to Mantine, which
+  // refuses an empty string: it builds DOM ids from it and throws "rendered
+  // with invalid value" on "", blanking the whole work screen. `path` is the
+  // URL segment, and the data tab is the index route, whose segment really is
+  // "". Using one for both is what broke.
   const tabs = [
-    { value: "", label: "Datos", visible: true },
+    { value: "data", path: "", label: "Datos", visible: true },
     {
       value: "takeoff",
+      path: "takeoff",
       label: "Cómputo",
       visible:
         project.permissions.includes("project.recipe.view") ||
@@ -213,12 +219,16 @@ function ProjectTabs({ basePath, project, firmCan }: ProjectTabsProps) {
   // The segment after the work's id, or "" on the index. Anything unknown
   // falls back to the data tab rather than to no tab selected.
   const segment = pathname.slice(basePath.length).split("/")[1] ?? "";
-  const active = tabs.some((tab) => tab.value === segment) ? segment : "";
+  const active = tabs.find((tab) => tab.path === segment) ?? tabs[0];
 
   return (
     <Tabs
-      value={active}
-      onChange={(value) => navigate(value ? `${basePath}/${value}` : basePath)}
+      value={active.value}
+      onChange={(value) => {
+        const target = tabs.find((tab) => tab.value === value);
+        if (!target) return;
+        navigate(target.path ? `${basePath}/${target.path}` : basePath);
+      }}
     >
       <Tabs.List>
         {tabs.map((tab) => (

@@ -245,6 +245,29 @@ def join_roster(db: Connection, role_id: dict[tuple[str, str], int]):
 
 
 @pytest.fixture
+def support_account(db: Connection, role_id: dict[tuple[str, str], int]) -> int:
+    """The platform staff: an account with the support role and no firm at all.
+
+    Shared because two populations meet at it: HU-2 refuses to put it on a
+    roster, and HU-7 is the story it acts in.
+    """
+    account_id = db.execute(
+        text(
+            "INSERT INTO account (name, email, password_hash)"
+            " VALUES ('Soporte', 'soporte@test.com', 'not-a-real-hash') RETURNING id"
+        )
+    ).scalar_one()
+    db.execute(
+        text(
+            "INSERT INTO platform_member (account_id, role_id, role_scope)"
+            " VALUES (:a, :r, 'platform')"
+        ),
+        {"a": account_id, "r": role_id[("support", "platform")]},
+    )
+    return account_id
+
+
+@pytest.fixture
 def new_project(db: Connection):
     """Another project besides the world's two, active or archived."""
 
