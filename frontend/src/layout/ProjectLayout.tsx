@@ -212,6 +212,7 @@ function ProjectTabs({ basePath, project, firmCan }: ProjectTabsProps) {
     },
     {
       value: "team",
+      path: "team",
       label: "Equipo",
       // No project.view_all fallback, unlike the take-off above, and that is
       // the rule rather than an omission: project.member.view is not granted
