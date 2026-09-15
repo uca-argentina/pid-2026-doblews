@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button, Group, Stack, Text, Title } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { AdminResourceBrowser } from "../features/catalog-admin/AdminResourceBrowser";
+import { DeactivateResourceModal } from "../features/catalog-admin/DeactivateResourceModal";
 import { MaterialActionsMenu } from "../features/catalog-admin/MaterialActionsMenu";
 import { MaterialFormModal } from "../features/catalog-admin/MaterialFormModal";
 import type { ResourceOut } from "../features/catalog-admin/types";
@@ -15,6 +16,11 @@ export function PlatformMaterialsPage() {
   // project prop: it is what the form itself already treats as "new".
   const [editTarget, setEditTarget] = useState<ResourceOut | null>(null);
   const [formOpened, formModal] = useDisclosure(false);
+  // Which material the deactivate modal is about, and null when it is
+  // closed — one shared modal at page level, same pattern as FirmStatusModal.
+  const [deactivateTarget, setDeactivateTarget] = useState<ResourceOut | null>(
+    null,
+  );
 
   const openCreate = () => {
     setEditTarget(null);
@@ -43,10 +49,18 @@ export function PlatformMaterialsPage() {
         resource={editTarget}
         onClose={formModal.close}
       />
+      <DeactivateResourceModal
+        resource={deactivateTarget}
+        onClose={() => setDeactivateTarget(null)}
+      />
 
       <AdminResourceBrowser
         renderAction={(resource) => (
-          <MaterialActionsMenu resource={resource} onEdit={openEdit} />
+          <MaterialActionsMenu
+            resource={resource}
+            onEdit={openEdit}
+            onDeactivate={setDeactivateTarget}
+          />
         )}
       />
     </Stack>
