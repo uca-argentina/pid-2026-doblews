@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.api.routes import (
     auth,
     catalog,
+    catalog_admin,
     firms,
     members,
     platform,
@@ -16,6 +17,7 @@ from app.api.routes import (
 api_router = APIRouter()
 api_router.include_router(auth.router)
 api_router.include_router(catalog.router)
+api_router.include_router(catalog_admin.router)
 api_router.include_router(firms.router)
 api_router.include_router(members.router)
 api_router.include_router(platform.router)
