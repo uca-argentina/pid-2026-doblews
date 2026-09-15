@@ -54,12 +54,17 @@ class ProjectError(Exception):
         self.detail = detail
 
 
-def _project_role(db: Session, code: str) -> Role:
-    """The seeded project role with this code. Missing means a broken seed: a 500."""
+def project_role(db: Session, code: str) -> Role:
+    """The seeded project role with this code. Missing means a broken seed: a 500.
+
+    Public, like the two helpers below it: HU-6 manages the same project_member
+    rows this module writes when a work is created, and a second copy of "how do
+    I turn a role code into a row" is how the two would drift apart.
+    """
     return db.scalars(select(Role).where(Role.scope == "project", Role.code == code)).one()
 
 
-def _firm_role_code(db: Session, firm_id: int, account_id: int) -> str | None:
+def firm_role_code(db: Session, firm_id: int, account_id: int) -> str | None:
     """The firm role of an active member of this firm, or None if they are not one.
 
     One query answers both halves of every question asked below: whether the
@@ -78,7 +83,7 @@ def _firm_role_code(db: Session, firm_id: int, account_id: int) -> str | None:
     )
 
 
-def _assign(db: Session, project: Project, account_id: int, code: str) -> None:
+def assign_role(db: Session, project: Project, account_id: int, code: str) -> None:
     """Put one person on a project with one role.
 
     Spells out firm_id and role_code because project_member needs them: the
@@ -86,7 +91,7 @@ def _assign(db: Session, project: Project, account_id: int, code: str) -> None:
     project and the person to the same firm; the second is what the partial
     unique indexes test (ADR-002 section 5).
     """
-    role = _project_role(db, code)
+    role = project_role(db, code)
     db.add(
         ProjectMember(
             project_id=project.id,
@@ -111,7 +116,7 @@ def _check_client(db: Session, firm_id: int, account_id: int) -> None:
     to make someone a firm client while they hold a non-client project role
     (ADR-002 section 11.2). Together they keep the two role systems agreeing.
     """
-    role_code = _firm_role_code(db, firm_id, account_id)
+    role_code = firm_role_code(db, firm_id, account_id)
     if role_code is None:
         raise ProjectError(CLIENT_NOT_ON_ROSTER)
     if role_code != FIRM_CLIENT:
@@ -147,7 +152,7 @@ def _set_client(db: Session, project: Project, client_account_id: int | None) ->
     db.flush()
 
     if client_account_id is not None:
-        _assign(db, project, client_account_id, CLIENT)
+        assign_role(db, project, client_account_id, CLIENT)
 
 
 def create_project(
@@ -175,7 +180,7 @@ def create_project(
     not hold project.create; the invariant is the service's regardless, because
     that is where section 11 puts it.
     """
-    if _firm_role_code(db, firm_id, created_by) == FIRM_CLIENT:
+    if firm_role_code(db, firm_id, created_by) == FIRM_CLIENT:
         raise ProjectError(FIRM_CLIENT_CANNOT_LEAD)
 
     # Checked before the project row exists, so a refused client leaves nothing
@@ -194,9 +199,9 @@ def create_project(
     db.add(project)
     db.flush()  # assigns the id both assignments need
 
-    _assign(db, project, created_by, LEAD)
+    assign_role(db, project, created_by, LEAD)
     if client_account_id is not None:
-        _assign(db, project, client_account_id, CLIENT)
+        assign_role(db, project, client_account_id, CLIENT)
 
     db.flush()
     return project

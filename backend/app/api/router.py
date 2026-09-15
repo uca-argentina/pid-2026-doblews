@@ -8,6 +8,7 @@ from app.api.routes import (
     firms,
     members,
     platform,
+    project_members,
     projects,
     takeoff,
     units_of_measure,
@@ -19,6 +20,7 @@ api_router.include_router(catalog.router)
 api_router.include_router(firms.router)
 api_router.include_router(members.router)
 api_router.include_router(platform.router)
+api_router.include_router(project_members.router)
 api_router.include_router(projects.router)
 api_router.include_router(takeoff.router)
 api_router.include_router(units_of_measure.router)
