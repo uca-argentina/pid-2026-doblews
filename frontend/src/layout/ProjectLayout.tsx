@@ -204,6 +204,15 @@ function ProjectTabs({ basePath, project, firmCan }: ProjectTabsProps) {
         project.permissions.includes("project.recipe.view") ||
         firmCan("project.view_all"),
     },
+    {
+      value: "team",
+      label: "Equipo",
+      // No project.view_all fallback, unlike the take-off above, and that is
+      // the rule rather than an omission: project.member.view is not granted
+      // by the firm (ADR-002 section 7), so the owner of a work they are not
+      // on would open a tab the backend answers with a 403.
+      visible: project.permissions.includes("project.member.view"),
+    },
   ].filter((tab) => tab.visible);
 
   if (tabs.length < 2) {
