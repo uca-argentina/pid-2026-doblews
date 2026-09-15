@@ -370,7 +370,7 @@ Tener permisos de plataforma no abre ningún estudio. El soporte sigue recibiend
 **Alta.** El estudio y la fila `firm_member` del `owner` se escriben en el mismo flush y con un solo commit. El dueño sale de su email:
 
 - **No existe:** se crea la cuenta con el nombre y la contraseña que tipea el soporte, que la entrega en persona.
-- **Existe:** esa cuenta pasa a ser la dueña **tal como está**. El nombre y la contraseña tipeados se ignoran, porque son de esa persona. La respuesta devuelve el nombre guardado, para que la UI avise.
+- **Existe:** esa cuenta pasa a ser la dueña **tal como está**. El nombre y la contraseña tipeados se ignoran, porque son de esa persona. La respuesta devuelve el nombre guardado y **`owner.account_existed`**, para que la UI avise que la contraseña tipeada no es la que hay que entregar. Es un flag y no una comparación de nombres, porque comparar falla justo cuando el soporte tipeó el nombre real de la persona.
 - **Es staff:** 409. Es §11.4: el soporte no puede asignarse roles de estudio.
 - **Está dada de baja** (`account.is_active = FALSE`): 409. No podría loguearse, y el estudio nuevo sería uno al que nadie puede entrar, que es justo lo que esta sección prohíbe.
 

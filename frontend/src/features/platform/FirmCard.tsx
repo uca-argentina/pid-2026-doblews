@@ -1,15 +1,17 @@
 import { Card, Group, Stack, Text } from "@mantine/core";
+import { FirmActionsMenu } from "./FirmActionsMenu";
 import { FirmStatus } from "./FirmStatus";
 import type { FirmAdminOut } from "./types";
 
 interface FirmCardProps {
   firm: FirmAdminOut;
+  onChangeStatus: (firm: FirmAdminOut) => void;
 }
 
 /** One firm on a phone. Same data as a table row, stacked instead of side by
  * side, so 375px needs no horizontal scrolling. The email is truncated rather
  * than wrapped, as in MemberCard: it is the longest field by far. */
-export function FirmCard({ firm }: FirmCardProps) {
+export function FirmCard({ firm, onChangeStatus }: FirmCardProps) {
   const members = firm.member_count === 1 ? "miembro" : "miembros";
 
   return (
@@ -24,7 +26,10 @@ export function FirmCard({ firm }: FirmCardProps) {
           <Text fw={600} truncate>
             {firm.name}
           </Text>
-          <FirmStatus isActive={firm.is_active} />
+          <Group gap="xs" wrap="nowrap">
+            <FirmStatus isActive={firm.is_active} />
+            <FirmActionsMenu firm={firm} onChangeStatus={onChangeStatus} />
+          </Group>
         </Group>
         <Text size="sm" c="dimmed" truncate>
           {firm.contact_email}

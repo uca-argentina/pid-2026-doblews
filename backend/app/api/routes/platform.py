@@ -88,11 +88,12 @@ def create_platform_firm(payload: FirmCreate, db: DbSession) -> FirmCreatedOut:
     any rule refuses, nothing was written, and there is never a firm without an
     owner.
 
-    The owner comes back as stored. If the address already had an account, its
-    name is that person's and not the one typed, and HU-7's UI tells support so.
+    The owner comes back as stored, with account_existed saying whether the
+    address already had an account. If it did, its name and password are that
+    person's and not the ones typed, and HU-7's UI tells support so.
     """
     with _platform_rules():
-        firm, owner = create_firm(
+        created = create_firm(
             db,
             name=payload.name,
             contact_email=payload.contact_email,
@@ -103,9 +104,15 @@ def create_platform_firm(payload: FirmCreate, db: DbSession) -> FirmCreatedOut:
         )
     db.commit()
 
+    owner = created.owner
     return FirmCreatedOut(
-        **vars(get_firm(db, firm.id)),
-        owner=OwnerOut(account_id=owner.id, name=owner.name, email=owner.email),
+        **vars(get_firm(db, created.firm.id)),
+        owner=OwnerOut(
+            account_id=owner.id,
+            name=owner.name,
+            email=owner.email,
+            account_existed=created.owner_existed,
+        ),
     )
 
 

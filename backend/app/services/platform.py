@@ -12,6 +12,7 @@ as a whole, and a firm_id filter would be the wrong question to ask here.
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import NamedTuple
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
@@ -68,6 +69,20 @@ class FirmAdminEntry:
     member_count: int
 
 
+class CreatedFirm(NamedTuple):
+    """What create_firm made, and what it found already there.
+
+    owner_existed is the one fact the route cannot work out on its own. Comparing
+    the stored name with the typed one guesses wrong exactly when support typed
+    the person's real name, which is when it matters most: the typed password
+    was ignored, and support is about to hand it over.
+    """
+
+    firm: Firm
+    owner: Account
+    owner_existed: bool
+
+
 def _entry_query() -> Select:
     """The one definition of a firm as support sees it, for the list and for one.
 
@@ -118,7 +133,7 @@ def create_firm(
     owner_name: str,
     owner_email: str,
     owner_password: str,
-) -> tuple[Firm, Account]:
+) -> CreatedFirm:
     """Create a firm together with its owner, in the caller's transaction.
 
     ADR-002 section 10: a firm without an owner is a firm nobody can enter, so
@@ -138,8 +153,8 @@ def create_firm(
     - it is deactivated on the platform: refused, because it could not log in
       and the new firm would be one nobody can enter after all.
 
-    Returns the account too, so the route can show the name actually stored:
-    when the address already existed, it is not the one support typed.
+    Returns the account and whether it already existed, so the route can say
+    so: when it did, the password support typed is not the one to hand over.
 
     `owner_email` must already be normalized; the request schema does it.
     """
@@ -150,6 +165,7 @@ def create_firm(
     owner_role = firm_role(db, OWNER)
 
     account = db.scalar(select(Account).where(Account.email == owner_email))
+    owner_existed = account is not None
     if account is None:
         account = Account(name=owner_name, email=owner_email, password_hash=password_hash)
         db.add(account)
@@ -164,7 +180,7 @@ def create_firm(
 
     db.add(FirmMember(firm_id=firm.id, account_id=account.id, role_id=owner_role.id))
     db.flush()
-    return firm, account
+    return CreatedFirm(firm=firm, owner=account, owner_existed=owner_existed)
 
 
 def set_firm_active(db: Session, firm_id: int, *, is_active: bool) -> Firm:

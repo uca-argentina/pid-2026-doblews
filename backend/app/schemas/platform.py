@@ -51,12 +51,18 @@ class OwnerOut(BaseModel):
     """The owner as stored, which is not always as typed.
 
     When the address already had an account, name is that person's own and not
-    the one support typed. Sending it back is what lets the UI say so.
+    the one support typed, and so is the password.
     """
 
     account_id: int
     name: str
     email: str
+    # True when the address already had an account, which became the owner as
+    # it was. The UI needs it to tell support that the password it typed was
+    # ignored and is not the one to hand over. A flag and not a name comparison,
+    # which guesses wrong when support typed the person's real name. Revealing
+    # it is no oracle here: only support gets this far (ADR-002 section 10.2).
+    account_existed: bool
 
 
 class FirmCreatedOut(FirmAdminOut):

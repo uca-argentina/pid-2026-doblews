@@ -18,11 +18,14 @@ export interface FirmAdminOut {
 }
 
 /** The owner as stored, which is not always as typed: when the address
- * already had an account, name is that person's own. */
+ * already had an account, name and password are that person's own. */
 export interface OwnerOut {
   account_id: number;
   name: string;
   email: string;
+  /** true when the address already had an account: the typed password was
+   * ignored and is not the one to hand over. */
+  account_existed: boolean;
 }
 
 export interface FirmCreatedOut extends FirmAdminOut {

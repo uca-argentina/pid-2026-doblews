@@ -100,6 +100,7 @@ class TestCreateFirm:
         assert (body["is_active"], body["member_count"]) == (True, 1)
         assert body["owner"]["name"] == "Nueva Dueña"
         assert body["owner"]["email"] == "duena@oeste.test"
+        assert body["owner"]["account_existed"] is False
 
         token = login(client, "duena@oeste.test", "clave-inicial").json()["access_token"]
         me = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"}).json()
@@ -107,8 +108,10 @@ class TestCreateFirm:
             (body["id"], "owner")
         ]
 
-    def test_an_existing_account_is_returned_with_its_own_name(self, client, world, support):
-        """What lets the UI tell support the typed name was not used."""
+    def test_an_existing_account_is_returned_as_such_with_its_own_name(
+        self, client, world, support
+    ):
+        """What lets the UI tell support the typed name and password were not used."""
         response = client.post(FIRMS_URL, json=firm_body("bruno@test.com"), headers=support)
 
         assert response.status_code == 201
@@ -116,6 +119,7 @@ class TestCreateFirm:
             "account_id": world.account_b,
             "name": "bruno",
             "email": "bruno@test.com",
+            "account_existed": True,
         }
 
     def test_a_blank_phone_is_stored_as_none(self, client, world, support):

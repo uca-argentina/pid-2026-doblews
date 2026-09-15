@@ -51,8 +51,9 @@ def owners_of(db_session, firm_id: int) -> list[FirmMember]:
 
 class TestCreateFirm:
     def test_creates_the_firm_and_a_new_owner_account(self, db_session):
-        firm, owner = create(db_session, "duena@oeste.test")
+        firm, owner, owner_existed = create(db_session, "duena@oeste.test")
 
+        assert owner_existed is False
         assert (firm.name, firm.contact_email, firm.phone, firm.is_active) == (
             "Oeste",
             "contacto@oeste.test",
@@ -64,12 +65,12 @@ class TestCreateFirm:
 
     def test_the_new_firm_has_exactly_one_active_owner(self, db_session):
         """ADR-002 sections 10 and 11.1: never a firm nobody can enter."""
-        firm, owner = create(db_session, "duena@oeste.test")
+        firm, owner, _ = create(db_session, "duena@oeste.test")
 
         assert [member.account_id for member in owners_of(db_session, firm.id)] == [owner.id]
 
     def test_the_owner_can_act_in_the_new_firm_right_away(self, db_session):
-        firm, owner = create(db_session, "duena@oeste.test")
+        firm, owner, _ = create(db_session, "duena@oeste.test")
 
         memberships = list_firm_memberships(db_session, owner.id)
 
@@ -81,8 +82,9 @@ class TestCreateFirm:
         hash_before = before.password_hash
         accounts_before = db_session.scalar(select(Account.id).order_by(Account.id.desc()))
 
-        firm, owner = create(db_session, "bruno@test.com", owner_name="Otro Nombre")
+        firm, owner, owner_existed = create(db_session, "bruno@test.com", owner_name="Otro Nombre")
 
+        assert owner_existed is True
         assert owner.id == world.account_b
         assert owner.name == "bruno"
         assert owner.password_hash == hash_before
@@ -90,6 +92,16 @@ class TestCreateFirm:
         # Bruno now owns two firms, each with its own roster row.
         firms = {m.firm_id for m in list_firm_memberships(db_session, world.account_b)}
         assert firms == {world.firm_b, firm.id}
+
+    def test_says_the_account_existed_even_when_the_typed_name_matches(self, db_session, world):
+        """The case a name comparison gets wrong: support typed the person's
+        real name, so nothing in the stored row tells the two outcomes apart,
+        and the typed password was still ignored."""
+        _, owner, owner_existed = create(db_session, "bruno@test.com", owner_name="bruno")
+
+        assert owner.name == "bruno"
+        assert owner_existed is True
+        assert not verify_password(TYPED_PASSWORD, owner.password_hash)
 
     def test_refuses_a_staff_account_and_writes_nothing(self, db_session, support_account):
         """ADR-002 section 11.4: support cannot hand itself a firm role."""

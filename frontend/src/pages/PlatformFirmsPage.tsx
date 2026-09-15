@@ -1,6 +1,26 @@
-import { Alert, Box, Center, Loader, Stack, Text, Title } from "@mantine/core";
+import { useState } from "react";
+import {
+  Alert,
+  Box,
+  Button,
+  Center,
+  Group,
+  Loader,
+  Stack,
+  Text,
+  Title,
+} from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
+import { useAuth } from "../features/auth/AuthContext";
+import { CreateFirmModal } from "../features/platform/CreateFirmModal";
 import { FirmCard } from "../features/platform/FirmCard";
+import { FirmStatusModal } from "../features/platform/FirmStatusModal";
 import { FirmsTable } from "../features/platform/FirmsTable";
+import {
+  canOnPlatform,
+  PLATFORM_PERMISSIONS,
+} from "../features/platform/platformAccess";
+import type { FirmAdminOut } from "../features/platform/types";
 import { usePlatformFirms } from "../features/platform/usePlatform";
 
 /** HU-7: every firm on the platform, with its head count and its state.
@@ -8,17 +28,36 @@ import { usePlatformFirms } from "../features/platform/usePlatform";
  * Support's home. Suspended firms are listed too, dimmed, because this is
  * where support finds one to reactivate. */
 export function PlatformFirmsPage() {
+  const { account } = useAuth();
   const { data: firms, isLoading, isError } = usePlatformFirms();
+  const [createOpened, createModal] = useDisclosure(false);
+  // Which firm the status modal is about, and null when it is closed. Kept
+  // here and not in each row, so there is one modal on the screen rather than
+  // one per firm — as MembersPage does.
+  const [statusTarget, setStatusTarget] = useState<FirmAdminOut | null>(null);
+
+  // Asked separately from the screen's own gate (firm.view): listing firms
+  // and creating them are two permissions, even if support holds both today.
+  const canCreate = canOnPlatform(account, PLATFORM_PERMISSIONS.createFirm);
 
   return (
     <Stack gap="md">
-      <div>
-        <Title order={3}>Estudios</Title>
-        <Text c="dimmed" size="sm">
-          Los estudios de la plataforma, con su cantidad de miembros y su
-          estado.
-        </Text>
-      </div>
+      <Group justify="space-between" align="flex-start" wrap="nowrap">
+        <div>
+          <Title order={3}>Estudios</Title>
+          <Text c="dimmed" size="sm">
+            Los estudios de la plataforma, con su cantidad de miembros y su
+            estado.
+          </Text>
+        </div>
+        {canCreate && <Button onClick={createModal.open}>Nuevo estudio</Button>}
+      </Group>
+
+      <CreateFirmModal opened={createOpened} onClose={createModal.close} />
+      <FirmStatusModal
+        firm={statusTarget}
+        onClose={() => setStatusTarget(null)}
+      />
 
       {isLoading && (
         <Center>
@@ -42,11 +81,15 @@ export function PlatformFirmsPage() {
         <>
           {/* One list, two shapes, switched by CSS as in MembersPage. */}
           <Box visibleFrom="sm">
-            <FirmsTable firms={firms} />
+            <FirmsTable firms={firms} onChangeStatus={setStatusTarget} />
           </Box>
           <Stack gap="sm" hiddenFrom="sm">
             {firms.map((firm) => (
-              <FirmCard key={firm.id} firm={firm} />
+              <FirmCard
+                key={firm.id}
+                firm={firm}
+                onChangeStatus={setStatusTarget}
+              />
             ))}
           </Stack>
         </>

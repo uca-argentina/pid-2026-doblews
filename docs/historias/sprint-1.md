@@ -287,7 +287,7 @@ Dos avisos sobre este plan:
   - `PATCH /platform/firms/{firm_id}`: solo `{is_active}`, y responde la fila nueva.
   - `PUT /platform/accounts/password`: 204, con `{email, password}`.
 - **`/auth/me` trae `platform_permissions`.** El front decide con `firm.view`, `firm.create`, `firm.suspend` y `account.reset_password`, nunca con `platform_roles`. Hoy el soporte cae en "no pertenecés a ningún estudio", y ahí es donde el front lo tiene que redirigir.
-- **El alta devuelve el `owner` como quedó guardado.** Si el email ya tenía cuenta, `owner.name` es el de esa persona y no el tipeado, y la UI tiene que avisarlo.
+- **El alta devuelve el `owner` como quedó guardado, con `account_existed`.** Si el email ya tenía cuenta, el flag viene en `true`, `owner.name` es el de esa persona y la contraseña tipeada no se usó. La UI tiene que avisarlo usando el flag, no comparando nombres.
 - **Errores:**
   - `owner` staff o con la cuenta dada de baja → 409 con el motivo;
   - estudio inexistente → 404;
