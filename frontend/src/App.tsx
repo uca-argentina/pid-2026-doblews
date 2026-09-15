@@ -13,6 +13,7 @@ import { ProjectTakeoffPage } from "./pages/ProjectTakeoffPage";
 import { NoFirmPage } from "./pages/NoFirmPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { PlatformLayout } from "./layout/PlatformLayout";
+import { PasswordResetPage } from "./pages/PasswordResetPage";
 import { PlatformFirmsPage } from "./pages/PlatformFirmsPage";
 import { ProtectedRoute } from "./routes/ProtectedRoute";
 import { RequirePermission } from "./routes/RequirePermission";
@@ -54,6 +55,14 @@ function App() {
             element={
               <RequirePlatformPermission code="firm.view">
                 <PlatformFirmsPage />
+              </RequirePlatformPermission>
+            }
+          />
+          <Route
+            path="password-reset"
+            element={
+              <RequirePlatformPermission code="account.reset_password">
+                <PasswordResetPage />
               </RequirePlatformPermission>
             }
           />

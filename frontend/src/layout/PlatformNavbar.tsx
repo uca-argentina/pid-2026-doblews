@@ -24,6 +24,11 @@ export function PlatformNavbar({ onNavigate }: PlatformNavbarProps) {
       label: "Estudios",
       visible: canOnPlatform(account, PLATFORM_PERMISSIONS.viewFirms),
     },
+    {
+      to: "/platform/password-reset",
+      label: "Contraseñas",
+      visible: canOnPlatform(account, PLATFORM_PERMISSIONS.resetPassword),
+    },
   ];
 
   return (
