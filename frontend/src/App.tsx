@@ -10,6 +10,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { MembersPage } from "./pages/MembersPage";
 import { ProjectDetailPage } from "./pages/ProjectDetailPage";
 import { ProjectTakeoffPage } from "./pages/ProjectTakeoffPage";
+import { ProjectTeamPage } from "./pages/ProjectTeamPage";
 import { NoFirmPage } from "./pages/NoFirmPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { PlatformLayout } from "./layout/PlatformLayout";
@@ -102,6 +103,7 @@ function App() {
           <Route path="projects/:projectId" element={<ProjectLayout />}>
             <Route index element={<ProjectDetailPage />} />
             <Route path="takeoff" element={<ProjectTakeoffPage />} />
+            <Route path="team" element={<ProjectTeamPage />} />
           </Route>
           {/* Every firm role holds catalog.view today, so the gate is for the
               role that someday will not, not for anyone who exists now. */}
