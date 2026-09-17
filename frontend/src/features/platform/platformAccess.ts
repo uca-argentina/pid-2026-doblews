@@ -7,6 +7,7 @@ export const PLATFORM_PERMISSIONS = {
   createFirm: "firm.create",
   suspendFirm: "firm.suspend",
   resetPassword: "account.reset_password",
+  manageCatalog: "catalog.manage",
 } as const;
 
 export type PlatformPermission =

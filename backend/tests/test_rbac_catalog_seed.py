@@ -1,4 +1,5 @@
-"""The seeded catalogue, checked against ADR-002 section 7 and ADR-003 section 8.
+"""The seeded catalogue, checked against ADR-002 section 7, ADR-003 section 8
+and ADR-005 section 2.
 
 The expected matrix is typed out here by hand rather than imported from the seed
 migrations. That duplication is the test: a check that reads the same source as
@@ -9,8 +10,8 @@ the seed shows up as a diff against the documents the team agreed on.
 from sqlalchemy import Connection, text
 
 # (role code, scope) -> permission codes it grants. The catalogue.* and
-# project.recipe.*/project.cost.* rows come from ADR-003 section 8; everything
-# else from ADR-002 section 7.
+# project.recipe.*/project.cost.* rows come from ADR-003 section 8; catalog.manage
+# comes from ADR-005 section 2; everything else from ADR-002 section 7.
 EXPECTED: dict[tuple[str, str], set[str]] = {
     ("support", "platform"): {
         "firm.create",
@@ -22,6 +23,7 @@ EXPECTED: dict[tuple[str, str], set[str]] = {
         "account.edit",
         "account.deactivate",
         "account.reset_password",
+        "catalog.manage",
     },
     ("owner", "firm"): {
         "firm.view",

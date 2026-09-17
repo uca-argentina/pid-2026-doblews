@@ -29,6 +29,16 @@ export function PlatformNavbar({ onNavigate }: PlatformNavbarProps) {
       label: "Contraseñas",
       visible: canOnPlatform(account, PLATFORM_PERMISSIONS.resetPassword),
     },
+    {
+      to: "/platform/catalog/materials",
+      label: "Materiales",
+      visible: canOnPlatform(account, PLATFORM_PERMISSIONS.manageCatalog),
+    },
+    {
+      to: "/platform/catalog/recipes",
+      label: "Recetas",
+      visible: canOnPlatform(account, PLATFORM_PERMISSIONS.manageCatalog),
+    },
   ];
 
   return (

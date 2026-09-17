@@ -239,7 +239,7 @@ Dos consecuencias que aparecieron al implementar HU-3:
 
 | Ámbito | Rol | Permisos |
 |---|---|---|
-| `platform` | `support` | `firm.create`, `firm.view`, `firm.edit`, `firm.suspend`, `account.create`, `account.view`, `account.edit`, `account.deactivate`, `account.reset_password` |
+| `platform` | `support` | `firm.create`, `firm.view`, `firm.edit`, `firm.suspend`, `account.create`, `account.view`, `account.edit`, `account.deactivate`, `account.reset_password`, `catalog.manage` |
 | `firm` | `owner` | `firm.view`, `firm.edit`, `member.view`, `member.add`, `member.edit_role`, `member.remove`, `project.create`, `project.view_all` |
 | `firm` | `architect` | `firm.view`, `member.view`, `project.create` |
 | `firm` | `client` | `firm.view` |

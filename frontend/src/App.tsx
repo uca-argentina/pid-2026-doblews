@@ -16,6 +16,8 @@ import { ProjectsPage } from "./pages/ProjectsPage";
 import { PlatformLayout } from "./layout/PlatformLayout";
 import { PasswordResetPage } from "./pages/PasswordResetPage";
 import { PlatformFirmsPage } from "./pages/PlatformFirmsPage";
+import { PlatformMaterialsPage } from "./pages/PlatformMaterialsPage";
+import { PlatformRecipesPage } from "./pages/PlatformRecipesPage";
 import { ProtectedRoute } from "./routes/ProtectedRoute";
 import { RequirePermission } from "./routes/RequirePermission";
 import { RequirePlatformPermission } from "./routes/RequirePlatformPermission";
@@ -64,6 +66,26 @@ function App() {
             element={
               <RequirePlatformPermission code="account.reset_password">
                 <PasswordResetPage />
+              </RequirePlatformPermission>
+            }
+          />
+          {/* HU-8: two screens, not one with a toggle, same split as
+              "firms"/"password-reset" above. Both guarded by the same
+              permission — the catalogue has one, not one per action
+              (ADR-005 section 2). */}
+          <Route
+            path="catalog/materials"
+            element={
+              <RequirePlatformPermission code="catalog.manage">
+                <PlatformMaterialsPage />
+              </RequirePlatformPermission>
+            }
+          />
+          <Route
+            path="catalog/recipes"
+            element={
+              <RequirePlatformPermission code="catalog.manage">
+                <PlatformRecipesPage />
               </RequirePlatformPermission>
             }
           />

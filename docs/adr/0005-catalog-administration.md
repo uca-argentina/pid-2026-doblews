@@ -1,7 +1,7 @@
 # ADR-005: Administración del catálogo del sistema por pantalla
 
-**Estado:** Propuesta
-**Fecha:** 2026-09-12
+**Estado:** Aceptada
+**Fecha:** 2026-09-12 (aceptada 2026-09-15, al implementarse el backend de HU-8)
 **Contexto:** Cómo crece y se mantiene el catálogo de recursos y recetas. Reemplaza la parte de [ADR-003 §1](0003-recipe-catalog.md) que lo declara de solo lectura en runtime. Motiva la historia HU-8.
 
 ## Contexto

@@ -318,6 +318,18 @@ def recipe_id(db: Connection) -> dict[str, int]:
 
 
 @pytest.fixture
+def resource_id(db: Connection) -> dict[str, int]:
+    """name -> id for the seeded resources. Mirrors recipe_id, same reasoning."""
+    return {row.name: row.id for row in db.execute(text("SELECT id, name FROM resource"))}
+
+
+@pytest.fixture
+def unit_id(db: Connection) -> dict[str, int]:
+    """code -> id for the seeded units of measure (HU-0), e.g. unit_id["kg"]."""
+    return {row.code: row.id for row in db.execute(text("SELECT id, code FROM unit_of_measure"))}
+
+
+@pytest.fixture
 def add_takeoff_line(db: Connection):
     """Insert one project_recipe row: this much of this recipe on this work.
 
