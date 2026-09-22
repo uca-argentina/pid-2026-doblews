@@ -1,0 +1,109 @@
+name: CI
+
+# Every pull request, whichever protected branch it targets. No path filters on
+# purpose: once this workflow is a required status check, a PR that skipped the
+# job would wait forever for a check that never runs.
+on:
+  pull_request:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+# A new push to the same PR cancels the previous run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend — lint, migrations, tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: warchitecture
+          POSTGRES_PASSWORD: warchitecture
+          POSTGRES_DB: warchitecture
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U warchitecture"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # There is no .env in CI: app/core/config.py falls back to real environment
+      # variables, which is exactly how the deploy works too.
+      DATABASE_URL: postgresql+psycopg://warchitecture:warchitecture@localhost:5432/warchitecture
+      TEST_DATABASE_URL: postgresql+psycopg://warchitecture:warchitecture@localhost:5432/warchitecture_test
+      # Fixed and public on purpose: CI signs tokens it verifies itself. Still
+      # 32 bytes or more, so the suite does not run under a warning it would
+      # then learn to ignore.
+      JWT_SECRET: ci-only-not-a-real-secret-at-least-32-bytes-long
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install dependencies
+        # --locked fails if uv.lock drifted from pyproject.toml, so a dependency
+        # added without relocking is caught here and not on someone's machine.
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format
+        run: uv run black --check .
+
+      - name: Apply migrations
+        run: uv run alembic upgrade head
+
+      - name: Models and migrations agree
+        # backend/CLAUDE.md requires this to pass: a model changed without a
+        # migration shows up here.
+        run: uv run alembic check
+
+      - name: Tests
+        # conftest.py creates its own database and runs the migrations down and
+        # up, so this also exercises the downgrade path.
+        run: uv run pytest -q
+
+  frontend:
+    name: Frontend — lint and build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        # `tsc -b && vite build`, so a type error fails here.
+        run: npm run build

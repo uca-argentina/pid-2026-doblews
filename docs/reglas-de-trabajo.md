@@ -19,10 +19,11 @@ Este documento fija cómo trabajamos como equipo durante todo el proyecto. No es
 
 **Branching**
 
-- `main` protegida: nadie pushea directo, solo se llega por Pull Request aprobado.
-- Una rama por historia/tarea: `feat/hu1-login`, `fix/hu3-validacion-fecha`, `chore/setup-docker`.
+- `main` = lo que está (o va a estar) hosteado. `dev` = rama de integración, donde se juntan las historias antes de promocionar a `main`. Ambas protegidas: nadie pushea directo a ninguna de las dos, solo se llega por Pull Request.
+- Una rama por historia/tarea, creada desde `dev`: `feat/hu1-login`, `fix/hu3-validacion-fecha`, `chore/setup-docker`. El PR de esa rama apunta a `dev`, no a `main`.
 - Ramas cortas: se abren, se trabajan 1-3 días y se mergean. Si una rama vive más de una semana, es señal de que la tarea estaba mal cortada.
-- Antes de abrir el PR, traer los cambios de `main` (`rebase` o `merge`) para no descubrir conflictos recién en el review.
+- Antes de abrir el PR, traer los cambios de `dev` (`rebase` o `merge`) para no descubrir conflictos recién en el review.
+- Promoción `dev → main`: PR aparte, con **merge commit, no squash** (squash en ambos niveles hace divergir el historial de las dos ramas). Se hace cuando el equipo decide que lo acumulado en `dev` está listo para quedar hosteado, no automáticamente en cada historia.
 
 **Commits**
 
@@ -33,8 +34,7 @@ Este documento fija cómo trabajamos como equipo durante todo el proyecto. No es
 **Pull Requests**
 
 - Descripción mínima: qué hace, qué historia/tarjeta de Trello resuelve (link), cómo se probó.
-- **Al menos 1 review cruzada antes de mergear** (con 2-3 personas, no hace falta más de 1 aprobación).
-- El que abre el PR no se autoaprueba ni mergea su propio código sin el visto bueno del otro.
+- **La review no bloquea el merge.** Si hay alguien disponible y el cambio lo amerita, una mirada cruzada suma; pero con 2-3 personas trabajando en horarios distintos, esperar aprobación frena más de lo que aporta. Quien abre el PR puede mergearlo.
 - PRs chicos (idealmente bajo ~400 líneas de diff). Un PR gigante nadie lo revisa en serio.
 - Squash merge a `main` para mantener el historial limpio — el detalle de commits intermedios queda en la rama.
 
