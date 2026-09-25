@@ -6,7 +6,9 @@
 // redefining is what keeps the two sides from drifting apart on their own.
 export type {
   RecipeLineOut,
+  RecipeLineWrite,
   RecipeOut,
+  RecipeWrite,
   ResourceOut,
   UnitRef,
 } from "../catalog/types";
@@ -25,22 +27,4 @@ export interface ResourceWrite {
   /** Decimal string ("9000.00"), scale 2 — never a number, same reason as
    * ResourceOut.reference_price. */
   reference_price: string;
-}
-
-/** One line of the master-detail form: this material, this much per unit. */
-export interface RecipeLineWrite {
-  resource_id: number;
-  /** Decimal string, scale 4 (recipe_resource.quantity_per_unit is
-   * NUMERIC(12,4) — a different scale from the take-off's NUMERIC(14,3)). */
-  quantity_per_unit: string;
-}
-
-/** The create/edit form for one recipe: header and every one of its lines,
- * replaced whole. The backend rejects an empty lines array and a repeated
- * resource_id across lines (422) — the form validates both before sending. */
-export interface RecipeWrite {
-  name: string;
-  description: string | null;
-  unit_of_measure_id: number;
-  lines: RecipeLineWrite[];
 }
