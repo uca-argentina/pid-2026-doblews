@@ -168,6 +168,8 @@ Una receta real de 1 m² de pared es *60 ladrillos + 0,25 bolsas de cemento + 0,
 
 Es la columna *naturaleza* de Presto. **El Sprint 1 siembra únicamente `type = 'material'`**; los otros dos valores existen en el `CHECK` y no tienen filas.
 
+> **Precisado por T-05 (2026-09-25).** Cuando `type = 'labor'` o `'equipment'`, la unidad de `resource` (`unit_of_measure_id`) es siempre **`h`** (hora, agregada al catálogo cerrado de `unit_of_measure` por T-06), `reference_price` es el **costo por hora** de esa mano de obra o ese equipo, y en `recipe_resource.quantity_per_unit` el **rendimiento** son las horas que esa receta necesita de ese recurso por cada unidad de receta (ej.: "1 m² de pared lleva 0,5 h de oficial"). No es una tabla ni una columna nueva: son las mismas dos columnas genéricas que esta sección ya describía, con su significado precisado para este caso — exactamente la promesa del párrafo de Consecuencias de más abajo ("el Módulo 1 entra agregando filas con otro `type`, sin tablas nuevas"). Ver [ADR-006](0006-firm-recipes.md) y [ADR-007](0007-budget-versions.md) (T-05).
+
 ### 4. `recipe`, no `building_component`
 
 La entidad que lleva la receta se llama `recipe`. Reemplaza al `building_component` de los documentos previos por dos razones: el nombre viejo promete más de lo que la tabla hace, y "componente constructivo" es un término que probablemente se necesite más adelante para otra cosa (un elemento del modelo del edificio, no una línea de cómputo).
