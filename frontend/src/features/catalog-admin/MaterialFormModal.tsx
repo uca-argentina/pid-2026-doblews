@@ -16,7 +16,7 @@ import { notifications } from "@mantine/notifications";
 import { apiErrorMessage } from "../../lib/apiError";
 import { useUnitsOfMeasure } from "../units-of-measure/useUnitsOfMeasure";
 import type { UnitOfMeasureOut } from "../units-of-measure/types";
-import { findUnitId } from "./unitLookup";
+import { findUnitId } from "../units-of-measure/unitLookup";
 import { useCreateResource, useUpdateResource } from "./useCatalogAdmin";
 import type { ResourceOut, ResourceType, ResourceWrite } from "./types";
 

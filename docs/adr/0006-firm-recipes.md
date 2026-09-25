@@ -1,6 +1,6 @@
 # ADR-006: Recetas del estudio
 
-**Estado:** Propuesta
+**Estado:** Aceptada
 **Fecha:** 2026-09-25
 **Contexto:** Modelo de datos de las recetas propias de cada estudio. Desbloquea HU-9 del Sprint 2 y precisa el pendiente que dejó anotado [ADR-003](0003-recipe-catalog.md).
 

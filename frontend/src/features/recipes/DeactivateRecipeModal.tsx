@@ -2,16 +2,19 @@ import { useState } from "react";
 import { Alert, Button, Group, Modal, Stack, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { apiErrorMessage } from "../../lib/apiError";
-import { useDeactivateRecipe } from "./useCatalogAdmin";
-import type { RecipeOut } from "./types";
+import type { RecipeOut } from "../catalog/types";
+import type { RecipeWriter } from "./types";
 
 interface DeactivateRecipeModalProps {
   /** The recipe being deactivated, or null when the modal is closed. */
   recipe: RecipeOut | null;
   onClose: () => void;
+  /** Where the deactivation goes: support's endpoint or the firm's. */
+  writer: RecipeWriter;
 }
 
-/** Confirmation for deactivating a recipe. Same shape as
+/** Confirmation for deactivating a recipe, general (HU-8) or a firm's own
+ * (HU-9) — the rule is the same for both. Same shape as
  * DeactivateResourceModal, but with no 409-in-use case to design for:
  * ADR-005 section 6 carries no usage guard on a recipe's deactivation — the
  * works that already added it keep computing from its live rows, so the only
@@ -20,8 +23,8 @@ interface DeactivateRecipeModalProps {
 export function DeactivateRecipeModal({
   recipe,
   onClose,
+  writer,
 }: DeactivateRecipeModalProps) {
-  const deactivateRecipe = useDeactivateRecipe();
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const close = () => {
@@ -34,7 +37,7 @@ export function DeactivateRecipeModal({
 
     setSubmitError(null);
     try {
-      await deactivateRecipe.mutateAsync(recipe.id);
+      await writer.deactivate(recipe.id);
       notifications.show({
         title: "Receta dada de baja",
         message: `${recipe.name} ya no aparece en el catálogo.`,
@@ -72,14 +75,14 @@ export function DeactivateRecipeModal({
           <Button
             variant="subtle"
             onClick={close}
-            disabled={deactivateRecipe.isPending}
+            disabled={writer.deactivating}
           >
             Cancelar
           </Button>
           <Button
             color="red"
             onClick={handleConfirm}
-            loading={deactivateRecipe.isPending}
+            loading={writer.deactivating}
           >
             Dar de baja
           </Button>

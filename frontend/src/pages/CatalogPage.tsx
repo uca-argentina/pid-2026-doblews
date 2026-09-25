@@ -1,28 +1,78 @@
 import { useState } from "react";
-import { SegmentedControl, Stack, Text, Title } from "@mantine/core";
+import {
+  Button,
+  Group,
+  SegmentedControl,
+  Stack,
+  Text,
+  Title,
+} from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
 import { RecipeBrowser } from "../features/catalog/RecipeBrowser";
 import { ResourceBrowser } from "../features/catalog/ResourceBrowser";
+import type { RecipeOut } from "../features/catalog/types";
+import {
+  useFirmRecipeWriter,
+  useResources,
+} from "../features/catalog/useCatalog";
+import { useCurrentFirm } from "../features/firms/firmContext";
+import { DeactivateRecipeModal } from "../features/recipes/DeactivateRecipeModal";
+import { RecipeActionsMenu } from "../features/recipes/RecipeActionsMenu";
+import { RecipeFormModal } from "../features/recipes/RecipeFormModal";
 
 type View = "recipes" | "resources";
 
-/** HU-4: the system catalogue, read-only.
+/** HU-4's catalogue, plus the firm's own recipes (HU-9).
  *
  * Recipes come first because they are what a work computes; the materials
- * view answers the follow-up question of what each one costs. No actions on
- * either: adding a recipe to a work is HU-5, and happens inside the work,
- * where RecipeBrowser is mounted again with an "Agregar" button. */
+ * view answers the follow-up question of what each one costs. The recipes mix
+ * the general ones and the firm's own, each badged with its origin.
+ *
+ * Writing is offered only to whoever holds recipe.manage (owner, architect),
+ * and only on the firm's own recipes: the general ones never show edit or
+ * deactivate, since support maintains them (HU-8). A client sees the same
+ * list with no actions. The backend refuses both cases again on its own. */
 export function CatalogPage() {
+  const { firm, can } = useCurrentFirm();
   const [view, setView] = useState<View>("recipes");
+  const canManage = can("recipe.manage");
+
+  // null doubles as "creating", same convention as PlatformRecipesPage.
+  const [editTarget, setEditTarget] = useState<RecipeOut | null>(null);
+  const [formOpened, formModal] = useDisclosure(false);
+  const [deactivateTarget, setDeactivateTarget] = useState<RecipeOut | null>(
+    null,
+  );
+  const writer = useFirmRecipeWriter(firm.id);
+  // The same cached list the materials view reads, so opening the editor
+  // after browsing materials costs no request.
+  const resources = useResources(firm.id);
+
+  const openCreate = () => {
+    setEditTarget(null);
+    formModal.open();
+  };
+  const openEdit = (recipe: RecipeOut) => {
+    setEditTarget(recipe);
+    formModal.open();
+  };
 
   return (
     <Stack gap="md">
-      <div>
-        <Title order={3}>Catálogo</Title>
-        <Text c="dimmed" size="sm">
-          Las recetas con las que se computan las obras y los materiales que
-          llevan.
-        </Text>
-      </div>
+      <Group justify="space-between" align="flex-start" wrap="nowrap">
+        <div>
+          <Title order={3}>Catálogo</Title>
+          <Text c="dimmed" size="sm">
+            Las recetas con las que se computan las obras y los materiales que
+            llevan.
+          </Text>
+        </div>
+        {canManage && view === "recipes" && (
+          <Button onClick={openCreate} style={{ flexShrink: 0 }}>
+            Nueva receta
+          </Button>
+        )}
+      </Group>
 
       <SegmentedControl
         value={view}
@@ -37,7 +87,38 @@ export function CatalogPage() {
         maw={{ sm: 320 }}
       />
 
-      {view === "recipes" ? <RecipeBrowser /> : <ResourceBrowser />}
+      {canManage && (
+        <>
+          <RecipeFormModal
+            opened={formOpened}
+            recipe={editTarget}
+            onClose={formModal.close}
+            resources={resources.data}
+            writer={writer}
+          />
+          <DeactivateRecipeModal
+            recipe={deactivateTarget}
+            onClose={() => setDeactivateTarget(null)}
+            writer={writer}
+          />
+        </>
+      )}
+
+      {view === "recipes" ? (
+        <RecipeBrowser
+          renderAction={(recipe) =>
+            canManage && recipe.origin === "firm" ? (
+              <RecipeActionsMenu
+                recipe={recipe}
+                onEdit={openEdit}
+                onDeactivate={setDeactivateTarget}
+              />
+            ) : null
+          }
+        />
+      ) : (
+        <ResourceBrowser />
+      )}
     </Stack>
   );
 }

@@ -21,15 +21,11 @@ import {
 import { useMediaQuery } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import { apiErrorMessage } from "../../lib/apiError";
+import type { RecipeOut, RecipeWrite, ResourceOut } from "../catalog/types";
 import type { UnitOfMeasureOut } from "../units-of-measure/types";
+import { findUnitId } from "../units-of-measure/unitLookup";
 import { useUnitsOfMeasure } from "../units-of-measure/useUnitsOfMeasure";
-import { findUnitId } from "./unitLookup";
-import {
-  useAdminResources,
-  useCreateRecipe,
-  useUpdateRecipe,
-} from "./useCatalogAdmin";
-import type { RecipeOut, RecipeWrite, ResourceOut } from "./types";
+import type { RecipeWriter } from "./types";
 
 // Same limit as recipe.name (String(150)).
 const MAX_NAME = 150;
@@ -39,10 +35,17 @@ interface RecipeFormModalProps {
   /** The recipe being edited, or null to create a new one. */
   recipe: RecipeOut | null;
   onClose: () => void;
+  /** The resources a line may use, or undefined while they load. Always the
+   * system's (ADR-006 rule 3), but each screen reads them from its own
+   * endpoint: support from /platform, a firm from its catalogue. */
+  resources: ResourceOut[] | undefined;
+  /** Where saving goes: support's endpoint or the firm's. */
+  writer: RecipeWriter;
 }
 
-/** HU-8's create/edit form for one recipe: header and every one of its
- * lines, replaced whole — the master-detail screen ADR-005 section 3
+/** The create/edit form for one recipe, for support's general recipes (HU-8)
+ * and a firm's own (HU-9) alike: header and every one of its lines, replaced
+ * whole — the master-detail screen ADR-005 section 3
  * flags as the hardest one, and the first form in this app editing an
  * array of rows in a single submit.
  *
@@ -61,13 +64,14 @@ export function RecipeFormModal({
   opened,
   recipe,
   onClose,
+  resources,
+  writer,
 }: RecipeFormModalProps) {
   const theme = useMantineTheme();
   const isPhone = useMediaQuery(`(max-width: ${theme.breakpoints.sm})`);
   const units = useUnitsOfMeasure();
-  const resources = useAdminResources();
 
-  const loading = units.isLoading || resources.isLoading;
+  const loading = units.isLoading || resources === undefined;
 
   return (
     <Modal
@@ -88,7 +92,8 @@ export function RecipeFormModal({
             key={recipe?.id ?? "new"}
             recipe={recipe}
             units={units.data ?? []}
-            resources={resources.data ?? []}
+            resources={resources ?? []}
+            writer={writer}
             onClose={onClose}
           />
         ))}
@@ -113,18 +118,18 @@ function RecipeForm({
   recipe,
   units,
   resources,
+  writer,
   onClose,
 }: {
   recipe: RecipeOut | null;
   units: UnitOfMeasureOut[];
   resources: ResourceOut[];
+  writer: RecipeWriter;
   onClose: () => void;
 }) {
-  const createRecipe = useCreateRecipe();
-  const updateRecipe = useUpdateRecipe();
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const saving = createRecipe.isPending || updateRecipe.isPending;
+  const saving = writer.saving;
 
   const form = useForm<FormValues>({
     initialValues: {
@@ -200,9 +205,7 @@ function RecipeForm({
     };
 
     try {
-      const saved = recipe
-        ? await updateRecipe.mutateAsync({ recipeId: recipe.id, payload })
-        : await createRecipe.mutateAsync(payload);
+      const saved = await writer.save(payload, recipe?.id ?? null);
       notifications.show({
         title: recipe ? "Receta actualizada" : "Receta creada",
         message: recipe

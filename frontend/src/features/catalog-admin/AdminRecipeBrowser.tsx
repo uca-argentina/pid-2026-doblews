@@ -60,6 +60,9 @@ export function AdminRecipeBrowser({ renderAction }: AdminRecipeBrowserProps) {
           key={recipe.id}
           recipe={recipe}
           action={renderAction?.(recipe)}
+          // Support only ever sees general recipes here (ADR-006), so a
+          // "General" badge on every card would say nothing.
+          showOrigin={false}
         />
       ))}
     </Stack>
