@@ -1,9 +1,9 @@
-"""The system catalogue: what a resource is, and what one unit of a recipe takes.
+"""The catalogue: what a resource is, and what one unit of a recipe takes.
 
-Global to the platform, not to any firm (ADR-003 section 1), so none of these three
-tables carries firm_id and there is nothing to isolate in them. A recipe says what
-*one* unit of something takes; how much of it a given work needs lives in
-project_recipe, which is the only table of the five holding a firm's data.
+Resources are global to the platform (ADR-003 section 1). Recipes are too, except
+the ones a firm writes for itself (HU-9, ADR-006): recipe.firm_id is NULL for the
+system catalogue and the owning firm otherwise. A recipe says what *one* unit of
+something takes; how much of it a given work needs lives in project_recipe.
 """
 
 from datetime import datetime
@@ -90,8 +90,19 @@ class Recipe(Base):
     """
 
     __tablename__ = "recipe"
+    __table_args__ = (
+        # "This firm's recipes", for HU-9's screen and HU-5's picker. Partial:
+        # the general recipes are never looked up by firm.
+        Index("ix_recipe_firm_id", "firm_id", postgresql_where=text("firm_id IS NOT NULL")),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+
+    # NULL is a general recipe, maintained by support (HU-8). A value is the
+    # firm that owns it (HU-9, ADR-006 section 1). Having it is also what lets
+    # FirmScopedRepository scope writes to a firm's own recipes: firm_id =
+    # :firm never matches a NULL, so the general ones are out of reach there.
+    firm_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("firm.id"))
 
     name: Mapped[str] = mapped_column(String(150))
     # Where the assumptions behind the proportions are written down: the
@@ -154,9 +165,20 @@ Index(
     unique=True,
     postgresql_where=text("is_active"),
 )
+# Recipes need two, and not one on (firm_id, lower(name)): Postgres never treats
+# two NULLs as equal in a unique index, so that one would let two general recipes
+# share a name. They never compare against each other, which is what lets a
+# firm's recipe share a general recipe's name (ADR-006 section 2).
 Index(
-    "uq_recipe_name_active",
+    "uq_recipe_name_active_general",
     func.lower(Recipe.name),
     unique=True,
-    postgresql_where=text("is_active"),
+    postgresql_where=text("is_active AND firm_id IS NULL"),
+)
+Index(
+    "uq_recipe_name_active_firm",
+    Recipe.firm_id,
+    func.lower(Recipe.name),
+    unique=True,
+    postgresql_where=text("is_active AND firm_id IS NOT NULL"),
 )

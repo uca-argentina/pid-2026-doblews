@@ -15,7 +15,19 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.security import hash_password
 from app.db.session import SessionLocal
-from app.models import Account, Firm, FirmMember, PlatformMember, Project, Recipe, Role
+from app.models import (
+    Account,
+    Firm,
+    FirmMember,
+    PlatformMember,
+    Project,
+    Recipe,
+    Resource,
+    Role,
+    UnitOfMeasure,
+)
+from app.services.catalog_admin import CatalogError, InvalidReferenceError, RecipeLineInput
+from app.services.firm_recipes import create_firm_recipe
 from app.services.project import ProjectError, create_project
 from app.services.takeoff import add_line
 
@@ -49,6 +61,25 @@ DEMO_WORK = (
         ("Pared de ladrillo común 15cm", "70", "planta baja"),
         ("Pared de ladrillo común 15cm", "50", "planta alta"),
         ("Contrapiso de cascote", "60", None),
+    ],
+)
+
+
+# One recipe of Estudio Norte's own (HU-9), so its catalogue shows both origins
+# and Estudio Sur has something it must not see.
+# (firm, recipe, unit code, description, [(resource, quantity per unit)])
+FIRM_RECIPE = (
+    "Estudio Norte",
+    "Revoque grueso a la cal",
+    "m2",
+    "Revoque grueso de 1,5 cm, mezcla 1/4:1:4 (cemento : cal : arena fina). "
+    "Así lo resuelve el estudio; no es parte del catálogo del sistema.",
+    [
+        ("Cemento portland (bolsa 50 kg)", "0.0500"),
+        ("Cal hidratada (bolsa 25 kg)", "0.1500"),
+        ("Arena fina", "0.0200"),
+        ("Oficial", "0.6000"),
+        ("Ayudante", "0.6000"),
     ],
 )
 
@@ -126,7 +157,56 @@ def seed(session: Session, password: str) -> None:
             session.add(FirmMember(firm_id=firm.id, account_id=member.id, role_id=role.id))
             print(f"creada    padron   {member_email} -> {role_code} de {firm_name}")
 
+    _seed_firm_recipe(session, firms)
     _seed_demo_work(session, firms)
+
+
+def _seed_firm_recipe(session: Session, firms: dict[str, Firm]) -> None:
+    """The firm's own recipe, through the same service HU-9's routes use.
+
+    Created only if the firm has no active recipe of that name, and left alone
+    otherwise, so edits made on the screen survive a re-seed. Skipped with a
+    notice when the catalogue it draws from was edited by hand and a resource
+    it needs is gone.
+    """
+    firm_name, recipe_name, unit_code, description, lines = FIRM_RECIPE
+    firm = firms[firm_name]
+
+    exists = session.scalar(
+        select(Recipe.id).where(
+            Recipe.firm_id == firm.id, Recipe.name == recipe_name, Recipe.is_active
+        )
+    )
+    if exists is not None:
+        print(f"ya estaba  receta   {recipe_name} ({firm_name})")
+        return
+
+    session.flush()  # the firm row, if it was created above
+    unit_id = session.scalar(select(UnitOfMeasure.id).where(UnitOfMeasure.code == unit_code))
+    resource_ids = {
+        name: resource_id
+        for name, resource_id in session.execute(
+            select(Resource.name, Resource.id).where(Resource.is_active)
+        )
+    }
+    try:
+        create_firm_recipe(
+            session,
+            firm.id,
+            name=recipe_name,
+            description=description,
+            unit_of_measure_id=unit_id,
+            lines=[
+                RecipeLineInput(resource_ids[name], Decimal(quantity)) for name, quantity in lines
+            ],
+        )
+    except KeyError as missing:
+        print(f"salteada  receta   {recipe_name}: el catálogo ya no tiene {missing}")
+        return
+    except (CatalogError, InvalidReferenceError) as error:
+        print(f"salteada  receta   {recipe_name}: {error.detail}")
+        return
+    print(f"creada    receta   {recipe_name} ({firm_name})")
 
 
 def _seed_demo_work(session: Session, firms: dict[str, Firm]) -> None:
@@ -170,7 +250,10 @@ def _seed_demo_work(session: Session, firms: dict[str, Firm]) -> None:
     print(f"creada    obra     {work_name} (lead {lead_email}, cliente {client_email})")
 
     for recipe_name, quantity, note in lines:
-        recipe_id = session.scalar(select(Recipe.id).where(Recipe.name == recipe_name))
+        # General recipes only: a firm may own one with the same name (HU-9).
+        recipe_id = session.scalar(
+            select(Recipe.id).where(Recipe.name == recipe_name, Recipe.firm_id.is_(None))
+        )
         add_line(session, project, recipe_id=recipe_id, quantity=Decimal(quantity), note=note)
         print(f"creada    computo  {quantity} x {recipe_name}")
 

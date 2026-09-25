@@ -178,6 +178,14 @@ class TestListRecipes:
         names = {row["name"] for row in response.json()}
         assert "Pared de ladrillo común 15cm" in names
 
+    def test_a_firm_s_own_recipe_is_not_listed(self, client, support, world, add_firm_recipe):
+        add_firm_recipe(world.firm_a, name="Revoque del estudio")
+
+        body = client.get(RECIPES_URL, headers=support).json()
+
+        assert "Revoque del estudio" not in {row["name"] for row in body}
+        assert {row["origin"] for row in body} == {"general"}
+
 
 class TestCreateRecipe:
     def test_creates_a_recipe_with_its_lines(self, client, support, unit_id, resource_id):
@@ -256,6 +264,17 @@ class TestUpdateRecipe:
         assert response.status_code == 200
         body = response.json()
         assert [item["resource_id"] for item in body["lines"]] == [resource_id["Arena fina"]]
+
+    def test_a_firm_s_own_recipe_is_a_404(
+        self, client, support, unit_id, resource_id, world, add_firm_recipe
+    ):
+        recipe = add_firm_recipe(world.firm_a)
+
+        response = client.put(
+            f"{RECIPES_URL}/{recipe}", json=recipe_body(unit_id, resource_id), headers=support
+        )
+
+        assert response.status_code == 404
 
     def test_an_unknown_recipe_is_a_404(self, client, support, unit_id, resource_id):
         response = client.put(
