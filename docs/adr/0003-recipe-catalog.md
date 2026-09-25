@@ -245,7 +245,7 @@ Composición de recetas dentro de recetas (los *auxiliares* de Presto) · capít
 
 | Tema | Se revisa cuando |
 |---|---|
-| Receta propia del estudio, editable | Un estudio pida ajustar proporciones según su experiencia |
+| ~~Receta propia del estudio, editable~~ | **Resuelto por HU-9 (2026-09-25)**, con [ADR-006](0006-firm-recipes.md) |
 | Copia de la receta hacia la obra | Existan presupuestos cerrados que no deban cambiar retroactivamente |
 | Precios por estudio | Los precios de referencia globales dejen de ser representativos |
 | Precios por proveedor | Entre el Módulo 2 |

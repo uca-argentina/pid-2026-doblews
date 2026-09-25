@@ -85,7 +85,7 @@ Cierra lo que T-04 dejó pendiente: "si los materiales `labor` y `equipment` se 
 - Baja lógica. Una receta dada de baja deja de ofrecerse para cargar, pero las líneas de cómputo que ya la usan siguen calculando (mismo criterio que ADR-005 §6).
 - **Las recetas generales no muestran acciones de edición ni de baja**, y si alguien llama igual al endpoint con el id de una general, recibe error. Solo el soporte las modifica, por HU-8.
 - El alta de una línea de cómputo (HU-5) ofrece las generales y las del estudio, con su origen visible.
-- Aislamiento: una receta de otro estudio no aparece en ningún listado y, pedida por URL o usada en una línea de cómputo, da **404**.
+- Aislamiento: una receta de otro estudio no aparece en ningún listado y, pedida por URL, da **404**. Usada en una línea de cómputo da **409**, la misma respuesta que una receta dada de baja o inexistente, para no confirmar que existe en otro estudio (precisado al implementar, ver [ADR-006 §4](../adr/0006-firm-recipes.md)).
 - La sección exige `recipe.manage` para escribir (`owner`, `architect`). Un `client` ve las recetas del estudio (tiene `catalog.view`) pero sin acciones.
 - El editor se usa bien a 375px (reusa el modal maestro-detalle de HU-8).
 
@@ -198,3 +198,7 @@ Dos avisos sobre este plan:
 **2026-09-25.** **T-05 terminada** (ADR-006 y ADR-007, PR #22). **T-06 implementada** en `feat/t06-hour-unit-labor-seed`: unidad `h`, `Oficial` (5.500 ARS/h), `Ayudante` (4.600 ARS/h) y `Hormigonera` (3.000 ARS/h), y las horas por m² de las tres recetas sembradas (migración `3d8e1b7a9c24`, que no pisa lo editado por pantalla). Efecto transitorio buscado: hasta HU-10/HU-11, la tabla "Materiales" del cómputo de HU-5 lista también las horas de mano de obra y equipo, porque la query de ADR-003 §2 no filtra por tipo — agruparlas es trabajo de HU-11.
 
 **Queda liberado:** HU-10 (camino crítico). **En paralelo:** HU-9 y T-07.
+
+**2026-09-25 (tarde).** **T-06 terminada** (PR #23). **HU-9 implementada**, back (PR #24, mergeado) y front (`feat/hu9-firm-recipes-front`): recetas del estudio en la pantalla Catálogo, con origen visible y filtro, el editor de HU-8 reusado y la receta propia ofrecida en el selector del cómputo. Se precisó ADR-006 al implementar: las rutas van bajo `/firms/{id}/catalog/recipes`, una receta ajena en el cómputo da 409, y el soporte no alcanza recetas de estudio. ADR-006 pasa a **Aceptada**.
+
+**Queda:** HU-10 → HU-11 → HU-12 (camino crítico) y T-07.
