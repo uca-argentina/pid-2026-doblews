@@ -199,6 +199,21 @@ class TestCreate:
         assert response.status_code == 409
         assert response.json()["detail"] == RECIPE_NOT_AVAILABLE
 
+    def test_another_firm_s_recipe_is_the_same_409(
+        self, client, world, team, auth_header, add_firm_recipe
+    ):
+        """Same status and body as a retired recipe (ADR-006 rule 1)."""
+        theirs = add_firm_recipe(world.firm_b)
+
+        response = client.post(
+            lines_url(world),
+            json={"recipe_id": theirs, "quantity": "1"},
+            headers=auth_header(team["lead"]),
+        )
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == RECIPE_NOT_AVAILABLE
+
     @pytest.mark.parametrize("role", ["viewer", "client", "owner"])
     def test_those_who_only_read_get_403(self, client, world, team, recipe_id, auth_header, role):
         """They can already see the work, so hiding it protects nothing: 403, not 404.

@@ -1,9 +1,17 @@
-"""The system catalogue as a firm member reads it: recipes and materials (HU-4)."""
+"""The catalogue as a firm member sees it (HU-4), and the firm's own recipes (HU-9).
 
-from fastapi import APIRouter, Depends
+Reads demand catalog.view, which every firm role holds. Writes reach only this
+firm's recipes and demand recipe.manage (ADR-006 section 3): the general ones
+stay support's, through HU-8's /platform/catalog.
+"""
 
+from fastapi import APIRouter, Depends, status
+
+from app.api.catalog_common import catalog_rules, line_inputs, recipe_out
 from app.api.deps import CurrentMembership, DbSession, requires
 from app.schemas.catalog import RecipeOut, ResourceOut
+from app.schemas.catalog_admin import RecipeWrite
+from app.services import firm_recipes
 from app.services.catalog import list_recipes, list_resources
 
 # Under the firm although the rows are global. catalog.view is a firm-scope
@@ -31,6 +39,65 @@ def read_recipes(db: DbSession, membership: CurrentMembership) -> list[RecipeOut
     """
     entries = list_recipes(db, firm_id=membership.firm_id)
     return [RecipeOut.model_validate(entry, from_attributes=True) for entry in entries]
+
+
+@router.post(
+    "/recipes",
+    response_model=RecipeOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(requires("recipe.manage", "firm"))],
+)
+def create_firm_recipe(
+    payload: RecipeWrite, db: DbSession, membership: CurrentMembership
+) -> RecipeOut:
+    """Add a recipe of this firm. firm_id comes from the membership, never the body."""
+    with catalog_rules():
+        recipe = firm_recipes.create_firm_recipe(
+            db,
+            membership.firm_id,
+            name=payload.name,
+            description=payload.description,
+            unit_of_measure_id=payload.unit_of_measure_id,
+            lines=line_inputs(payload),
+        )
+    db.commit()
+    return recipe_out(db, recipe)
+
+
+@router.put(
+    "/recipes/{recipe_id}",
+    response_model=RecipeOut,
+    dependencies=[Depends(requires("recipe.manage", "firm"))],
+)
+def update_firm_recipe(
+    recipe_id: int, payload: RecipeWrite, db: DbSession, membership: CurrentMembership
+) -> RecipeOut:
+    """Replace one of this firm's recipes. A general or another firm's is a 404."""
+    with catalog_rules():
+        recipe = firm_recipes.update_firm_recipe(
+            db,
+            membership.firm_id,
+            recipe_id,
+            name=payload.name,
+            description=payload.description,
+            unit_of_measure_id=payload.unit_of_measure_id,
+            lines=line_inputs(payload),
+        )
+    db.commit()
+    return recipe_out(db, recipe)
+
+
+@router.delete(
+    "/recipes/{recipe_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(requires("recipe.manage", "firm"))],
+)
+def deactivate_firm_recipe(recipe_id: int, db: DbSession, membership: CurrentMembership) -> None:
+    """Take one of this firm's recipes out of use. The works already using it keep
+    computing (ADR-005 section 6). A general or another firm's is a 404."""
+    with catalog_rules():
+        firm_recipes.deactivate_firm_recipe(db, membership.firm_id, recipe_id)
+    db.commit()
 
 
 @router.get(

@@ -5,6 +5,10 @@ ORM rows, flush and never commit, and a broken rule is one of this module's own
 exceptions rather than an HTTPException. The route owns the transaction and the
 status codes.
 
+validate_unit_of_measure, validate_recipe_resources, name_taken and
+insert_recipe_lines are public because firm_recipes.py (HU-9) applies the very
+same rules to a firm's own recipes.
+
 The read side — the shaped listing with unit labels and recipe lines HU-4 and
 this module's own screens both show — stays in app.services.catalog. This
 module only decides whether a write may happen.
@@ -83,32 +87,37 @@ class RecipeLineInput:
     quantity_per_unit: Decimal
 
 
-def _name_taken(
+def name_taken(
     db: Session,
     model: type[Resource] | type[Recipe],
     name: str,
     *,
     exclude_id: int | None = None,
+    firm_id: int | None = None,
 ) -> bool:
     """Whether another *active* row of this model already answers to this name.
 
     Case-insensitive, mirroring the partial unique index each table carries
-    (uq_resource_name_active / uq_recipe_name_active_general): "Cemento" and
-    "cemento" are the same name. exclude_id leaves the row itself out, so
+    (uq_resource_name_active, uq_recipe_name_active_general/_firm): "Cemento"
+    and "cemento" are the same name. exclude_id leaves the row itself out, so
     editing a resource without changing its name does not collide with itself.
 
-    A recipe is compared against the general ones only: a firm may already
-    use the name for its own recipe, and that is allowed (ADR-006 section 2).
+    A recipe competes only with the recipes of its own origin: the general
+    ones when firm_id is None, that firm's otherwise. A firm's recipe may share
+    a general recipe's name, or another firm's (ADR-006 section 2).
     """
     stmt = select(model.id).where(model.is_active, func.lower(model.name) == name.lower())
     if model is Recipe:
-        stmt = stmt.where(Recipe.firm_id.is_(None))
+        stmt = stmt.where(
+            Recipe.firm_id.is_(None) if firm_id is None else Recipe.firm_id == firm_id
+        )
     if exclude_id is not None:
         stmt = stmt.where(model.id != exclude_id)
     return db.scalar(stmt.limit(1)) is not None
 
 
-def _validate_unit_of_measure(db: Session, unit_of_measure_id: int) -> None:
+def validate_unit_of_measure(db: Session, unit_of_measure_id: int) -> None:
+    """Refuse a unit that is not in HU-0's closed catalogue."""
     found = db.scalar(
         select(UnitOfMeasure.id).where(
             UnitOfMeasure.id == unit_of_measure_id, UnitOfMeasure.is_active
@@ -118,12 +127,31 @@ def _validate_unit_of_measure(db: Session, unit_of_measure_id: int) -> None:
         raise InvalidReferenceError(UNKNOWN_UNIT_OF_MEASURE)
 
 
-def _validate_recipe_resources(db: Session, resource_ids: set[int]) -> None:
+def validate_recipe_resources(db: Session, resource_ids: set[int]) -> None:
+    """Refuse a line pointing at a resource that is missing or deactivated.
+
+    Always the system's resources, for a general recipe and a firm's alike:
+    there is no catalogue of materials per firm (HU-9, ADR-006 rule 3).
+    """
     found = set(
         db.scalars(select(Resource.id).where(Resource.id.in_(resource_ids), Resource.is_active))
     )
     if resource_ids - found:
         raise InvalidReferenceError(UNKNOWN_RECIPE_RESOURCE)
+
+
+def insert_recipe_lines(db: Session, recipe_id: int, lines: list[RecipeLineInput]) -> None:
+    """Write a recipe's lines. Updating deletes the old set first: the lines are
+    replaced whole, never diffed (see update_recipe)."""
+    db.add_all(
+        RecipeResource(
+            recipe_id=recipe_id,
+            resource_id=line.resource_id,
+            quantity_per_unit=line.quantity_per_unit,
+        )
+        for line in lines
+    )
+    db.flush()
 
 
 def get_resource(db: Session, resource_id: int) -> Resource:
@@ -150,8 +178,8 @@ def create_resource(
     db: Session, *, name: str, type: str, unit_of_measure_id: int, reference_price: Decimal
 ) -> Resource:
     """Add a resource to the system catalogue."""
-    _validate_unit_of_measure(db, unit_of_measure_id)
-    if _name_taken(db, Resource, name):
+    validate_unit_of_measure(db, unit_of_measure_id)
+    if name_taken(db, Resource, name):
         raise CatalogError(RESOURCE_NAME_TAKEN)
 
     resource = Resource(
@@ -181,8 +209,8 @@ def update_resource(
     make the take-off screen claim its price is fresher than it is.
     """
     resource = get_resource(db, resource_id)
-    _validate_unit_of_measure(db, unit_of_measure_id)
-    if _name_taken(db, Resource, name, exclude_id=resource_id):
+    validate_unit_of_measure(db, unit_of_measure_id)
+    if name_taken(db, Resource, name, exclude_id=resource_id):
         raise CatalogError(RESOURCE_NAME_TAKEN)
 
     if resource.reference_price != reference_price:
@@ -251,24 +279,16 @@ def create_recipe(
     """
     if not lines:
         raise CatalogError(RECIPE_NEEDS_A_LINE)
-    _validate_unit_of_measure(db, unit_of_measure_id)
-    if _name_taken(db, Recipe, name):
+    validate_unit_of_measure(db, unit_of_measure_id)
+    if name_taken(db, Recipe, name):
         raise CatalogError(RECIPE_NAME_TAKEN)
-    _validate_recipe_resources(db, {line.resource_id for line in lines})
+    validate_recipe_resources(db, {line.resource_id for line in lines})
 
     recipe = Recipe(name=name, description=description, unit_of_measure_id=unit_of_measure_id)
     db.add(recipe)
     db.flush()  # assigns the id the lines need
 
-    db.add_all(
-        RecipeResource(
-            recipe_id=recipe.id,
-            resource_id=line.resource_id,
-            quantity_per_unit=line.quantity_per_unit,
-        )
-        for line in lines
-    )
-    db.flush()
+    insert_recipe_lines(db, recipe.id, lines)
     return recipe
 
 
@@ -291,25 +311,17 @@ def update_recipe(
     if not lines:
         raise CatalogError(RECIPE_NEEDS_A_LINE)
     recipe = get_recipe(db, recipe_id)
-    _validate_unit_of_measure(db, unit_of_measure_id)
-    if _name_taken(db, Recipe, name, exclude_id=recipe_id):
+    validate_unit_of_measure(db, unit_of_measure_id)
+    if name_taken(db, Recipe, name, exclude_id=recipe_id):
         raise CatalogError(RECIPE_NAME_TAKEN)
-    _validate_recipe_resources(db, {line.resource_id for line in lines})
+    validate_recipe_resources(db, {line.resource_id for line in lines})
 
     recipe.name = name
     recipe.description = description
     recipe.unit_of_measure_id = unit_of_measure_id
 
     db.execute(delete(RecipeResource).where(RecipeResource.recipe_id == recipe.id))
-    db.add_all(
-        RecipeResource(
-            recipe_id=recipe.id,
-            resource_id=line.resource_id,
-            quantity_per_unit=line.quantity_per_unit,
-        )
-        for line in lines
-    )
-    db.flush()
+    insert_recipe_lines(db, recipe.id, lines)
     return recipe
 
 

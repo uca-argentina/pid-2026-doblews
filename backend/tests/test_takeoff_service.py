@@ -81,6 +81,26 @@ class TestAdd:
         assert refused.value.detail == RECIPE_NOT_AVAILABLE
         assert lines_in(db_session, project.id) == []
 
+    def test_another_firm_s_recipe_gets_the_same_refusal(
+        self, db_session, project, world, add_firm_recipe
+    ):
+        """ADR-006 rule 1, and indistinguishable from a missing recipe: the answer
+        must not confirm that some other firm has a recipe with that id."""
+        theirs = add_firm_recipe(world.firm_b)
+
+        with pytest.raises(TakeoffError) as refused:
+            add_line(db_session, project, recipe_id=theirs, quantity=Decimal("10"))
+
+        assert refused.value.detail == RECIPE_NOT_AVAILABLE
+        assert lines_in(db_session, project.id) == []
+
+    def test_the_firm_s_own_recipe_is_loaded(self, db_session, project, world, add_firm_recipe):
+        ours = add_firm_recipe(world.firm_a)
+
+        add_line(db_session, project, recipe_id=ours, quantity=Decimal("10"))
+
+        assert lines_in(db_session, project.id) == [(ours, Decimal("10"), None, True)]
+
 
 class TestUpdate:
     @pytest.fixture
