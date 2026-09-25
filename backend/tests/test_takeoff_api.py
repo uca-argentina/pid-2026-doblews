@@ -83,7 +83,8 @@ class TestRead:
             "ARS",
         )
 
-        assert body["total_cost"] == "2665800.00"
+        # 2,665,800 of materials plus T-06's hours: 120 h of Oficial and of Ayudante.
+        assert body["total_cost"] == "3877800.00"
         assert body["currency"] == "ARS"
         assert body["prices_as_of"] is not None
 
@@ -92,7 +93,7 @@ class TestRead:
         """viewer holds project.cost.view; the owner sees them through project.view_all."""
         body = client.get(takeoff_url(world), headers=auth_header(team[role])).json()
 
-        assert body["total_cost"] == "2665800.00"
+        assert body["total_cost"] == "3877800.00"
         assert all(material["cost"] is not None for material in body["materials"])
 
     def test_the_client_sees_quantities_and_no_costs(self, client, world, team, wall, auth_header):

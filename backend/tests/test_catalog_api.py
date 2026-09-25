@@ -84,7 +84,7 @@ class TestResources:
         body = response.json()
         names = [resource["name"] for resource in body]
         assert names == sorted(names)
-        assert len(body) == 7
+        assert len(body) == 10
 
         brick = next(resource for resource in body if resource["name"] == BRICK)
         assert brick["type"] == "material"

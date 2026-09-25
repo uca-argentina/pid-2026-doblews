@@ -40,6 +40,8 @@ class TestMaterials:
 
         The other two materials are there too: the seeded wall also takes lime
         and sand, and a take-off that dropped them would be cheaper than the wall.
+        So are T-06's hours, 1 h/m2 of each trade: the query does not filter by
+        type, and grouping them apart is HU-11's job, not this repository's.
         """
         add_takeoff_line(world.project_a, world.firm_a, recipe_id[WALL], "120")
 
@@ -50,6 +52,8 @@ class TestMaterials:
             CEMENT: (Decimal("30"), Decimal("480000.00")),
             "Cal hidratada (bolsa 25 kg)": (Decimal("24"), Decimal("276000.00")),
             "Arena gruesa": (Decimal("5.64"), Decimal("253800.00")),
+            "Oficial": (Decimal("120"), Decimal("660000.00")),
+            "Ayudante": (Decimal("120"), Decimal("552000.00")),
         }
 
     def test_two_lines_of_the_same_recipe_add_up(
