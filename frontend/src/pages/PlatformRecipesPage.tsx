@@ -2,13 +2,13 @@ import { useState } from "react";
 import { Button, Group, Stack, Text, Title } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { AdminRecipeBrowser } from "../features/catalog-admin/AdminRecipeBrowser";
-import { RecipeAdminActionsMenu } from "../features/catalog-admin/RecipeAdminActionsMenu";
 import type { RecipeOut } from "../features/catalog-admin/types";
 import {
   useAdminRecipeWriter,
   useAdminResources,
 } from "../features/catalog-admin/useCatalogAdmin";
 import { DeactivateRecipeModal } from "../features/recipes/DeactivateRecipeModal";
+import { RecipeActionsMenu } from "../features/recipes/RecipeActionsMenu";
 import { RecipeFormModal } from "../features/recipes/RecipeFormModal";
 
 /** HU-8: every recipe of the system catalogue, administered by support. */
@@ -61,7 +61,7 @@ export function PlatformRecipesPage() {
 
       <AdminRecipeBrowser
         renderAction={(recipe) => (
-          <RecipeAdminActionsMenu
+          <RecipeActionsMenu
             recipe={recipe}
             onEdit={openEdit}
             onDeactivate={setDeactivateTarget}

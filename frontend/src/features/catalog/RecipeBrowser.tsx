@@ -1,9 +1,17 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Alert, Center, Loader, Stack, Text, TextInput } from "@mantine/core";
+import {
+  Alert,
+  Center,
+  Loader,
+  SegmentedControl,
+  Stack,
+  Text,
+  TextInput,
+} from "@mantine/core";
 import { matchesSearch } from "../../lib/format";
 import { useCurrentFirm } from "../firms/firmContext";
 import { RecipeCard } from "./RecipeCard";
-import type { RecipeOut } from "./types";
+import type { RecipeOrigin, RecipeOut } from "./types";
 import { useRecipes } from "./useCatalog";
 
 interface RecipeBrowserProps {
@@ -27,10 +35,18 @@ export function RecipeBrowser({ renderAction }: RecipeBrowserProps) {
   const { firm } = useCurrentFirm();
   const { data: recipes, isLoading, isError } = useRecipes(firm.id);
   const [query, setQuery] = useState("");
+  // HU-9: the general recipes and the firm's own share one list, and this
+  // narrows it to either. Combined with the name search, not instead of it.
+  const [origin, setOrigin] = useState<RecipeOrigin | "all">("all");
 
   const visible = useMemo(
-    () => recipes?.filter((recipe) => matchesSearch(recipe.name, query)) ?? [],
-    [recipes, query],
+    () =>
+      recipes?.filter(
+        (recipe) =>
+          (origin === "all" || recipe.origin === origin) &&
+          matchesSearch(recipe.name, query),
+      ) ?? [],
+    [recipes, query, origin],
   );
 
   return (
@@ -40,6 +56,22 @@ export function RecipeBrowser({ renderAction }: RecipeBrowserProps) {
         aria-label="Buscar receta"
         value={query}
         onChange={(event) => setQuery(event.currentTarget.value)}
+      />
+
+      <SegmentedControl
+        value={origin}
+        onChange={(value) => setOrigin(value as RecipeOrigin | "all")}
+        data={[
+          { value: "all", label: "Todas" },
+          { value: "general", label: "Generales" },
+          { value: "firm", label: "Del estudio" },
+        ]}
+        aria-label="Filtrar recetas por origen"
+        size="xs"
+        // Full width on a phone so three options stay an easy tap, same as
+        // CatalogPage's own switch.
+        fullWidth
+        maw={{ sm: 360 }}
       />
 
       {isLoading && (
@@ -58,7 +90,9 @@ export function RecipeBrowser({ renderAction }: RecipeBrowserProps) {
         <Text size="sm" c="dimmed" ta="center" py="md">
           {recipes.length === 0
             ? "El catálogo todavía no tiene recetas."
-            : "Ninguna receta coincide con la búsqueda."}
+            : origin === "firm" && !recipes.some((r) => r.origin === "firm")
+              ? "El estudio todavía no tiene recetas propias."
+              : "Ninguna receta coincide con la búsqueda."}
         </Text>
       )}
 
