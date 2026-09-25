@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends
 
-from app.api.deps import DbSession, requires
+from app.api.deps import CurrentMembership, DbSession, requires
 from app.schemas.catalog import RecipeOut, ResourceOut
 from app.services.catalog import list_recipes, list_resources
 
@@ -19,14 +19,18 @@ router = APIRouter(prefix="/firms/{firm_id}/catalog", tags=["catalog"])
     response_model=list[RecipeOut],
     dependencies=[Depends(requires("catalog.view", "firm"))],
 )
-def read_recipes(db: DbSession) -> list[RecipeOut]:
-    """Every active recipe with the lines it takes.
+def read_recipes(db: DbSession, membership: CurrentMembership) -> list[RecipeOut]:
+    """Every active recipe this firm can use: the general ones and its own.
 
     The whole list in one response and no search parameter: the catalogue is
     small enough that the browser filters it, and HU-5's picker reuses the same
     cached answer instead of asking again per keystroke.
+
+    The firm comes from the resolved membership and never from the raw path,
+    like every other firm route.
     """
-    return [RecipeOut.model_validate(entry, from_attributes=True) for entry in list_recipes(db)]
+    entries = list_recipes(db, firm_id=membership.firm_id)
+    return [RecipeOut.model_validate(entry, from_attributes=True) for entry in entries]
 
 
 @router.get(

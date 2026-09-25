@@ -96,6 +96,7 @@ def _recipe_out(db: DbSession, recipe: Recipe) -> RecipeOut:
         name=recipe.name,
         description=recipe.description,
         unit=_unit_ref(db, recipe.unit_of_measure_id),
+        origin="general",
         lines=lines,
     )
 
@@ -180,9 +181,10 @@ def deactivate_catalog_resource(resource_id: int, db: DbSession) -> None:
     dependencies=[Depends(requires("catalog.manage", "platform"))],
 )
 def list_catalog_recipes(db: DbSession) -> list[RecipeOut]:
-    """Every active recipe with its lines, the same listing HU-4 shows everyone else."""
+    """Every active general recipe with its lines. Never a firm's own (ADR-006)."""
     return [
-        RecipeOut.model_validate(entry, from_attributes=True) for entry in catalog.list_recipes(db)
+        RecipeOut.model_validate(entry, from_attributes=True)
+        for entry in catalog.list_recipes(db, firm_id=None)
     ]
 
 

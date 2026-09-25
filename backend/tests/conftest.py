@@ -330,6 +330,37 @@ def unit_id(db: Connection) -> dict[str, int]:
 
 
 @pytest.fixture
+def add_firm_recipe(db: Connection):
+    """Insert a recipe owned by a firm (HU-9), with one line of common brick.
+
+    Raw SQL for the same reason as add_takeoff_line: tests about who may read or
+    reach a firm's recipe need one to exist without going through the service
+    that writes them. One line, because an active recipe with none is a trap
+    HU-8's rules already refuse.
+    """
+
+    def _add(firm: int, name: str = "Receta del estudio", is_active: bool = True) -> int:
+        recipe = db.execute(
+            text(
+                "INSERT INTO recipe (name, unit_of_measure_id, firm_id, is_active)"
+                " VALUES (:n, (SELECT id FROM unit_of_measure WHERE code = 'm2'), :f, :a)"
+                " RETURNING id"
+            ),
+            {"n": name, "f": firm, "a": is_active},
+        ).scalar_one()
+        db.execute(
+            text(
+                "INSERT INTO recipe_resource (recipe_id, resource_id, quantity_per_unit)"
+                " VALUES (:r, (SELECT id FROM resource WHERE name = 'Ladrillo común'), 50)"
+            ),
+            {"r": recipe},
+        )
+        return recipe
+
+    return _add
+
+
+@pytest.fixture
 def add_takeoff_line(db: Connection):
     """Insert one project_recipe row: this much of this recipe on this work.
 

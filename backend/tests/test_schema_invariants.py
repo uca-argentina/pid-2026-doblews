@@ -205,8 +205,8 @@ INSERT_RESOURCE = (
 )
 
 INSERT_RECIPE = (
-    "INSERT INTO recipe (name, unit_of_measure_id)"
-    " VALUES (:name, (SELECT id FROM unit_of_measure WHERE code = 'm2')) RETURNING id"
+    "INSERT INTO recipe (name, unit_of_measure_id, firm_id)"
+    " VALUES (:name, (SELECT id FROM unit_of_measure WHERE code = 'm2'), :firm) RETURNING id"
 )
 
 
@@ -220,8 +220,9 @@ def new_resource(db: Connection, name: str = "Material de prueba", **overrides) 
     ).scalar_one()
 
 
-def new_recipe(db: Connection, name: str = "Receta de prueba") -> int:
-    return db.execute(text(INSERT_RECIPE), {"name": name}).scalar_one()
+def new_recipe(db: Connection, name: str = "Receta de prueba", firm: int | None = None) -> int:
+    """A general recipe, or a firm's own when firm is given (HU-9)."""
+    return db.execute(text(INSERT_RECIPE), {"name": name, "firm": firm}).scalar_one()
 
 
 def test_a_resource_type_outside_the_three_is_refused(db: Connection) -> None:
@@ -268,11 +269,38 @@ def test_a_deactivated_resource_frees_its_name(db: Connection) -> None:
     assert active == 1
 
 
-def test_two_active_recipes_cannot_share_a_name(db: Connection) -> None:
+def test_two_active_general_recipes_cannot_share_a_name(db: Connection) -> None:
+    """The guarantee a single (firm_id, name) index would have lost: NULL is never
+    equal to NULL in a unique index, hence a partial one just for the general
+    recipes (ADR-006 section 2)."""
     new_recipe(db)
 
-    with pytest.raises(IntegrityError, match="uq_recipe_name_active"):
+    with pytest.raises(IntegrityError, match="uq_recipe_name_active_general"):
         new_recipe(db, name="RECETA DE PRUEBA")
+
+
+def test_two_active_recipes_of_one_firm_cannot_share_a_name(db: Connection, world) -> None:
+    new_recipe(db, firm=world.firm_a)
+
+    with pytest.raises(IntegrityError, match="uq_recipe_name_active_firm"):
+        new_recipe(db, name="RECETA DE PRUEBA", firm=world.firm_a)
+
+
+def test_a_firm_recipe_may_share_a_general_recipe_s_name(db: Connection, world) -> None:
+    """HU-9: the origin tells them apart, so the name does not have to."""
+    new_recipe(db)
+    new_recipe(db, firm=world.firm_a)
+
+
+def test_two_firms_may_each_have_a_recipe_of_the_same_name(db: Connection, world) -> None:
+    """Uniqueness is within a firm: one firm's names say nothing about another's."""
+    new_recipe(db, firm=world.firm_a)
+    new_recipe(db, firm=world.firm_b)
+
+
+def test_a_recipe_cannot_belong_to_a_firm_that_does_not_exist(db: Connection) -> None:
+    with pytest.raises(IntegrityError, match="fk_recipe_firm_id"):
+        new_recipe(db, firm=999_999)
 
 
 def test_a_recipe_line_must_carry_a_positive_yield(db: Connection) -> None:

@@ -8,6 +8,10 @@ status codes.
 The read side — the shaped listing with unit labels and recipe lines HU-4 and
 this module's own screens both show — stays in app.services.catalog. This
 module only decides whether a write may happen.
+
+Every recipe this module reaches is a general one (firm_id IS NULL). A firm's
+own recipes (HU-9, ADR-006) are that firm's content, and support never reads
+or writes a firm's content (ADR-002): to this module they do not exist.
 """
 
 from dataclasses import dataclass
@@ -89,11 +93,16 @@ def _name_taken(
     """Whether another *active* row of this model already answers to this name.
 
     Case-insensitive, mirroring the partial unique index each table carries
-    (uq_resource_name_active / uq_recipe_name_active): "Cemento" and "cemento"
-    are the same name. exclude_id leaves the row itself out, so editing a
-    resource without changing its name does not collide with itself.
+    (uq_resource_name_active / uq_recipe_name_active_general): "Cemento" and
+    "cemento" are the same name. exclude_id leaves the row itself out, so
+    editing a resource without changing its name does not collide with itself.
+
+    A recipe is compared against the general ones only: a firm may already
+    use the name for its own recipe, and that is allowed (ADR-006 section 2).
     """
     stmt = select(model.id).where(model.is_active, func.lower(model.name) == name.lower())
+    if model is Recipe:
+        stmt = stmt.where(Recipe.firm_id.is_(None))
     if exclude_id is not None:
         stmt = stmt.where(model.id != exclude_id)
     return db.scalar(stmt.limit(1)) is not None
@@ -126,9 +135,13 @@ def get_resource(db: Session, resource_id: int) -> Resource:
 
 
 def get_recipe(db: Session, recipe_id: int) -> Recipe:
-    """The active recipe with this id, for a write to act on or answer with."""
+    """The active general recipe with this id, for a write to act on or answer with.
+
+    A firm's recipe is not found, the same as a missing one: support must not
+    be able to edit it, nor learn that the id exists.
+    """
     recipe = db.get(Recipe, recipe_id)
-    if recipe is None or not recipe.is_active:
+    if recipe is None or not recipe.is_active or recipe.firm_id is not None:
         raise RecipeNotFoundError
     return recipe
 
@@ -186,9 +199,16 @@ def update_resource(
 def deactivate_resource(db: Session, resource_id: int) -> None:
     """Take a resource out of the catalogue. A logical removal.
 
-    Refused while any active recipe still uses it (ADR-005 section 6 and 7.1):
-    the message names every one of them, so support knows where to go remove
-    it first. ix_recipe_resource_resource_id is what keeps this check cheap.
+    Refused while any active general recipe still uses it (ADR-005 section 6
+    and 7.1): the message names every one of them, so support knows where to
+    go remove it first. ix_recipe_resource_resource_id is what keeps this
+    check cheap.
+
+    A firm's recipe does not block it and is not named. Support can neither
+    see nor edit it, so blocking would leave a resource that can never be
+    retired, and naming it would show support a firm's content. That recipe
+    keeps computing with the retired resource, and the firm replaces the line
+    the next time it saves the recipe, since a write refuses inactive ones.
     """
     resource = get_resource(db, resource_id)
 
@@ -196,7 +216,11 @@ def deactivate_resource(db: Session, resource_id: int) -> None:
         db.scalars(
             select(Recipe.name)
             .join(RecipeResource, RecipeResource.recipe_id == Recipe.id)
-            .where(RecipeResource.resource_id == resource_id, Recipe.is_active)
+            .where(
+                RecipeResource.resource_id == resource_id,
+                Recipe.is_active,
+                Recipe.firm_id.is_(None),
+            )
             .order_by(Recipe.name)
         )
     )

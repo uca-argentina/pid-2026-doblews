@@ -44,6 +44,26 @@ class TestRecipes:
             WALL,
         ]
 
+    def test_lists_this_firm_s_own_recipes_with_their_origin(
+        self, client, world, auth_header, add_firm_recipe
+    ):
+        """HU-9: the general recipes and this firm's, each saying which it is."""
+        add_firm_recipe(world.firm_a, name="Revoque del estudio")
+
+        body = recipes(client, world.firm_a, auth_header(world.account_a)).json()
+
+        origin = {recipe["name"]: recipe["origin"] for recipe in body}
+        assert origin["Revoque del estudio"] == "firm"
+        assert origin[WALL] == "general"
+
+    def test_another_firm_s_recipe_never_appears(self, client, world, auth_header, add_firm_recipe):
+        """ADR-006: a firm's recipe is its content, invisible to every other firm."""
+        add_firm_recipe(world.firm_b, name="Revoque de Sur")
+
+        body = recipes(client, world.firm_a, auth_header(world.account_a)).json()
+
+        assert "Revoque de Sur" not in {recipe["name"] for recipe in body}
+
     def test_a_recipe_arrives_with_what_one_unit_of_it_takes(self, client, world, auth_header):
         """ADR-003's own example, typed out: 1 m2 of wall takes 60 bricks and a
         quarter of a bag of cement."""

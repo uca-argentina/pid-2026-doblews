@@ -1,15 +1,17 @@
 """Reads over the platform's catalogues (ADR-003).
 
-No firm/project filter anywhere in this module: the catalogue is global to the
-platform (ADR-003 section 7), so every caller sees the same rows. Who may call
-these is decided by the endpoints, not here.
+Units and resources are global to the platform (ADR-003 section 7), so every
+caller sees the same rows. Recipes are too, plus the ones a firm wrote for
+itself (HU-9, ADR-006): list_recipes is the one read here that takes a firm.
+Who may call these is decided by the endpoints, not here.
 """
 
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, aliased
 
 from app.models import Recipe, RecipeResource, Resource, UnitOfMeasure
@@ -44,6 +46,10 @@ class RecipeLine:
     currency: str
 
 
+# Where a recipe comes from, as the screens label it: "General" or "Del estudio".
+RecipeOrigin = Literal["general", "firm"]
+
+
 @dataclass(frozen=True)
 class RecipeEntry:
     """A recipe with its lines, which is how HU-4 shows it and HU-5 picks it."""
@@ -52,6 +58,7 @@ class RecipeEntry:
     name: str
     description: str | None
     unit: UnitLabel
+    origin: RecipeOrigin
     lines: list[RecipeLine]
 
 
@@ -86,8 +93,14 @@ def list_resources(db: Session) -> list[ResourceEntry]:
     ]
 
 
-def list_recipes(db: Session) -> list[RecipeEntry]:
+def list_recipes(db: Session, *, firm_id: int | None) -> list[RecipeEntry]:
     """The active recipes, ordered by name, each with every line it takes.
+
+    firm_id says whose recipes join the general ones, and it is required so no
+    caller gets a scope by omission. None is the system catalogue alone, which
+    is what support administers (HU-8). A firm's id adds that firm's own
+    recipes and never another's (ADR-006 section 5): OR firm_id = :firm cannot
+    match a NULL, nor a row of a different firm.
 
     Two queries whatever the size of the catalogue — the recipes, then all of
     their lines at once — grouped here by recipe, rather than one query per
@@ -102,7 +115,7 @@ def list_recipes(db: Session) -> list[RecipeEntry]:
     recipes = db.execute(
         select(Recipe, recipe_unit.code, recipe_unit.abbreviation)
         .join(recipe_unit, recipe_unit.id == Recipe.unit_of_measure_id)
-        .where(Recipe.is_active)
+        .where(Recipe.is_active, or_(Recipe.firm_id.is_(None), Recipe.firm_id == firm_id))
         .order_by(Recipe.name)
     ).all()
     if not recipes:
@@ -136,6 +149,7 @@ def list_recipes(db: Session) -> list[RecipeEntry]:
             name=recipe.name,
             description=recipe.description,
             unit=UnitLabel(code, abbreviation),
+            origin="general" if recipe.firm_id is None else "firm",
             lines=lines_by_recipe.get(recipe.id, []),
         )
         for recipe, code, abbreviation in recipes
