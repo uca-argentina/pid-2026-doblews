@@ -194,3 +194,7 @@ Dos avisos sobre este plan:
 ### Dónde estamos
 
 *Se completa a medida que avanza el sprint, como en el Sprint 1.*
+
+**2026-09-25.** **T-05 terminada** (ADR-006 y ADR-007, PR #22). **T-06 implementada** en `feat/t06-hour-unit-labor-seed`: unidad `h`, `Oficial` (5.500 ARS/h), `Ayudante` (4.600 ARS/h) y `Hormigonera` (3.000 ARS/h), y las horas por m² de las tres recetas sembradas (migración `3d8e1b7a9c24`, que no pisa lo editado por pantalla). Efecto transitorio buscado: hasta HU-10/HU-11, la tabla "Materiales" del cómputo de HU-5 lista también las horas de mano de obra y equipo, porque la query de ADR-003 §2 no filtra por tipo — agruparlas es trabajo de HU-11.
+
+**Queda liberado:** HU-10 (camino crítico). **En paralelo:** HU-9 y T-07.
