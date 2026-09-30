@@ -18,6 +18,8 @@ Las restricciones del proyecto que pesan en la decisión:
 
 - **HU-1 dice literalmente "el sistema me devuelve un token"**, y pone fuera de alcance el auto-registro, la recuperación de contraseña, OAuth y los refresh tokens.
 - **Front y backend viven en dominios distintos**: Vercel el front, Render/Railway el backend ([ADR-001](0001-stack.md)). No es una app servida desde el mismo origen.
+
+  > **Actualización (2026-09-30):** [ADR-008](0008-azure-deploy.md) movió el deploy a Azure Static Web Apps (front) y Container Apps (backend). Siguen siendo orígenes distintos, así que el razonamiento de esta ADR vale igual; donde dice Vercel y Render, léase Static Web Apps y Container Apps.
 - **El sprint son 2 semanas y HU-1 está estimada en 2 días**, siendo la historia que bloquea a todas las demás.
 - **No hay datos reales de clientes.** Son dos estudios semilla con contraseña conocida, para una defensa de materia.
 

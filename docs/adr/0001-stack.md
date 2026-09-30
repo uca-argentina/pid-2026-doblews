@@ -32,6 +32,8 @@ El documento de propuesta del cliente evalúa un abanico amplio de opciones (Nex
 
 - **Docker Compose** con Postgres para desarrollo local, evita diferencias de entorno entre los miembros del equipo.
 - **Deploy**: backend + base de datos en Render o Railway, frontend en Vercel. Deploy funcionando desde los primeros días del sprint, no reservado para el final.
+
+  > **Reemplazado por [ADR-008](0008-azure-deploy.md) (2026-09-30).** El deploy es en Azure: backend en Container Apps, base en PostgreSQL Flexible Server y frontend en Static Web Apps. Los planes gratis de Render y Neon ya estaban ocupados por otros proyectos del equipo. El resto de esta sección sigue vigente.
 - **CI**: GitHub Actions con lint (`ruff` + `eslint`) y verificación de build en cada Pull Request.
 
 ## Fuera de alcance (explícitamente, para este momento del proyecto)

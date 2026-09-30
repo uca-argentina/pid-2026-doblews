@@ -26,6 +26,15 @@ cd ../frontend && npm install # instala deps del frontend
 
 `.env.example` está versionado; copiarlo a `.env` (nunca commitear `.env`).
 
+## Ambiente de deploy
+
+Azure, deployado desde `main` por `.github/workflows/deploy.yml`. Ver [docs/adr/0008-azure-deploy.md](docs/adr/0008-azure-deploy.md).
+
+- Frontend: https://orange-mushroom-009669d0f.6.azurestaticapps.net
+- API: https://ca-warchitecture-api.delightfuldune-fd794876.brazilsouth.azurecontainerapps.io (`/docs` para Swagger)
+- El primer request después de unos minutos sin tráfico tarda ~15 s (escala a cero). Para una demo: `az containerapp update -g rg-warchitecture -n ca-warchitecture-api --min-replicas 1`, y volver a `0` después.
+- Las cuentas demo usan un `SEED_PASSWORD` propio del ambiente, no el de `.env.example`.
+
 ## Idioma
 
 - Conversación con el usuario: **español**.
