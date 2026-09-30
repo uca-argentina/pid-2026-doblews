@@ -1,16 +1,7 @@
-import {
-  Alert,
-  Box,
-  Button,
-  Center,
-  Group,
-  Loader,
-  Stack,
-  Text,
-  Title,
-} from "@mantine/core";
+import { Alert, Box, Button, Center, Loader, Stack } from "@mantine/core";
 import { useState } from "react";
 import { useDisclosure } from "@mantine/hooks";
+import { PageHeader } from "../components/PageHeader";
 import { useCurrentFirm } from "../features/firms/firmContext";
 import { AddMemberModal } from "../features/members/AddMemberModal";
 import { ChangeRoleModal } from "../features/members/ChangeRoleModal";
@@ -40,17 +31,13 @@ export function MembersPage() {
 
   return (
     <Stack gap="md">
-      <Group justify="space-between" align="flex-start" wrap="nowrap">
-        <div>
-          <Title order={3}>Padrón</Title>
-          <Text c="dimmed" size="sm">
-            Las personas de {firm.name} y su rol en el estudio.
-          </Text>
-        </div>
-        {/* No permission check: this whole screen already sits behind
-            member.add, the permission the add itself demands. */}
-        <Button onClick={addModal.open}>Agregar miembro</Button>
-      </Group>
+      {/* No permission check on the action: this whole screen already sits
+          behind member.add, the permission the add itself demands. */}
+      <PageHeader
+        title="Padrón"
+        description={`Las personas de ${firm.name} y su rol en el estudio.`}
+        action={<Button onClick={addModal.open}>Agregar miembro</Button>}
+      />
 
       <AddMemberModal opened={addOpened} onClose={addModal.close} />
       <ChangeRoleModal

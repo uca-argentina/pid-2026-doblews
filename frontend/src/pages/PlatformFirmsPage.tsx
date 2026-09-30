@@ -1,16 +1,7 @@
 import { useState } from "react";
-import {
-  Alert,
-  Box,
-  Button,
-  Center,
-  Group,
-  Loader,
-  Stack,
-  Text,
-  Title,
-} from "@mantine/core";
+import { Alert, Box, Button, Center, Loader, Stack } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
+import { PageHeader } from "../components/PageHeader";
 import { useAuth } from "../features/auth/AuthContext";
 import { CreateFirmModal } from "../features/platform/CreateFirmModal";
 import { FirmCard } from "../features/platform/FirmCard";
@@ -42,16 +33,15 @@ export function PlatformFirmsPage() {
 
   return (
     <Stack gap="md">
-      <Group justify="space-between" align="flex-start" wrap="nowrap">
-        <div>
-          <Title order={3}>Estudios</Title>
-          <Text c="dimmed" size="sm">
-            Los estudios de la plataforma, con su cantidad de miembros y su
-            estado.
-          </Text>
-        </div>
-        {canCreate && <Button onClick={createModal.open}>Nuevo estudio</Button>}
-      </Group>
+      <PageHeader
+        title="Estudios"
+        description="Los estudios de la plataforma, con su cantidad de miembros y su estado."
+        action={
+          canCreate ? (
+            <Button onClick={createModal.open}>Nuevo estudio</Button>
+          ) : undefined
+        }
+      />
 
       <CreateFirmModal opened={createOpened} onClose={createModal.close} />
       <FirmStatusModal

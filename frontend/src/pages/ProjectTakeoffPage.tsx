@@ -97,7 +97,7 @@ function TakeoffView({
           </Stack>
 
           <Stack gap="sm">
-            <Group justify="space-between" align="center" wrap="nowrap">
+            <Group justify="space-between" align="center" wrap="wrap" gap="sm">
               <Title order={4}>Recetas cargadas</Title>
               {canManage && <Button onClick={add.open}>Agregar receta</Button>}
             </Group>

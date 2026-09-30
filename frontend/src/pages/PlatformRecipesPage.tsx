@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Button, Group, Stack, Text, Title } from "@mantine/core";
+import { Button, Stack } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
+import { PageHeader } from "../components/PageHeader";
 import { AdminRecipeBrowser } from "../features/catalog-admin/AdminRecipeBrowser";
 import type { RecipeOut } from "../features/catalog-admin/types";
 import {
@@ -36,15 +37,11 @@ export function PlatformRecipesPage() {
 
   return (
     <Stack gap="md">
-      <Group justify="space-between" align="flex-start" wrap="nowrap">
-        <div>
-          <Title order={3}>Recetas</Title>
-          <Text c="dimmed" size="sm">
-            Las recetas del catálogo del sistema, con lo que lleva cada una.
-          </Text>
-        </div>
-        <Button onClick={openCreate}>Nueva receta</Button>
-      </Group>
+      <PageHeader
+        title="Recetas"
+        description="Las recetas del catálogo del sistema, con lo que lleva cada una."
+        action={<Button onClick={openCreate}>Nueva receta</Button>}
+      />
 
       <RecipeFormModal
         opened={formOpened}

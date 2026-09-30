@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Button, Group, Stack, Text, Title } from "@mantine/core";
+import { Button, Stack } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
+import { PageHeader } from "../components/PageHeader";
 import { AdminResourceBrowser } from "../features/catalog-admin/AdminResourceBrowser";
 import { DeactivateResourceModal } from "../features/catalog-admin/DeactivateResourceModal";
 import { MaterialActionsMenu } from "../features/catalog-admin/MaterialActionsMenu";
@@ -33,16 +34,11 @@ export function PlatformMaterialsPage() {
 
   return (
     <Stack gap="md">
-      <Group justify="space-between" align="flex-start" wrap="nowrap">
-        <div>
-          <Title order={3}>Materiales</Title>
-          <Text c="dimmed" size="sm">
-            El catálogo de materiales del sistema, igual para todos los
-            estudios.
-          </Text>
-        </div>
-        <Button onClick={openCreate}>Nuevo material</Button>
-      </Group>
+      <PageHeader
+        title="Materiales"
+        description="El catálogo de materiales del sistema, igual para todos los estudios."
+        action={<Button onClick={openCreate}>Nuevo material</Button>}
+      />
 
       <MaterialFormModal
         opened={formOpened}
