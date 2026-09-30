@@ -180,9 +180,17 @@ function RecipeForm({
     label: `${resource.name} (${resource.unit.abbreviation})`,
   }));
 
+  const isLaborOrEquipment = (resource: ResourceOut) =>
+    resource.type === "labor" || resource.type === "equipment";
+
   const unitAbbreviationFor = (resourceId: string | null) =>
     resources.find((resource) => resource.id.toString() === resourceId)?.unit
       .abbreviation ?? "";
+
+  const quantityLabel = (selectedResourceId: string | null) => {
+    const resource = resources.find((r) => r.id.toString() === selectedResourceId);
+    return resource && isLaborOrEquipment(resource) ? "Horas" : "Cantidad";
+  };
 
   const addLine = () =>
     form.insertListItem("lines", { resource_id: null, quantity_per_unit: "" });
@@ -286,7 +294,8 @@ function RecipeForm({
                     {...form.getInputProps(`lines.${index}.resource_id`)}
                   />
                   <NumberInput
-                    placeholder="Cantidad"
+                    label={quantityLabel(line.resource_id)}
+                    placeholder="0.0"
                     w={160}
                     rightSection={unitAbbreviationFor(line.resource_id)}
                     decimalScale={4}
@@ -325,7 +334,7 @@ function RecipeForm({
                     {...form.getInputProps(`lines.${index}.resource_id`)}
                   />
                   <NumberInput
-                    label="Cantidad"
+                    label={quantityLabel(line.resource_id)}
                     placeholder="0"
                     rightSection={unitAbbreviationFor(line.resource_id)}
                     decimalScale={4}
