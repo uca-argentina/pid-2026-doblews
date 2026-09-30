@@ -1,16 +1,7 @@
 import { useState } from "react";
-import {
-  Alert,
-  Box,
-  Button,
-  Center,
-  Group,
-  Loader,
-  Stack,
-  Text,
-  Title,
-} from "@mantine/core";
+import { Alert, Box, Button, Center, Loader, Stack } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
+import { PageHeader } from "../components/PageHeader";
 import { useCurrentFirm } from "../features/firms/firmContext";
 import { useCurrentProject } from "../features/projects/projectContext";
 import { AddTeamMemberModal } from "../features/team/AddTeamMemberModal";
@@ -75,17 +66,16 @@ function TeamView({
 
   return (
     <Stack gap="md">
-      <Group justify="space-between" align="flex-start" wrap="nowrap">
-        <div>
-          <Title order={4}>Equipo</Title>
-          <Text c="dimmed" size="sm">
-            Quiénes participan de esta obra y qué puede hacer cada uno.
-          </Text>
-        </div>
-        {canManage && (
-          <Button onClick={addModal.open}>Agregar al equipo</Button>
-        )}
-      </Group>
+      <PageHeader
+        order={4}
+        title="Equipo"
+        description="Quiénes participan de esta obra y qué puede hacer cada uno."
+        action={
+          canManage ? (
+            <Button onClick={addModal.open}>Agregar al equipo</Button>
+          ) : undefined
+        }
+      />
 
       {/* Outside the loading branches on purpose, as in the take-off: a modal
           rendered inside one would be torn down mid-close when the list

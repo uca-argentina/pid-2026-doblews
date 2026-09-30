@@ -4,13 +4,12 @@ import {
   Button,
   Card,
   Center,
-  Group,
   Loader,
   Stack,
   Text,
-  Title,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
+import { PageHeader } from "../components/PageHeader";
 import { useCurrentFirm } from "../features/firms/firmContext";
 import { ProjectCard } from "../features/projects/ProjectCard";
 import { ProjectFormModal } from "../features/projects/ProjectFormModal";
@@ -39,15 +38,13 @@ export function ProjectsPage() {
 
   return (
     <Stack gap="md">
-      <Group justify="space-between" align="flex-start" wrap="nowrap">
-        <div>
-          <Title order={3}>Obras</Title>
-          <Text c="dimmed" size="sm">
-            Las obras de {firm.name} en las que participás.
-          </Text>
-        </div>
-        {mayCreate && <Button onClick={form.open}>Nueva obra</Button>}
-      </Group>
+      <PageHeader
+        title="Obras"
+        description={`Las obras de ${firm.name} en las que participás.`}
+        action={
+          mayCreate ? <Button onClick={form.open}>Nueva obra</Button> : undefined
+        }
+      />
 
       <ProjectFormModal
         opened={formOpened}

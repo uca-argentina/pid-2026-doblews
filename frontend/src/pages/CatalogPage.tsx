@@ -1,13 +1,7 @@
 import { useState } from "react";
-import {
-  Button,
-  Group,
-  SegmentedControl,
-  Stack,
-  Text,
-  Title,
-} from "@mantine/core";
+import { Button, SegmentedControl, Stack } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
+import { PageHeader } from "../components/PageHeader";
 import { RecipeBrowser } from "../features/catalog/RecipeBrowser";
 import { ResourceBrowser } from "../features/catalog/ResourceBrowser";
 import type { RecipeOut } from "../features/catalog/types";
@@ -59,20 +53,15 @@ export function CatalogPage() {
 
   return (
     <Stack gap="md">
-      <Group justify="space-between" align="flex-start" wrap="nowrap">
-        <div>
-          <Title order={3}>Catálogo</Title>
-          <Text c="dimmed" size="sm">
-            Las recetas con las que se computan las obras y los materiales que
-            llevan.
-          </Text>
-        </div>
-        {canManage && view === "recipes" && (
-          <Button onClick={openCreate} style={{ flexShrink: 0 }}>
-            Nueva receta
-          </Button>
-        )}
-      </Group>
+      <PageHeader
+        title="Catálogo"
+        description="Las recetas con las que se computan las obras y los materiales que llevan."
+        action={
+          canManage && view === "recipes" ? (
+            <Button onClick={openCreate}>Nueva receta</Button>
+          ) : undefined
+        }
+      />
 
       <SegmentedControl
         value={view}
