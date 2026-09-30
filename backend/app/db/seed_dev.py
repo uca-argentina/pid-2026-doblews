@@ -9,7 +9,7 @@ with a known password. Idempotent: running it twice changes nothing.
 
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import make_url, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -261,8 +261,10 @@ def _seed_demo_work(session: Session, firms: dict[str, Firm]) -> None:
 def main() -> None:
     settings = get_settings()
     # Printed on purpose: this writes rows, and the only thing standing between
-    # a demo seed and a real database is which URL is configured.
-    print(f"sembrando en {settings.database_url}\n")
+    # a demo seed and a real database is which URL is configured. Without the
+    # password, which against a deployed database is a real secret.
+    target = make_url(settings.database_url).render_as_string(hide_password=True)
+    print(f"sembrando en {target}\n")
 
     with SessionLocal() as session:
         seed(session, settings.seed_password)
