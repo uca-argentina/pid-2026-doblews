@@ -203,4 +203,13 @@ Dos avisos sobre este plan:
 
 **Queda:** HU-10 → HU-11 → HU-12 (camino crítico) y T-07.
 
+**2026-10-01.** **T-07 terminada** (PR #28, `dev` promovido a `main`) y **HU-10 terminada** (PR #26). **HU-11 implementada**, back (`feat/hu11-project-budget`) y front (`feat/hu11-project-budget-front`): `GET /firms/{id}/projects/{id}/budget` con los tres grupos en orden fijo, subtotal por grupo y total general, y la sección "Presupuesto" como una tab más de la obra.
+
+Dos cosas que se precisaron al implementar:
+
+- **Endpoint propio y no un `/takeoff` más rico**, porque el permiso es distinto: el cómputo admite al `client` con los costos en `null`, y el presupuesto tiene que negarle la entrada (403, no 404 — ya puede ver la obra). Además HU-12 cuelga `/budget/versions` de acá.
+- **El efecto transitorio de T-06 se resolvió agrupando y no filtrando.** La idea era filtrar la tabla "Materiales" del cómputo a `type = 'material'`, pero HU-10 pide que *el `client` vea las horas y no los costos*: si HU-11 se las saca al cómputo, el cliente —que no entra al presupuesto— no las ve en ninguna pantalla. Las filas de `/takeoff` ahora llevan su `type` y el cómputo las muestra en tres grupos bajo el título "Qué necesita la obra".
+
+**Queda:** HU-12 (camino crítico).
+
 **2026-09-30.** **T-07 implementada** en `chore/t07-deploy-azure` ([ADR-008](../adr/0008-azure-deploy.md)). El deploy es en Azure y no en Render/Vercel, porque los planes gratis de Render y Neon ya estaban ocupados: backend en Container Apps, base en PostgreSQL Flexible Server y frontend en Static Web Apps, todo con costo USD 0. El ambiente ya está andando con las 11 migraciones y el seed demo, este último con una contraseña propia del ambiente. `.github/workflows/deploy.yml` deploya cada push a `main`. T-07 se cierra con la promoción `dev → main` (merge commit), que además es la primera corrida del workflow.
