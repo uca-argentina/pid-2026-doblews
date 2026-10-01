@@ -88,6 +88,16 @@ class TestRead:
         assert body["currency"] == "ARS"
         assert body["prices_as_of"] is not None
 
+    def test_every_resource_says_which_kind_it_is(self, client, world, team, wall, auth_header):
+        """HU-10 put labour and equipment on this screen; `type` is what lets it
+        show the three apart instead of calling hours a material."""
+        body = client.get(takeoff_url(world), headers=auth_header(team["lead"])).json()
+
+        by_name = {material["name"]: material["type"] for material in body["materials"]}
+
+        assert by_name[BRICK] == "material"
+        assert by_name["Oficial"] == "labor"
+
     @pytest.mark.parametrize("role", ["collaborator", "viewer", "owner"])
     def test_these_roles_see_the_costs(self, client, world, team, wall, auth_header, role):
         """viewer holds project.cost.view; the owner sees them through project.view_all."""

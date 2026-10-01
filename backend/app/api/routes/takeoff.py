@@ -157,6 +157,7 @@ def read_takeoff(
             TakeoffMaterialOut(
                 resource_id=material.resource_id,
                 name=material.name,
+                type=material.type,
                 unit=UnitRef(code=material.unit.code, abbreviation=material.unit.abbreviation),
                 quantity=material.quantity,
                 cost=material.cost if sees_cost else None,
