@@ -211,6 +211,18 @@ function ProjectTabs({ basePath, project, firmCan }: ProjectTabsProps) {
         firmCan("project.view_all"),
     },
     {
+      value: "budget",
+      path: "budget",
+      label: "Presupuesto",
+      // Costs, so a tighter rule than the take-off above: project.cost.view is
+      // what the client of the work lacks, and HU-11 asks for the section to be
+      // closed to them rather than emptied. project.view_all still lets the
+      // owner audit a work they are not on, as everywhere else.
+      visible:
+        project.permissions.includes("project.cost.view") ||
+        firmCan("project.view_all"),
+    },
+    {
       value: "team",
       path: "team",
       label: "Equipo",

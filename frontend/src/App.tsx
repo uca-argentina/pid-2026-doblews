@@ -8,6 +8,7 @@ import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { HomeRedirect } from "./pages/HomeRedirect";
 import { LoginPage } from "./pages/LoginPage";
 import { MembersPage } from "./pages/MembersPage";
+import { ProjectBudgetPage } from "./pages/ProjectBudgetPage";
 import { ProjectDetailPage } from "./pages/ProjectDetailPage";
 import { ProjectTakeoffPage } from "./pages/ProjectTakeoffPage";
 import { ProjectTeamPage } from "./pages/ProjectTeamPage";
@@ -98,11 +99,12 @@ function App() {
           <Route path="projects" element={<ProjectsPage />} />
           {/* One work, with its name as the context of everything inside it
               (HU-3). Each tab of the work is a child route: the index is its
-              data, "takeoff" is HU-5's take-off, and HU-6's team joins them
-              the same way. */}
+              data, "takeoff" is HU-5's take-off, "budget" is HU-11's, and
+              HU-6's team joins them the same way. */}
           <Route path="projects/:projectId" element={<ProjectLayout />}>
             <Route index element={<ProjectDetailPage />} />
             <Route path="takeoff" element={<ProjectTakeoffPage />} />
+            <Route path="budget" element={<ProjectBudgetPage />} />
             <Route path="team" element={<ProjectTeamPage />} />
           </Route>
           {/* Every firm role holds catalog.view today, so the gate is for the
