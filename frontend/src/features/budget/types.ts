@@ -36,3 +36,44 @@ export interface BudgetOut {
    * referencia al <fecha>". null when the work has no lines to price. */
   prices_as_of: string | null;
 }
+
+/** What BudgetGroupSection renders, which both the draft and a saved version
+ * can supply.
+ *
+ * The unit is the abbreviation alone and not a UnitRef, because that is all a
+ * frozen item has: a version copies the abbreviation it was saved with instead
+ * of referencing the unit catalogue (ADR-007 section 2). The draft adapts down
+ * to this rather than the version inventing a code it never stored. */
+export interface BudgetSectionItem {
+  resource_id: number;
+  name: string;
+  unit_abbreviation: string;
+  quantity: string;
+  unit_price: string;
+  subtotal: string;
+}
+
+export interface BudgetSectionGroup {
+  type: ResourceType;
+  items: BudgetSectionItem[];
+  subtotal: string;
+}
+
+/** The draft's groups in the shape above: its items carry a full UnitRef, of
+ * which only the abbreviation reaches the screen. */
+export function toSectionGroups(
+  groups: BudgetGroupOut[],
+): BudgetSectionGroup[] {
+  return groups.map((group) => ({
+    type: group.type,
+    subtotal: group.subtotal,
+    items: group.items.map((item) => ({
+      resource_id: item.resource_id,
+      name: item.name,
+      unit_abbreviation: item.unit.abbreviation,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      subtotal: item.subtotal,
+    })),
+  }));
+}

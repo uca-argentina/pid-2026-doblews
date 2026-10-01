@@ -1,10 +1,10 @@
 import { Box, Card, Group, Stack, Table, Text, Title } from "@mantine/core";
 import { formatMoney, formatQuantity } from "../../lib/format";
 import { RESOURCE_GROUP_LABELS } from "../catalog/resourceTypes";
-import type { BudgetGroupOut } from "./types";
+import type { BudgetSectionGroup } from "./types";
 
 interface BudgetGroupSectionProps {
-  group: BudgetGroupOut;
+  group: BudgetSectionGroup;
   currency: string;
 }
 
@@ -44,13 +44,13 @@ export function BudgetGroupSection({
                 </Table.Td>
                 <Table.Td ta="right">
                   <Text size="sm">
-                    {formatQuantity(item.quantity)} {item.unit.abbreviation}
+                    {formatQuantity(item.quantity)} {item.unit_abbreviation}
                   </Text>
                 </Table.Td>
                 <Table.Td ta="right">
                   <Text size="sm" c="dimmed">
                     {formatMoney(item.unit_price, currency)} /{" "}
-                    {item.unit.abbreviation}
+                    {item.unit_abbreviation}
                   </Text>
                 </Table.Td>
                 <Table.Td ta="right">
@@ -67,7 +67,7 @@ export function BudgetGroupSection({
           <Card key={item.resource_id} withBorder padding="md" radius="md">
             <Text fw={600}>{item.name}</Text>
             <Text size="sm" c="dimmed">
-              {formatQuantity(item.quantity)} {item.unit.abbreviation} ×{" "}
+              {formatQuantity(item.quantity)} {item.unit_abbreviation} ×{" "}
               {formatMoney(item.unit_price, currency)}
             </Text>
             <Group justify="flex-end">
