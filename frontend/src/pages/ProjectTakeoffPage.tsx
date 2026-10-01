@@ -92,12 +92,15 @@ function TakeoffView({
       ) : (
         <Stack gap="xl">
           <Stack gap="sm">
-            <Title order={4}>Materiales</Title>
+            {/* Not "Materiales": since T-06 the recipes also yield hours of
+                labour and of equipment, and TakeoffMaterials groups the three
+                under their own headings. */}
+            <Title order={4}>Qué necesita la obra</Title>
             <TakeoffMaterials takeoff={takeoff} />
           </Stack>
 
           <Stack gap="sm">
-            <Group justify="space-between" align="center" wrap="nowrap">
+            <Group justify="space-between" align="center" wrap="wrap" gap="sm">
               <Title order={4}>Recetas cargadas</Title>
               {canManage && <Button onClick={add.open}>Agregar receta</Button>}
             </Group>

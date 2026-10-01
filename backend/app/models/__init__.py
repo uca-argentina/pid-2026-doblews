@@ -5,6 +5,11 @@ the whole schema; without it they see an empty one and propose dropping every ta
 """
 
 from app.models.account import Account
+from app.models.budget_version import (
+    BudgetVersion,
+    BudgetVersionItem,
+    BudgetVersionLine,
+)
 from app.models.catalog import Recipe, RecipeResource, Resource
 from app.models.firm import Firm
 from app.models.membership import FirmMember, PlatformMember
@@ -17,6 +22,9 @@ from app.models.unit_of_measure import UnitOfMeasure
 # than as unused imports waiting for someone to tidy them away.
 __all__ = [
     "Account",
+    "BudgetVersion",
+    "BudgetVersionItem",
+    "BudgetVersionLine",
     "Firm",
     "FirmMember",
     "Permission",

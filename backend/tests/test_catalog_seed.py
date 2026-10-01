@@ -14,16 +14,19 @@ from decimal import Decimal
 
 from sqlalchemy import Connection, text
 
-# material name -> unit code, from the seed migration's own MATERIALS. Sprint 1
-# seeds materials only: labor and equipment exist in the CHECK without rows.
-EXPECTED_MATERIALS: dict[str, str] = {
-    "Ladrillo común": "u",
-    "Cemento portland (bolsa 50 kg)": "bolsa",
-    "Cal hidratada (bolsa 25 kg)": "bolsa",
-    "Arena gruesa": "m3",
-    "Arena fina": "m3",
-    "Cascote": "m3",
-    "Hidrófugo": "kg",
+# resource name -> (type, unit code). The seven materials are T-04's; labour and
+# equipment are T-06's, always in hours (ADR-003 section 3, precised by T-05).
+EXPECTED_RESOURCES: dict[str, tuple[str, str]] = {
+    "Ladrillo común": ("material", "u"),
+    "Cemento portland (bolsa 50 kg)": ("material", "bolsa"),
+    "Cal hidratada (bolsa 25 kg)": ("material", "bolsa"),
+    "Arena gruesa": ("material", "m3"),
+    "Arena fina": ("material", "m3"),
+    "Cascote": ("material", "m3"),
+    "Hidrófugo": ("material", "kg"),
+    "Oficial": ("labor", "h"),
+    "Ayudante": ("labor", "h"),
+    "Hormigonera": ("equipment", "h"),
 }
 
 # recipe name -> unit code. Three curated recipes, as T-04 asks: better few done
@@ -38,12 +41,15 @@ WALL = "Pared de ladrillo común 15cm"
 
 # The worked example of ADR-003: what 120 m2 of that wall takes. Section 2 states
 # the yields it comes from, and the Consequences section states the result —
-# "esta obra necesita 7.200 ladrillos y 30 bolsas de cemento".
+# "esta obra necesita 7.200 ladrillos y 30 bolsas de cemento". T-06 adds the
+# hours: 1 h/m2 of each trade, and no mixer, since the wall's mortar is hand-mixed.
 WALL_OF_120_M2: dict[str, Decimal] = {
     "Ladrillo común": Decimal("7200.0000"),
     "Cemento portland (bolsa 50 kg)": Decimal("30.0000"),
     "Cal hidratada (bolsa 25 kg)": Decimal("24.0000"),
     "Arena gruesa": Decimal("5.6400"),
+    "Oficial": Decimal("120.0000"),
+    "Ayudante": Decimal("120.0000"),
 }
 
 # ADR-003 section 2, verbatim. Run here against seeded data rather than
@@ -60,7 +66,7 @@ TAKE_OFF = """
 """
 
 
-def test_the_catalogue_holds_exactly_the_seeded_materials(db: Connection) -> None:
+def test_the_catalogue_holds_exactly_the_seeded_resources(db: Connection) -> None:
     rows = db.execute(
         text(
             "SELECT r.name, u.code, r.type FROM resource r"
@@ -68,8 +74,22 @@ def test_the_catalogue_holds_exactly_the_seeded_materials(db: Connection) -> Non
         )
     ).all()
 
-    assert {row.name: row.code for row in rows} == EXPECTED_MATERIALS
-    assert {row.type for row in rows} == {"material"}
+    assert {row.name: (row.type, row.code) for row in rows} == EXPECTED_RESOURCES
+
+
+def test_every_seeded_recipe_takes_hours_of_both_trades(db: Connection) -> None:
+    """T-06: the three recipes carry labour, so HU-11 has a labour section to show
+    for whatever a work is made of, not only for walls."""
+    rows = db.execute(
+        text(
+            "SELECT rc.name, count(*) AS trades FROM recipe rc"
+            " JOIN recipe_resource rr ON rr.recipe_id = rc.id"
+            " JOIN resource rs ON rs.id = rr.resource_id"
+            " WHERE rs.type = 'labor' GROUP BY rc.name"
+        )
+    ).all()
+
+    assert {row.name: row.trades for row in rows} == {name: 2 for name in EXPECTED_RECIPES}
 
 
 def test_every_seeded_resource_has_a_price_and_a_date_for_it(db: Connection) -> None:

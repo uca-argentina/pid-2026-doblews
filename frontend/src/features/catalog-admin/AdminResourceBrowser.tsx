@@ -6,6 +6,7 @@ import {
   Center,
   Group,
   Loader,
+  Select,
   Stack,
   Table,
   Text,
@@ -24,6 +25,16 @@ const TYPE_LABELS: Record<ResourceType, string> = {
   labor: "Mano de obra",
   equipment: "Equipo",
 };
+
+// "all" is the default, un-filtered view; the rest mirror resource.type.
+type TypeFilter = "all" | ResourceType;
+
+const TYPE_FILTER_OPTIONS: { value: TypeFilter; label: string }[] = [
+  { value: "all", label: "Todos los tipos" },
+  { value: "material", label: "Material" },
+  { value: "labor", label: "Mano de obra" },
+  { value: "equipment", label: "Equipo" },
+];
 
 interface AdminResourceBrowserProps {
   /** What each row offers to do with its material. Same render-prop contract
@@ -45,22 +56,36 @@ export function AdminResourceBrowser({
 }: AdminResourceBrowserProps) {
   const { data: resources, isLoading, isError } = useAdminResources();
   const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
 
   const visible = useMemo(
     () =>
-      resources?.filter((resource) => matchesSearch(resource.name, query)) ??
-      [],
-    [resources, query],
+      resources?.filter(
+        (resource) =>
+          matchesSearch(resource.name, query) &&
+          (typeFilter === "all" || resource.type === typeFilter),
+      ) ?? [],
+    [resources, query, typeFilter],
   );
 
   return (
     <Stack gap="sm">
-      <TextInput
-        placeholder="Buscar material por nombre"
-        aria-label="Buscar material"
-        value={query}
-        onChange={(event) => setQuery(event.currentTarget.value)}
-      />
+      <Group gap="sm" align="flex-end" grow wrap="wrap">
+        <TextInput
+          placeholder="Buscar recurso por nombre"
+          aria-label="Buscar recurso"
+          value={query}
+          onChange={(event) => setQuery(event.currentTarget.value)}
+        />
+        <Select
+          aria-label="Filtrar por tipo"
+          data={TYPE_FILTER_OPTIONS}
+          value={typeFilter}
+          onChange={(value) => setTypeFilter((value as TypeFilter) ?? "all")}
+          allowDeselect={false}
+          maw={{ sm: 220 }}
+        />
+      </Group>
 
       {isLoading && (
         <Center>
@@ -70,15 +95,15 @@ export function AdminResourceBrowser({
 
       {isError && (
         <Alert color="red" variant="light">
-          No pudimos cargar los materiales. Probá de nuevo en un momento.
+          No pudimos cargar los recursos. Probá de nuevo en un momento.
         </Alert>
       )}
 
       {resources && visible.length === 0 && (
         <Text size="sm" c="dimmed" ta="center" py="md">
           {resources.length === 0
-            ? "El catálogo todavía no tiene materiales."
-            : "Ningún material coincide con la búsqueda."}
+            ? "El catálogo todavía no tiene recursos."
+            : "Ningún recurso coincide con la búsqueda."}
         </Text>
       )}
 
@@ -88,7 +113,7 @@ export function AdminResourceBrowser({
             <Table verticalSpacing="sm" highlightOnHover>
               <Table.Thead>
                 <Table.Tr>
-                  <Table.Th>Material</Table.Th>
+                  <Table.Th>Recurso</Table.Th>
                   <Table.Th>Tipo</Table.Th>
                   <Table.Th>Unidad</Table.Th>
                   <Table.Th ta="right">Precio de referencia</Table.Th>

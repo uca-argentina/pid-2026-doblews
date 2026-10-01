@@ -14,6 +14,8 @@ Ana owns firm A; Clara is a firm client of A.
 import pytest
 from sqlalchemy import text
 
+from app.services.firm_recipes import FIRM_RECIPE_NAME_TAKEN
+
 WALL = "Pared de ladrillo común 15cm"
 BRICK = "Ladrillo común"
 CEMENT = "Cemento portland (bolsa 50 kg)"
@@ -43,6 +45,26 @@ class TestRecipes:
             "Contrapiso de cascote",
             WALL,
         ]
+
+    def test_lists_this_firm_s_own_recipes_with_their_origin(
+        self, client, world, auth_header, add_firm_recipe
+    ):
+        """HU-9: the general recipes and this firm's, each saying which it is."""
+        add_firm_recipe(world.firm_a, name="Revoque del estudio")
+
+        body = recipes(client, world.firm_a, auth_header(world.account_a)).json()
+
+        origin = {recipe["name"]: recipe["origin"] for recipe in body}
+        assert origin["Revoque del estudio"] == "firm"
+        assert origin[WALL] == "general"
+
+    def test_another_firm_s_recipe_never_appears(self, client, world, auth_header, add_firm_recipe):
+        """ADR-006: a firm's recipe is its content, invisible to every other firm."""
+        add_firm_recipe(world.firm_b, name="Revoque de Sur")
+
+        body = recipes(client, world.firm_a, auth_header(world.account_a)).json()
+
+        assert "Revoque de Sur" not in {recipe["name"] for recipe in body}
 
     def test_a_recipe_arrives_with_what_one_unit_of_it_takes(self, client, world, auth_header):
         """ADR-003's own example, typed out: 1 m2 of wall takes 60 bricks and a
@@ -84,7 +106,7 @@ class TestResources:
         body = response.json()
         names = [resource["name"] for resource in body]
         assert names == sorted(names)
-        assert len(body) == 7
+        assert len(body) == 10
 
         brick = next(resource for resource in body if resource["name"] == BRICK)
         assert brick["type"] == "material"
@@ -119,3 +141,136 @@ class TestWhoReadsIt:
         from_b = recipes(client, world.firm_b, auth_header(world.account_b)).json()
 
         assert from_a == from_b
+
+
+def recipe_body(unit_id, resource_id, **overrides) -> dict:
+    body = {
+        "name": "Revoque del estudio",
+        "description": "1:4",
+        "unit_of_measure_id": unit_id["m2"],
+        "lines": [{"resource_id": resource_id[CEMENT], "quantity_per_unit": "0.2000"}],
+    }
+    body.update(overrides)
+    return body
+
+
+class TestFirmRecipeWrites:
+    """HU-9: owner and architect write their firm's recipes, and only those."""
+
+    @pytest.mark.parametrize("who", ["owner", "architect"])
+    def test_owner_and_architect_create_one(
+        self, client, world, auth_header, unit_id, resource_id, who
+    ):
+        account = world.account_a if who == "owner" else world.account_a2
+
+        response = client.post(
+            f"/firms/{world.firm_a}/catalog/recipes",
+            json=recipe_body(unit_id, resource_id),
+            headers=auth_header(account),
+        )
+
+        assert response.status_code == 201
+        body = response.json()
+        assert (body["name"], body["origin"]) == ("Revoque del estudio", "firm")
+        listed = recipes(client, world.firm_a, auth_header(account)).json()
+        assert body["id"] in {recipe["id"] for recipe in listed}
+
+    def test_the_client_reads_them_but_cannot_write(
+        self, client, world, clara, auth_header, unit_id, resource_id, add_firm_recipe
+    ):
+        """catalog.view without recipe.manage (ADR-006 section 3)."""
+        add_firm_recipe(world.firm_a, name="Revoque del estudio")
+
+        listed = recipes(client, world.firm_a, auth_header(clara)).json()
+        response = client.post(
+            f"/firms/{world.firm_a}/catalog/recipes",
+            json=recipe_body(unit_id, resource_id, name="Otra"),
+            headers=auth_header(clara),
+        )
+
+        assert "Revoque del estudio" in {recipe["name"] for recipe in listed}
+        assert response.status_code == 403
+
+    def test_a_name_the_firm_already_uses_is_a_409(
+        self, client, world, auth_header, unit_id, resource_id, add_firm_recipe
+    ):
+        add_firm_recipe(world.firm_a, name="Revoque del estudio")
+
+        response = client.post(
+            f"/firms/{world.firm_a}/catalog/recipes",
+            json=recipe_body(unit_id, resource_id),
+            headers=auth_header(world.account_a),
+        )
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == FIRM_RECIPE_NAME_TAKEN
+
+    def test_a_general_recipe_s_name_is_allowed(
+        self, client, world, auth_header, unit_id, resource_id
+    ):
+        response = client.post(
+            f"/firms/{world.firm_a}/catalog/recipes",
+            json=recipe_body(unit_id, resource_id, name=WALL),
+            headers=auth_header(world.account_a),
+        )
+
+        assert response.status_code == 201
+
+    def test_editing_replaces_it(
+        self, client, world, auth_header, unit_id, resource_id, add_firm_recipe
+    ):
+        recipe = add_firm_recipe(world.firm_a)
+
+        response = client.put(
+            f"/firms/{world.firm_a}/catalog/recipes/{recipe}",
+            json=recipe_body(unit_id, resource_id, name="Revoque fino"),
+            headers=auth_header(world.account_a2),
+        )
+
+        assert response.status_code == 200
+        assert response.json()["name"] == "Revoque fino"
+        assert [line["resource_id"] for line in response.json()["lines"]] == [resource_id[CEMENT]]
+
+    def test_deactivating_drops_it_from_the_listing(
+        self, client, world, auth_header, add_firm_recipe
+    ):
+        recipe = add_firm_recipe(world.firm_a)
+
+        response = client.delete(
+            f"/firms/{world.firm_a}/catalog/recipes/{recipe}",
+            headers=auth_header(world.account_a),
+        )
+
+        assert response.status_code == 204
+        listed = recipes(client, world.firm_a, auth_header(world.account_a)).json()
+        assert recipe not in {row["id"] for row in listed}
+
+    @pytest.mark.parametrize("method", ["put", "delete"])
+    def test_a_general_recipe_is_a_404(
+        self, client, world, auth_header, unit_id, resource_id, recipe_id, method
+    ):
+        """ADR-006 rule 2: no firm route writes the system catalogue, and it
+        answers as if the recipe were not there."""
+        response = client.request(
+            method.upper(),
+            f"/firms/{world.firm_a}/catalog/recipes/{recipe_id[WALL]}",
+            json=recipe_body(unit_id, resource_id) if method == "put" else None,
+            headers=auth_header(world.account_a),
+        )
+
+        assert response.status_code == 404
+
+    @pytest.mark.parametrize("method", ["put", "delete"])
+    def test_another_firm_s_recipe_is_a_404(
+        self, client, world, auth_header, unit_id, resource_id, add_firm_recipe, method
+    ):
+        theirs = add_firm_recipe(world.firm_b)
+
+        response = client.request(
+            method.upper(),
+            f"/firms/{world.firm_a}/catalog/recipes/{theirs}",
+            json=recipe_body(unit_id, resource_id) if method == "put" else None,
+            headers=auth_header(world.account_a),
+        )
+
+        assert response.status_code == 404

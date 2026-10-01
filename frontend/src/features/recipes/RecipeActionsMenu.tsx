@@ -1,18 +1,19 @@
 import { ActionIcon, Menu } from "@mantine/core";
-import type { RecipeOut } from "./types";
+import type { RecipeOut } from "../catalog/types";
 
-interface RecipeAdminActionsMenuProps {
+interface RecipeActionsMenuProps {
   recipe: RecipeOut;
   onEdit: (recipe: RecipeOut) => void;
   onDeactivate: (recipe: RecipeOut) => void;
 }
 
-/** What support can do to one recipe, same shape as MaterialActionsMenu. */
-export function RecipeAdminActionsMenu({
+/** Edit or deactivate one recipe: support's on a general one (HU-8), an owner's
+ * or architect's on their firm's own (HU-9). Same shape as MaterialActionsMenu. */
+export function RecipeActionsMenu({
   recipe,
   onEdit,
   onDeactivate,
-}: RecipeAdminActionsMenuProps) {
+}: RecipeActionsMenuProps) {
   return (
     <Menu position="bottom-end" withinPortal>
       <Menu.Target>

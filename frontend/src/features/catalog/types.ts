@@ -33,6 +33,11 @@ export interface RecipeLineOut {
   currency: string;
 }
 
+/** Where a recipe comes from: the system catalogue support maintains, or the
+ * firm's own (HU-9). What the cards badge, the browser filters by, and what
+ * decides whether a card offers edit and deactivate at all. */
+export type RecipeOrigin = "general" | "firm";
+
 /** A recipe with everything one unit of it takes. What HU-4's browser lists
  * and HU-5's "Agregar al cómputo" picks from. */
 export interface RecipeOut {
@@ -40,5 +45,28 @@ export interface RecipeOut {
   name: string;
   description: string | null;
   unit: UnitRef;
+  origin: RecipeOrigin;
   lines: RecipeLineOut[];
+}
+
+/** One line of the master-detail form: this material, this much per unit. */
+export interface RecipeLineWrite {
+  resource_id: number;
+  /** Decimal string, scale 4 (recipe_resource.quantity_per_unit is
+   * NUMERIC(12,4) — a different scale from the take-off's NUMERIC(14,3)). */
+  quantity_per_unit: string;
+}
+
+/** The create/edit form for one recipe: header and every one of its lines,
+ * replaced whole. The backend rejects an empty lines array and a repeated
+ * resource_id across lines (422) — the form validates both before sending.
+ *
+ * Here and not in catalog-admin because two screens send it: support's for a
+ * general recipe (HU-8) and a firm's for its own (HU-9), to the same shape
+ * (backend/app/schemas/catalog_admin.py's RecipeWrite). */
+export interface RecipeWrite {
+  name: string;
+  description: string | null;
+  unit_of_measure_id: number;
+  lines: RecipeLineWrite[];
 }

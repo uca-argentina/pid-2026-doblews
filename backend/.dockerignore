@@ -1,0 +1,13 @@
+# Local environment and caches: rebuilt inside the image, or not needed there.
+.venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.ruff_cache
+
+# The test suite never runs in the deployed container.
+tests
+
+# Never bake configuration into the image, even if one shows up in backend/.
+.env
+.env.*

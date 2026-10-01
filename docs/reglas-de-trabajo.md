@@ -45,7 +45,7 @@ Una historia está "terminada" solo si se cumplen **todas** estas condiciones:
 1. Código mergeado a `main` (no en una rama, no "casi listo").
 2. Migración de base de datos aplicada y versionada (si corresponde).
 3. Cumple **todos** los criterios de aceptación de la tarjeta/historia — verificados a mano, no de memoria.
-4. Probado en el ambiente de deploy (Render/Vercel), no solo en localhost.
+4. Probado en el ambiente de deploy (Azure, ver [ADR-008](adr/0008-azure-deploy.md)), no solo en localhost.
 5. Sin errores de lint ni de build.
 6. Responsive verificado en un ancho mobile (375px) si la historia toca UI.
 

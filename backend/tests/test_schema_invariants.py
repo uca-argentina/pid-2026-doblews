@@ -205,8 +205,8 @@ INSERT_RESOURCE = (
 )
 
 INSERT_RECIPE = (
-    "INSERT INTO recipe (name, unit_of_measure_id)"
-    " VALUES (:name, (SELECT id FROM unit_of_measure WHERE code = 'm2')) RETURNING id"
+    "INSERT INTO recipe (name, unit_of_measure_id, firm_id)"
+    " VALUES (:name, (SELECT id FROM unit_of_measure WHERE code = 'm2'), :firm) RETURNING id"
 )
 
 
@@ -220,8 +220,9 @@ def new_resource(db: Connection, name: str = "Material de prueba", **overrides) 
     ).scalar_one()
 
 
-def new_recipe(db: Connection, name: str = "Receta de prueba") -> int:
-    return db.execute(text(INSERT_RECIPE), {"name": name}).scalar_one()
+def new_recipe(db: Connection, name: str = "Receta de prueba", firm: int | None = None) -> int:
+    """A general recipe, or a firm's own when firm is given (HU-9)."""
+    return db.execute(text(INSERT_RECIPE), {"name": name, "firm": firm}).scalar_one()
 
 
 def test_a_resource_type_outside_the_three_is_refused(db: Connection) -> None:
@@ -268,11 +269,38 @@ def test_a_deactivated_resource_frees_its_name(db: Connection) -> None:
     assert active == 1
 
 
-def test_two_active_recipes_cannot_share_a_name(db: Connection) -> None:
+def test_two_active_general_recipes_cannot_share_a_name(db: Connection) -> None:
+    """The guarantee a single (firm_id, name) index would have lost: NULL is never
+    equal to NULL in a unique index, hence a partial one just for the general
+    recipes (ADR-006 section 2)."""
     new_recipe(db)
 
-    with pytest.raises(IntegrityError, match="uq_recipe_name_active"):
+    with pytest.raises(IntegrityError, match="uq_recipe_name_active_general"):
         new_recipe(db, name="RECETA DE PRUEBA")
+
+
+def test_two_active_recipes_of_one_firm_cannot_share_a_name(db: Connection, world) -> None:
+    new_recipe(db, firm=world.firm_a)
+
+    with pytest.raises(IntegrityError, match="uq_recipe_name_active_firm"):
+        new_recipe(db, name="RECETA DE PRUEBA", firm=world.firm_a)
+
+
+def test_a_firm_recipe_may_share_a_general_recipe_s_name(db: Connection, world) -> None:
+    """HU-9: the origin tells them apart, so the name does not have to."""
+    new_recipe(db)
+    new_recipe(db, firm=world.firm_a)
+
+
+def test_two_firms_may_each_have_a_recipe_of_the_same_name(db: Connection, world) -> None:
+    """Uniqueness is within a firm: one firm's names say nothing about another's."""
+    new_recipe(db, firm=world.firm_a)
+    new_recipe(db, firm=world.firm_b)
+
+
+def test_a_recipe_cannot_belong_to_a_firm_that_does_not_exist(db: Connection) -> None:
+    with pytest.raises(IntegrityError, match="fk_recipe_firm_id"):
+        new_recipe(db, firm=999_999)
 
 
 def test_a_recipe_line_must_carry_a_positive_yield(db: Connection) -> None:
@@ -346,3 +374,179 @@ def test_editing_a_resource_moves_updated_at_but_not_the_price_date(db: Connecti
     ).one()
     assert row.touched is True
     assert row.priced.year == 2000
+
+
+# --- saved budget versions --------------------------------------------------
+#
+# ADR-007's three tables. What is checked here is what the schema promises on its
+# own: the numbering cannot repeat inside a work, a version cannot be hung off
+# another firm's work, the amounts cannot be nonsense, and a version takes its
+# items and its lines with it. Which number comes next, and that a version is
+# never edited, are the service's and the route table's jobs — ADR-007 section 5
+# splits them on purpose, and so do their tests.
+
+INSERT_VERSION = (
+    "INSERT INTO budget_version"
+    " (project_id, firm_id, version_number, total, currency, prices_as_of, created_by)"
+    " VALUES (:project, :firm, :number, :total, 'ARS', now(), :account) RETURNING id"
+)
+
+INSERT_ITEM = (
+    "INSERT INTO budget_version_item"
+    " (budget_version_id, resource_id, resource_name, resource_type, unit_abbreviation,"
+    "  quantity, unit_price, currency, subtotal)"
+    " VALUES (:version, :resource, 'Material de prueba', :type, 'u',"
+    "         :quantity, :price, 'ARS', :subtotal)"
+)
+
+INSERT_LINE = (
+    "INSERT INTO budget_version_line (budget_version_id, recipe_id, quantity, note)"
+    " VALUES (:version, :recipe, :quantity, NULL)"
+)
+
+
+def new_version(db: Connection, world, number: int = 1, **overrides) -> int:
+    """A valid version of work A, plus whatever the caller wants wrong about it."""
+    row = {
+        "project": world.project_a,
+        "firm": world.firm_a,
+        "number": number,
+        "total": 1000,
+        "account": world.account_a,
+    } | overrides
+    return db.execute(text(INSERT_VERSION), row).scalar_one()
+
+
+def new_item(db: Connection, version: int, **overrides) -> None:
+    row = {
+        "version": version,
+        "resource": 1,
+        "type": "material",
+        "quantity": 10,
+        "price": 100,
+        "subtotal": 1000,
+    } | overrides
+    db.execute(text(INSERT_ITEM), row)
+
+
+def test_a_work_cannot_have_two_versions_with_the_same_number(db: Connection, world) -> None:
+    """The schema's half of the correlative numbering (ADR-007 section 5, rule 4).
+
+    Which number is next is decided by the service, under a lock; this is the
+    floor underneath it, for the day two saves race and the service loses.
+    """
+    new_version(db, world, number=1)
+
+    with pytest.raises(IntegrityError, match="uq_budget_version_project_id_version_number"):
+        new_version(db, world, number=1)
+
+
+def test_the_numbering_is_per_work_and_not_global(db: Connection, world) -> None:
+    """Two works each having their own v1 is the point: a global sequence would
+    let one firm infer how many versions another saves, from its own gaps."""
+    new_version(db, world, number=1)
+    new_version(
+        db, world, number=1, project=world.project_b, firm=world.firm_b, account=world.account_b
+    )
+
+    total = db.execute(text("SELECT count(*) FROM budget_version")).scalar_one()
+    assert total == 2
+
+
+def test_a_version_cannot_be_hung_off_another_firms_work(db: Connection, world) -> None:
+    """Same isolation invariant as a take-off line, one table further on.
+
+    project_a belongs to firm A, so claiming it under firm B's id is refused by
+    the composite FK against project (id, firm_id).
+    """
+    with pytest.raises(IntegrityError, match="fk_budget_version_project_id"):
+        new_version(db, world, firm=world.firm_b)
+
+
+def test_a_version_number_must_be_positive(db: Connection, world) -> None:
+    """v0 is not a version, and the service counts from 1."""
+    with pytest.raises(IntegrityError, match="ck_budget_version_version_number_positive"):
+        new_version(db, world, number=0)
+
+
+def test_a_version_total_cannot_be_negative(db: Connection, world) -> None:
+    """Zero is reachable only in theory — an empty take-off is refused before
+    this — but below zero is always a bug in what was frozen."""
+    with pytest.raises(IntegrityError, match="ck_budget_version_total_not_negative"):
+        new_version(db, world, total=-1)
+
+
+def test_a_frozen_item_keeps_its_resource_type_among_the_three(db: Connection, world) -> None:
+    """The type travels copied, so it carries its own CHECK: the item has to
+    render into Materiales, Mano de obra or Equipos with no join to resource."""
+    version = new_version(db, world)
+
+    with pytest.raises(IntegrityError, match="ck_budget_version_item_resource_type_valid"):
+        new_item(db, version, type="materials")
+
+
+def test_a_frozen_item_must_carry_a_positive_quantity(db: Connection, world) -> None:
+    version = new_version(db, world)
+
+    with pytest.raises(IntegrityError, match="ck_budget_version_item_quantity_positive"):
+        new_item(db, version, quantity=0)
+
+
+def test_a_frozen_item_keeps_its_price_even_if_the_resource_is_gone(db: Connection, world) -> None:
+    """resource_id travels without a foreign key on purpose (ADR-007 section 2).
+
+    A frozen item is a receipt: it has to show its numbers whether or not that
+    resource still exists, so an id pointing at nothing is accepted here — which
+    is exactly what a plain FK would have refused.
+    """
+    version = new_version(db, world)
+
+    new_item(db, version, resource=987654321)
+
+    stored = db.execute(
+        text("SELECT subtotal FROM budget_version_item WHERE budget_version_id = :v"),
+        {"v": version},
+    ).scalar_one()
+    assert stored == 1000
+
+
+def test_a_version_line_points_at_a_recipe_that_exists(db: Connection, world) -> None:
+    """The opposite of the item above, and the reason they are two tables.
+
+    A line exists to rebuild the draft, and loading has to know whether that
+    recipe is still active today — so here the reference is live and a dangling
+    id is refused.
+    """
+    version = new_version(db, world)
+
+    with pytest.raises(IntegrityError, match="fk_budget_version_line_recipe_id"):
+        db.execute(
+            text(INSERT_LINE),
+            {"version": version, "recipe": 987654321, "quantity": 120},
+        )
+
+
+def test_deleting_a_version_takes_its_items_and_lines_with_it(db: Connection, world) -> None:
+    """The cascade of ADR-007 section 1, which goes against modelo-datos 3.3 on
+    purpose: an item and a line are composition of one aggregate, not entities.
+
+    Nothing in the app deletes a version — HU-12 leaves that out of scope — so
+    this guards the shape of the aggregate rather than a feature.
+    """
+    version = new_version(db, world)
+    new_item(db, version)
+    db.execute(
+        text(INSERT_LINE),
+        {"version": version, "recipe": new_recipe(db, "Receta de una versión"), "quantity": 120},
+    )
+
+    db.execute(text("DELETE FROM budget_version WHERE id = :v"), {"v": version})
+
+    orphans = db.execute(
+        text(
+            "SELECT (SELECT count(*) FROM budget_version_item WHERE budget_version_id = :v)"
+            " + (SELECT count(*) FROM budget_version_line WHERE budget_version_id = :v)"
+        ),
+        {"v": version},
+    ).scalar_one()
+    assert orphans == 0

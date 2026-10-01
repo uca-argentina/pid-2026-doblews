@@ -9,6 +9,7 @@ import {
   updateRecipe,
   updateResource,
 } from "./catalogAdminService";
+import type { RecipeWriter } from "../recipes/types";
 import type { RecipeWrite, ResourceWrite } from "./types";
 
 /** Query keys for the catalogue admin screens.
@@ -113,4 +114,22 @@ export function useDeactivateRecipe() {
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: catalogAdminKeys.recipes() }),
   });
+}
+
+/** HU-8's side of the shared recipe modals: support's endpoints, and the
+ * platform cache they refresh. */
+export function useAdminRecipeWriter(): RecipeWriter {
+  const createRecipe = useCreateRecipe();
+  const updateRecipe = useUpdateRecipe();
+  const deactivateRecipe = useDeactivateRecipe();
+
+  return {
+    save: (payload, recipeId) =>
+      recipeId === null
+        ? createRecipe.mutateAsync(payload)
+        : updateRecipe.mutateAsync({ recipeId, payload }),
+    saving: createRecipe.isPending || updateRecipe.isPending,
+    deactivate: (recipeId) => deactivateRecipe.mutateAsync(recipeId),
+    deactivating: deactivateRecipe.isPending,
+  };
 }

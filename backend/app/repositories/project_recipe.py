@@ -35,16 +35,22 @@ class TakeoffLineEntry:
 
 @dataclass(frozen=True)
 class TakeoffMaterialEntry:
-    """One material of the take-off, summed across every line that uses it.
+    """One resource of the take-off, summed across every line that uses it.
 
-    cost is always computed here. Whether the caller may see it is decided at the
-    API, because project.cost.view is a permission and this is a read.
+    Named for the materials it only held until T-06, when labour and equipment
+    arrived: `type` is what tells the three apart, and HU-11 groups by it.
+
+    cost and unit_price are always computed here. Whether the caller may see them
+    is decided at the API, because project.cost.view is a permission and this is
+    a read.
     """
 
     resource_id: int
     name: str
+    type: str
     unit: UnitLabel
     quantity: Decimal
+    unit_price: Decimal
     cost: Decimal
     currency: str
     price_updated_at: datetime
@@ -106,7 +112,13 @@ class ProjectRecipeRepository(FirmScopedRepository[ProjectRecipe]):
         ).first()
 
     def materials(self, project_id: int) -> list[TakeoffMaterialEntry]:
-        """What the work needs: every material, with its total quantity and cost.
+        """What the work needs: every resource, with its total quantity and cost.
+
+        Every resource and not only the materials: since T-06 a recipe also
+        yields hours of labour and of equipment, and HU-10 asks for them on the
+        same screen. Each row carries its `type`, which is what HU-11 groups the
+        budget by, and its `unit_price`, the reference price the subtotal of that
+        group is built from.
 
         The query of ADR-003 section 2. Each line is multiplied out by its
         recipe's yields (120 m2 x 60 bricks per m2) and the products are summed
@@ -131,9 +143,11 @@ class ProjectRecipeRepository(FirmScopedRepository[ProjectRecipe]):
             .with_only_columns(
                 Resource.id,
                 Resource.name,
+                Resource.type,
                 UnitOfMeasure.code,
                 UnitOfMeasure.abbreviation,
                 func.round(func.sum(taken), 3),
+                Resource.reference_price,
                 func.round(func.sum(taken * Resource.reference_price), 2),
                 Resource.currency,
                 Resource.price_updated_at,
@@ -150,8 +164,10 @@ class ProjectRecipeRepository(FirmScopedRepository[ProjectRecipe]):
             TakeoffMaterialEntry(
                 resource_id=resource_id,
                 name=name,
+                type=resource_type,
                 unit=UnitLabel(code, abbreviation),
                 quantity=quantity,
+                unit_price=unit_price,
                 cost=cost,
                 currency=currency,
                 price_updated_at=price_updated_at,
@@ -159,9 +175,11 @@ class ProjectRecipeRepository(FirmScopedRepository[ProjectRecipe]):
             for (
                 resource_id,
                 name,
+                resource_type,
                 code,
                 abbreviation,
                 quantity,
+                unit_price,
                 cost,
                 currency,
                 price_updated_at,

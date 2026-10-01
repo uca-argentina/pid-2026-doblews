@@ -83,16 +83,27 @@ class TestRead:
             "ARS",
         )
 
-        assert body["total_cost"] == "2665800.00"
+        # 2,665,800 of materials plus T-06's hours: 120 h of Oficial and of Ayudante.
+        assert body["total_cost"] == "3877800.00"
         assert body["currency"] == "ARS"
         assert body["prices_as_of"] is not None
+
+    def test_every_resource_says_which_kind_it_is(self, client, world, team, wall, auth_header):
+        """HU-10 put labour and equipment on this screen; `type` is what lets it
+        show the three apart instead of calling hours a material."""
+        body = client.get(takeoff_url(world), headers=auth_header(team["lead"])).json()
+
+        by_name = {material["name"]: material["type"] for material in body["materials"]}
+
+        assert by_name[BRICK] == "material"
+        assert by_name["Oficial"] == "labor"
 
     @pytest.mark.parametrize("role", ["collaborator", "viewer", "owner"])
     def test_these_roles_see_the_costs(self, client, world, team, wall, auth_header, role):
         """viewer holds project.cost.view; the owner sees them through project.view_all."""
         body = client.get(takeoff_url(world), headers=auth_header(team[role])).json()
 
-        assert body["total_cost"] == "2665800.00"
+        assert body["total_cost"] == "3877800.00"
         assert all(material["cost"] is not None for material in body["materials"])
 
     def test_the_client_sees_quantities_and_no_costs(self, client, world, team, wall, auth_header):
@@ -192,6 +203,21 @@ class TestCreate:
         response = client.post(
             lines_url(world),
             json={"recipe_id": recipe_id[WALL], "quantity": "1"},
+            headers=auth_header(team["lead"]),
+        )
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == RECIPE_NOT_AVAILABLE
+
+    def test_another_firm_s_recipe_is_the_same_409(
+        self, client, world, team, auth_header, add_firm_recipe
+    ):
+        """Same status and body as a retired recipe (ADR-006 rule 1)."""
+        theirs = add_firm_recipe(world.firm_b)
+
+        response = client.post(
+            lines_url(world),
+            json={"recipe_id": theirs, "quantity": "1"},
             headers=auth_header(team["lead"]),
         )
 

@@ -28,19 +28,30 @@ class TakeoffError(Exception):
         self.detail = detail
 
 
-def _check_recipe(db: Session, recipe_id: int) -> None:
-    """May a new line be loaded with this recipe?
+def _check_recipe(db: Session, recipe_id: int, firm_id: int) -> None:
+    """May a new line of this firm be loaded with this recipe?
 
     Only while it is active. The foreign key already refuses an id that does not
     exist, but it cannot know about is_active: a recipe support retired (HU-8)
     still exists, and ADR-005 section 6 says it "deja de ofrecerse para cargar".
 
-    Missing and retired get the same refusal because they are the same situation
-    for the person at the form: the picker offered something that is no longer
-    there. A missing id would otherwise surface as an IntegrityError, a 500.
+    And only if it is a general recipe or this firm's own (ADR-006 rule 1). No
+    constraint can say so: project_recipe.recipe_id is a plain foreign key, and
+    no CHECK looks into another table.
+
+    Missing, retired and another firm's all get the same refusal. The first two
+    are the same situation for the person at the form: the picker offered
+    something that is no longer there, and a missing id would otherwise surface
+    as an IntegrityError, a 500. The third must be indistinguishable from them,
+    or the answer would confirm that some other firm has a recipe with that id
+    (ADR-002 section 9.2).
     """
-    is_active = db.scalar(select(Recipe.is_active).where(Recipe.id == recipe_id))
-    if not is_active:
+    recipe = db.execute(
+        select(Recipe.is_active, Recipe.firm_id).where(Recipe.id == recipe_id)
+    ).first()
+    if recipe is None or not recipe.is_active:
+        raise TakeoffError(RECIPE_NOT_AVAILABLE)
+    if recipe.firm_id is not None and recipe.firm_id != firm_id:
         raise TakeoffError(RECIPE_NOT_AVAILABLE)
 
 
@@ -65,7 +76,7 @@ def add_line(
     No check against an existing line of the same recipe: two lines of one
     recipe are how a take-off is measured per storey (ADR-003 section 5).
     """
-    _check_recipe(db, recipe_id)
+    _check_recipe(db, recipe_id, project.firm_id)
 
     line = ProjectRecipe(
         project_id=project.id,

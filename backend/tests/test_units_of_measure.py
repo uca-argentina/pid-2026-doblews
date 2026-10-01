@@ -1,7 +1,7 @@
 """GET /units-of-measure: the platform's catalogue, per HU-0.
 
 Two things are being proved here. That the seed migration loaded exactly the
-seven units HU-0 lists — typed out by hand, for the same reason as
+seven units HU-0 lists plus the hour T-06 adds — typed out by hand, for the same reason as
 test_rbac_catalog_seed.py: a check that reads the seed's own source only
 proves the source equals itself. And that the endpoint demands a session but
 nothing else, since the catalogue is global and holds no firm's data.
@@ -9,7 +9,7 @@ nothing else, since the catalogue is global and holds no firm's data.
 
 from sqlalchemy import Connection, text
 
-# (code, magnitude), from HU-0's acceptance criteria. name/abbreviation are
+# (code, magnitude), from HU-0's acceptance criteria, plus T-06's hour. name/abbreviation are
 # exercised through the endpoint response below instead of duplicated here.
 EXPECTED_UNITS: dict[str, str] = {
     "m2": "superficie",
@@ -19,6 +19,7 @@ EXPECTED_UNITS: dict[str, str] = {
     "kg": "peso",
     "bolsa": "cantidad",
     "lt": "volumen",
+    "h": "tiempo",
 }
 
 
@@ -52,8 +53,8 @@ def test_returns_the_shape_the_frontend_select_needs_in_code_order(client, world
     body = units_of_measure(client, auth_header(world.account_a)).json()
 
     assert [row["code"] for row in body] == sorted(EXPECTED_UNITS)
-    assert body[3] == {
-        "id": body[3]["id"],
+    assert body[4] == {
+        "id": body[4]["id"],
         "code": "m2",
         "name": "Metro cuadrado",
         "abbreviation": "m2",

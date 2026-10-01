@@ -52,6 +52,12 @@ class TestGetRecipe:
         with pytest.raises(RecipeNotFoundError):
             get_recipe(db_session, 999_999)
 
+    def test_a_firm_s_own_recipe_is_not_found(self, db_session, world, add_firm_recipe):
+        """Support administers the system catalogue only. A firm's recipe is that
+        firm's content (ADR-002), so to this module it does not exist."""
+        with pytest.raises(RecipeNotFoundError):
+            get_recipe(db_session, add_firm_recipe(world.firm_a))
+
 
 class TestCreateResource:
     def test_creates_an_active_resource(self, db_session, unit_id):
@@ -205,6 +211,25 @@ class TestDeactivateResource:
 
         assert "Pared de ladrillo común 15cm" in error.value.detail
 
+    def test_a_firm_s_recipe_neither_blocks_it_nor_is_named(
+        self, db_session, unit_id, world, db, add_firm_recipe
+    ):
+        """Support can neither see nor edit a firm's recipe, so it cannot be what
+        stops them. The recipe keeps its line and keeps computing (HU-9)."""
+        resource = make_resource(db_session, unit_id)
+        recipe = add_firm_recipe(world.firm_a)
+        db.execute(
+            text(
+                "INSERT INTO recipe_resource (recipe_id, resource_id, quantity_per_unit)"
+                " VALUES (:r, :s, 1)"
+            ),
+            {"r": recipe, "s": resource.id},
+        )
+
+        deactivate_resource(db_session, resource.id)
+
+        assert db_session.get(Resource, resource.id).is_active is False
+
     def test_freed_once_the_recipe_is_deactivated(self, db_session, resource_id, recipe_id):
         deactivate_recipe(db_session, recipe_id["Pared de ladrillo común 15cm"])
 
@@ -275,6 +300,22 @@ class TestCreateRecipe:
             )
 
         assert error.value.detail == RECIPE_NAME_TAKEN
+
+    def test_a_firm_s_recipe_does_not_take_the_name(
+        self, db_session, unit_id, resource_id, world, add_firm_recipe
+    ):
+        """Only general recipes compete for a general recipe's name (ADR-006)."""
+        add_firm_recipe(world.firm_a, name="Revoque grueso")
+
+        recipe = create_recipe(
+            db_session,
+            name="Revoque grueso",
+            description=None,
+            unit_of_measure_id=unit_id["m2"],
+            lines=[RecipeLineInput(resource_id["Ladrillo común"], Decimal("1"))],
+        )
+
+        assert recipe.firm_id is None
 
     def test_refuses_a_line_pointing_at_a_deactivated_resource(
         self, db_session, unit_id, resource_id, recipe_id

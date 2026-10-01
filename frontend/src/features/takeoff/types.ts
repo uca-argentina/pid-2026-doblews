@@ -4,6 +4,7 @@
 // lib/format.ts prints them.
 
 import type { UnitRef } from "../catalog/types";
+import type { ResourceType } from "../catalog/resourceTypes";
 
 /** The recipe a line measures: enough to render it, not the catalogue card. */
 export interface RecipeRef {
@@ -22,10 +23,14 @@ export interface TakeoffLineOut {
   note: string | null;
 }
 
-/** One material the work needs, summed across every line that uses it. */
+/** One resource the work needs, summed across every line that uses it.
+ *
+ * Not only materials since T-06: a recipe also yields hours of labour and of
+ * equipment (HU-10). `type` is what lets the screen show the three apart. */
 export interface TakeoffMaterialOut {
   resource_id: number;
   name: string;
+  type: ResourceType;
   unit: UnitRef;
   quantity: string;
   /** null when the caller may not see costs: the project client (ADR-003

@@ -14,10 +14,16 @@ import type { RecipeOut } from "./types";
 
 interface RecipeCardProps {
   recipe: RecipeOut;
-  /** Something to do with this recipe, shown at the foot of the card. Empty in
-   * HU-4's catalogue; HU-5's picker puts its "Agregar" button here. */
+  /** Something to do with this recipe, shown at the foot of the card. HU-5's
+   * picker puts its "Agregar" button here; HU-9's catalogue, the edit and
+   * deactivate menu of the firm's own recipes. */
   action?: ReactNode;
+  /** Whether to badge where the recipe comes from (HU-9). On by default: a
+   * firm's catalogue and HU-5's picker mix both origins. */
+  showOrigin?: boolean;
 }
+
+const ORIGIN_LABEL = { general: "General", firm: "Del estudio" } as const;
 
 /** One recipe: what it is, what it is measured in, and — on demand — what one
  * unit of it takes.
@@ -27,7 +33,11 @@ interface RecipeCardProps {
  * catalogue is a wall of numbers, and the name and description are usually
  * enough to tell recipes apart. Unfolding is what someone does to compare two
  * similar ones before choosing. */
-export function RecipeCard({ recipe, action }: RecipeCardProps) {
+export function RecipeCard({
+  recipe,
+  action,
+  showOrigin = true,
+}: RecipeCardProps) {
   const [opened, lines] = useDisclosure(false);
 
   return (
@@ -41,6 +51,21 @@ export function RecipeCard({ recipe, action }: RecipeCardProps) {
             por {recipe.unit.abbreviation}
           </Badge>
         </Group>
+
+        {showOrigin && (
+          // In a Group so the badge keeps its own width: Stack stretches its
+          // children. Filled for the firm's own, so they stand out among the
+          // general ones they share the list with.
+          <Group>
+            <Badge
+              size="sm"
+              variant={recipe.origin === "firm" ? "filled" : "outline"}
+              color={recipe.origin === "firm" ? "obra" : "gray"}
+            >
+              {ORIGIN_LABEL[recipe.origin]}
+            </Badge>
+          </Group>
+        )}
 
         {recipe.description && (
           <Text size="sm" c="dimmed" lineClamp={opened ? undefined : 2}>

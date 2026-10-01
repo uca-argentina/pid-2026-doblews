@@ -1,5 +1,5 @@
-"""The seeded catalogue, checked against ADR-002 section 7, ADR-003 section 8
-and ADR-005 section 2.
+"""The seeded catalogue, checked against ADR-002 section 7, ADR-003 section 8,
+ADR-005 section 2 and ADR-006 section 3.
 
 The expected matrix is typed out here by hand rather than imported from the seed
 migrations. That duplication is the test: a check that reads the same source as
@@ -11,7 +11,9 @@ from sqlalchemy import Connection, text
 
 # (role code, scope) -> permission codes it grants. The catalogue.* and
 # project.recipe.*/project.cost.* rows come from ADR-003 section 8; catalog.manage
-# comes from ADR-005 section 2; everything else from ADR-002 section 7.
+# comes from ADR-005 section 2; recipe.manage from ADR-006 section 3;
+# project.budget.manage from ADR-007 section 4; everything else from ADR-002
+# section 7.
 EXPECTED: dict[tuple[str, str], set[str]] = {
     ("support", "platform"): {
         "firm.create",
@@ -35,8 +37,17 @@ EXPECTED: dict[tuple[str, str], set[str]] = {
         "project.create",
         "project.view_all",
         "catalog.view",
+        "recipe.manage",
     },
-    ("architect", "firm"): {"firm.view", "member.view", "project.create", "catalog.view"},
+    ("architect", "firm"): {
+        "firm.view",
+        "member.view",
+        "project.create",
+        "catalog.view",
+        "recipe.manage",
+    },
+    # No recipe.manage: the client reads the firm's recipes and never writes them
+    # (HU-9).
     ("client", "firm"): {"firm.view", "catalog.view"},
     ("lead", "project"): {
         "project.view",
@@ -47,6 +58,7 @@ EXPECTED: dict[tuple[str, str], set[str]] = {
         "project.recipe.view",
         "project.recipe.manage",
         "project.cost.view",
+        "project.budget.manage",
     },
     ("collaborator", "project"): {
         "project.view",
@@ -55,7 +67,11 @@ EXPECTED: dict[tuple[str, str], set[str]] = {
         "project.recipe.view",
         "project.recipe.manage",
         "project.cost.view",
+        "project.budget.manage",
     },
+    # No project.budget.manage: the viewer reads the budget and its versions
+    # through project.cost.view, and never freezes or replaces the draft
+    # (ADR-007 section 4).
     ("viewer", "project"): {
         "project.view",
         "project.member.view",

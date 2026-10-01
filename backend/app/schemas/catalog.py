@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -60,4 +61,8 @@ class RecipeOut(BaseModel):
     name: str
     description: str | None
     unit: UnitRef
+    # "general" is the system catalogue, "firm" this firm's own (HU-9). What
+    # the screens badge and filter by, and what decides whether a card offers
+    # edit and deactivate at all.
+    origin: Literal["general", "firm"]
     lines: list[RecipeLineOut]

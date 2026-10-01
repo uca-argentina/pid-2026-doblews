@@ -166,7 +166,9 @@ La diferencia no es de alcance —las dos opciones viven en el mismo lugar— si
 
 Una receta real de 1 m² de pared es *60 ladrillos + 0,25 bolsas de cemento + 0,5 h de oficial + 0,25 h de ayudante*. Con una tabla `material`, las dos últimas líneas **no se pueden guardar** hasta que existan una tabla `labor`, una tabla `equipment`, y sus dos tablas de receta correspondientes — y a partir de ahí, toda query de costo pasa a ser tres joins en vez de uno. Con `resource`, son cuatro filas de la misma tabla y la query no cambia.
 
-Es la columna *naturaleza* de Presto. **El Sprint 1 siembra únicamente `type = 'material'`**; los otros dos valores existen en el `CHECK` y no tienen filas.
+Es la columna *naturaleza* de Presto. **El Sprint 1 siembra únicamente `type = 'material'`**; los otros dos valores existen en el `CHECK` y no tienen filas. T-06 (Sprint 2) siembra los primeros: `Oficial` y `Ayudante` (`labor`) y `Hormigonera` (`equipment`), con sus horas por m² en las tres recetas sembradas.
+
+> **Precisado por T-05 (2026-09-25).** Cuando `type = 'labor'` o `'equipment'`, la unidad de `resource` (`unit_of_measure_id`) es siempre **`h`** (hora, agregada al catálogo cerrado de `unit_of_measure` por T-06), `reference_price` es el **costo por hora** de esa mano de obra o ese equipo, y en `recipe_resource.quantity_per_unit` el **rendimiento** son las horas que esa receta necesita de ese recurso por cada unidad de receta (ej.: "1 m² de pared lleva 0,5 h de oficial"). No es una tabla ni una columna nueva: son las mismas dos columnas genéricas que esta sección ya describía, con su significado precisado para este caso — exactamente la promesa del párrafo de Consecuencias de más abajo ("el Módulo 1 entra agregando filas con otro `type`, sin tablas nuevas"). Ver [ADR-006](0006-firm-recipes.md) y [ADR-007](0007-budget-versions.md) (T-05).
 
 ### 4. `recipe`, no `building_component`
 
@@ -243,11 +245,11 @@ Composición de recetas dentro de recetas (los *auxiliares* de Presto) · capít
 
 | Tema | Se revisa cuando |
 |---|---|
-| Receta propia del estudio, editable | Un estudio pida ajustar proporciones según su experiencia |
+| ~~Receta propia del estudio, editable~~ | **Resuelto por HU-9 (2026-09-25)**, con [ADR-006](0006-firm-recipes.md) |
 | Copia de la receta hacia la obra | Existan presupuestos cerrados que no deban cambiar retroactivamente |
 | Precios por estudio | Los precios de referencia globales dejen de ser representativos |
 | Precios por proveedor | Entre el Módulo 2 |
-| `labor` y `equipment` sembrados | Se quiera el costo real del componente y no solo el de materiales |
+| ~~`labor` y `equipment` sembrados~~ | **Resuelto por T-06 (2026-09-25)**: la condición se cumplió con HU-10/HU-11 del Sprint 2 |
 | Capítulos / rubros para agrupar | Una obra tenga suficientes líneas como para que el listado plano moleste |
 | Composición de recetas (*auxiliares*) | Aparezcan recetas que compartan submezclas y duplicarlas se vuelva un problema de mantenimiento |
 | Conversión entre unidades | Una receta necesite expresar un insumo en una unidad distinta a la de su catálogo |
