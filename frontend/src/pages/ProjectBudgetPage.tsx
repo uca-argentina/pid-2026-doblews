@@ -1,5 +1,6 @@
 import {
   Alert,
+  Anchor,
   Button,
   Card,
   Center,
@@ -9,12 +10,15 @@ import {
   Stack,
   Text,
 } from "@mantine/core";
+import { useState } from "react";
 import dayjs from "dayjs";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { BudgetGroupSection } from "../features/budget/BudgetGroupSection";
+import { toSectionGroups } from "../features/budget/types";
 import type { BudgetOut } from "../features/budget/types";
 import { useBudget } from "../features/budget/useBudget";
+import { SaveVersionModal } from "../features/budget-versions/SaveVersionModal";
 import { useBudgetAccess } from "../features/budget/useBudgetAccess";
 import { useCurrentFirm } from "../features/firms/firmContext";
 import { useCurrentProject } from "../features/projects/projectContext";
@@ -27,7 +31,7 @@ import { formatMoney } from "../lib/format";
  * is what the empty state links to. It is the draft HU-12 will freeze. */
 export function ProjectBudgetPage() {
   const { firm } = useCurrentFirm();
-  const { project } = useCurrentProject();
+  const { project, can } = useCurrentProject();
   const canView = useBudgetAccess();
 
   if (!canView) {
@@ -40,17 +44,28 @@ export function ProjectBudgetPage() {
     );
   }
 
-  return <BudgetView firmId={firm.id} projectId={project.id} />;
+  return (
+    <BudgetView
+      firmId={firm.id}
+      projectId={project.id}
+      canManage={can("project.budget.manage")}
+    />
+  );
 }
 
 function BudgetView({
   firmId,
   projectId,
+  canManage,
 }: {
   firmId: number;
   projectId: number;
+  canManage: boolean;
 }) {
   const { data: budget, isLoading, isError } = useBudget(firmId, projectId);
+  const [saving, setSaving] = useState(false);
+
+  const versionsPath = `/firms/${firmId}/projects/${projectId}/budget/versions`;
 
   if (isLoading) {
     return (
@@ -71,7 +86,9 @@ function BudgetView({
   // Every group arrives, empty ones included. Nothing at all means the work has
   // no lines, which is the empty state; a group that is merely empty — a work
   // with no equipment — is left out rather than shown as a heading over zero.
-  const groups = budget.groups.filter((group) => group.items.length > 0);
+  const groups = toSectionGroups(budget.groups).filter(
+    (group) => group.items.length > 0,
+  );
 
   if (groups.length === 0) {
     return (
@@ -87,7 +104,20 @@ function BudgetView({
         title="Presupuesto estimado"
         description="Calculado con el cómputo de la obra y los precios de referencia del catálogo. Cambia solo cuando cambia alguno de los dos."
         order={4}
+        action={
+          canManage ? (
+            <Button onClick={() => setSaving(true)}>Guardar versión</Button>
+          ) : undefined
+        }
       />
+
+      {/* The way into HU-12, and not a fifth tab: versions belong to this
+          section, and a fifth tab at 375px costs more than it explains. */}
+      <div>
+        <Anchor component={Link} to={versionsPath} size="sm">
+          Ver versiones guardadas
+        </Anchor>
+      </div>
 
       {groups.map((group) => (
         <BudgetGroupSection
@@ -107,6 +137,16 @@ function BudgetView({
         </Group>
         <PricesNote budget={budget} />
       </Stack>
+
+      {/* Only for those who may freeze the budget: a button that fails is
+          worse than none. */}
+      {canManage && (
+        <SaveVersionModal
+          opened={saving}
+          onClose={() => setSaving(false)}
+          onSaved={() => setSaving(false)}
+        />
+      )}
     </Stack>
   );
 }

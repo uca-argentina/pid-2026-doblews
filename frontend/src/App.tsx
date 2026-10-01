@@ -9,6 +9,8 @@ import { HomeRedirect } from "./pages/HomeRedirect";
 import { LoginPage } from "./pages/LoginPage";
 import { MembersPage } from "./pages/MembersPage";
 import { ProjectBudgetPage } from "./pages/ProjectBudgetPage";
+import { ProjectBudgetVersionPage } from "./pages/ProjectBudgetVersionPage";
+import { ProjectBudgetVersionsPage } from "./pages/ProjectBudgetVersionsPage";
 import { ProjectDetailPage } from "./pages/ProjectDetailPage";
 import { ProjectTakeoffPage } from "./pages/ProjectTakeoffPage";
 import { ProjectTeamPage } from "./pages/ProjectTeamPage";
@@ -105,6 +107,17 @@ function App() {
             <Route index element={<ProjectDetailPage />} />
             <Route path="takeoff" element={<ProjectTakeoffPage />} />
             <Route path="budget" element={<ProjectBudgetPage />} />
+            {/* Under "budget" and not beside it, so the Presupuesto tab stays
+                selected while reading a version: the tab matches on the first
+                segment after the work's id (HU-12). */}
+            <Route
+              path="budget/versions"
+              element={<ProjectBudgetVersionsPage />}
+            />
+            <Route
+              path="budget/versions/:versionId"
+              element={<ProjectBudgetVersionPage />}
+            />
             <Route path="team" element={<ProjectTeamPage />} />
           </Route>
           {/* Every firm role holds catalog.view today, so the gate is for the
