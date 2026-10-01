@@ -212,4 +212,14 @@ Dos cosas que se precisaron al implementar:
 
 **Queda:** HU-12 (camino crítico).
 
+**2026-10-01 (tarde).** **HU-11 terminada** (PRs #29 y #30, mergeados a `dev`). **HU-12 implementada** en tres ramas: esquema (`feat/hu12-budget-versions-schema`), backend (`feat/hu12-budget-versions-back`) y front (`feat/hu12-budget-versions-front`). Las tres tablas de ADR-007, el permiso `project.budget.manage`, las cuatro rutas y la sección de versiones dentro del presupuesto. ADR-007 pasa a **Aceptada**.
+
+Tres cosas que se precisaron al implementar:
+
+- **La inmutabilidad se sostiene por topología, no por un chequeo.** No hay `PUT`, `PATCH` ni `DELETE` bajo `/budget/versions`, y el test que lo cuida compara el conjunto exacto de métodos del prefijo contra los cuatro que existen. Una regla que se sostiene por ausencia de código es justo la que vuelve sola.
+- **`load_version` reusa `add_line` de HU-5** en vez de repetir la validación de recetas, y atrapa su rechazo en lugar de propagarlo: una receta dada de baja no aborta la carga, queda afuera y se reporta. De yapa, la regla de ADR-006 sobre recetas de otro estudio vale al cargar sin código nuevo.
+- **Las versiones no son una quinta tab.** Viven bajo `budget/versions`, con un link desde el Presupuesto: una tab más a 375px cuesta más de lo que explica, y así la tab Presupuesto queda seleccionada mientras se lee una versión.
+
+**Queda:** nada del alcance del sprint. Falta cerrar la Definition of Done de HU-11 y HU-12: promoción `dev → main` y verificación en Azure.
+
 **2026-09-30.** **T-07 implementada** en `chore/t07-deploy-azure` ([ADR-008](../adr/0008-azure-deploy.md)). El deploy es en Azure y no en Render/Vercel, porque los planes gratis de Render y Neon ya estaban ocupados: backend en Container Apps, base en PostgreSQL Flexible Server y frontend en Static Web Apps, todo con costo USD 0. El ambiente ya está andando con las 11 migraciones y el seed demo, este último con una contraseña propia del ambiente. `.github/workflows/deploy.yml` deploya cada push a `main`. T-07 se cierra con la promoción `dev → main` (merge commit), que además es la primera corrida del workflow.
