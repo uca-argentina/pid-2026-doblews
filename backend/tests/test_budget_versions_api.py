@@ -192,9 +192,7 @@ class TestLoad:
 
     @pytest.mark.parametrize("role", ["lead", "collaborator"])
     def test_these_roles_load_a_version(self, client, world, team, version, auth_header, role):
-        response = client.post(
-            self.load_url(world, version["id"]), headers=auth_header(team[role])
-        )
+        response = client.post(self.load_url(world, version["id"]), headers=auth_header(team[role]))
 
         assert response.status_code == 200
         assert response.json() == {"loaded": 1, "skipped": []}
@@ -202,9 +200,7 @@ class TestLoad:
     @pytest.mark.parametrize("role", ["viewer", "client", "owner"])
     def test_these_roles_cannot_load(self, client, world, team, version, auth_header, role):
         """Same permission as saving: replacing the draft is writing it."""
-        response = client.post(
-            self.load_url(world, version["id"]), headers=auth_header(team[role])
-        )
+        response = client.post(self.load_url(world, version["id"]), headers=auth_header(team[role]))
 
         assert response.status_code == 403
 
@@ -225,9 +221,7 @@ class TestLoad:
 
         assert body == {"loaded": 1, "skipped": [SUBFLOOR]}
 
-    def test_loading_leaves_the_version_untouched(
-        self, client, world, team, version, auth_header
-    ):
+    def test_loading_leaves_the_version_untouched(self, client, world, team, version, auth_header):
         client.post(self.load_url(world, version["id"]), headers=auth_header(team["lead"]))
 
         after = client.get(
