@@ -10,6 +10,7 @@ from typing import Annotated
 from pydantic import BaseModel, Field, StringConstraints, field_validator
 
 from app.schemas.catalog import UnitRef
+from app.schemas.catalog_admin import ResourceType
 
 # The limits of project_recipe.quantity, NUMERIC(14,3) and CHECK > 0, so a bad
 # quantity is a 422 naming the field rather than a DataError surfacing as a 500.
@@ -72,7 +73,11 @@ class TakeoffLineOut(BaseModel):
 
 
 class TakeoffMaterialOut(BaseModel):
-    """One material the work needs, summed across every line.
+    """One resource the work needs, summed across every line.
+
+    Since T-06 these are not only materials: a recipe also yields hours of
+    labour and of equipment, and HU-10 asks for them on this same screen, the
+    client included. `type` is what lets the screen show the three apart.
 
     cost is null when the caller may not see costs. The field stays, so the
     frontend reads one shape and only asks whether the value is there.
@@ -80,6 +85,7 @@ class TakeoffMaterialOut(BaseModel):
 
     resource_id: int
     name: str
+    type: ResourceType
     unit: UnitRef
     quantity: Decimal
     cost: Decimal | None
