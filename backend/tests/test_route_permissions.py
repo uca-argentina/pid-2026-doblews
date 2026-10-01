@@ -43,6 +43,12 @@ NO_PERMISSION_REQUIRED = {
 PATH_PARAMETERS = {
     "firm_id": lambda world: world.firm_a,
     "project_id": lambda world: world.project_a,
+    # Deliberately an id that exists nowhere. Every route taking one resolves the
+    # firm and then the work first, so a stranger is refused before the version
+    # is ever looked up — which is the whole point of the test below. Building a
+    # real one would mean saving a budget version inside this fixture, making an
+    # isolation test depend on HU-12's write path.
+    "version_id": lambda world: 1,
 }
 
 
@@ -260,3 +266,35 @@ def _url(endpoint: Endpoint, world) -> str:
 
 def _path_parameter_names(path: str) -> list[str]:
     return [part.split("}")[0] for part in path.split("{")[1:]]
+
+
+# --- a saved budget version is never edited ---------------------------------
+
+
+def test_the_budget_versions_prefix_offers_no_way_to_change_a_version():
+    """ADR-007 section 5, rule 2, as topology rather than as a check.
+
+    HU-12 asks that a saved version never be modified. That is not enforced by a
+    permission or by a service refusing something: it is enforced by there being
+    no endpoint to call. A rule kept by the absence of code is exactly the kind
+    that comes back by accident — someone adds a PATCH to "fix a typo in the
+    note" and nothing else in the system objects — so the absence is asserted
+    here, in the same language modelo-datos section 6 uses for the rest of the
+    route table.
+
+    Four routes, no more: create, list, read, and load back into the draft.
+    Loading is a POST and writes the *take-off*, never the version.
+    """
+    prefix = "/firms/{firm_id}/projects/{project_id}/budget/versions"
+    offered = {
+        (endpoint.method, endpoint.path)
+        for endpoint in ENDPOINTS
+        if endpoint.path.startswith(prefix)
+    }
+
+    assert offered == {
+        ("POST", prefix),
+        ("GET", prefix),
+        ("GET", f"{prefix}/{{version_id}}"),
+        ("POST", f"{prefix}/{{version_id}}/load"),
+    }
