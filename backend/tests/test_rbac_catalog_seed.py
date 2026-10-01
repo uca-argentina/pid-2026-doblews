@@ -11,8 +11,9 @@ from sqlalchemy import Connection, text
 
 # (role code, scope) -> permission codes it grants. The catalogue.* and
 # project.recipe.*/project.cost.* rows come from ADR-003 section 8; catalog.manage
-# comes from ADR-005 section 2; recipe.manage from ADR-006 section 3; everything
-# else from ADR-002 section 7.
+# comes from ADR-005 section 2; recipe.manage from ADR-006 section 3;
+# project.budget.manage from ADR-007 section 4; everything else from ADR-002
+# section 7.
 EXPECTED: dict[tuple[str, str], set[str]] = {
     ("support", "platform"): {
         "firm.create",
@@ -57,6 +58,7 @@ EXPECTED: dict[tuple[str, str], set[str]] = {
         "project.recipe.view",
         "project.recipe.manage",
         "project.cost.view",
+        "project.budget.manage",
     },
     ("collaborator", "project"): {
         "project.view",
@@ -65,7 +67,11 @@ EXPECTED: dict[tuple[str, str], set[str]] = {
         "project.recipe.view",
         "project.recipe.manage",
         "project.cost.view",
+        "project.budget.manage",
     },
+    # No project.budget.manage: the viewer reads the budget and its versions
+    # through project.cost.view, and never freezes or replaces the draft
+    # (ADR-007 section 4).
     ("viewer", "project"): {
         "project.view",
         "project.member.view",
