@@ -2,12 +2,14 @@
 
 **Proyecto:** Proyecto Integral de Desarrollo — UCAio
 **Base:** PostgreSQL 15+ / SQLAlchemy 2.0 / Alembic (ver [ADR-001](adr/0001-stack.md))
-**Última revisión:** 2026-09-06
+**Última revisión:** 2026-10-07
 
 Este documento tiene dos funciones y ninguna más:
 
 1. **Las convenciones de modelado** que aplican a toda tabla del proyecto, presente o futura.
 2. **El estado del modelo**: qué está cerrado, dónde está definido, y qué sigue abierto.
+
+El dibujo del esquema no está acá: es [der.md](der.md), que se genera desde los modelos.
 
 **No** repite el modelo de usuarios, roles y permisos: eso está definido en [ADR-002](adr/0002-authorization-model.md) y esa ADR es la fuente de verdad. Si algo de acá la contradice, gana la ADR.
 
@@ -36,7 +38,10 @@ Tres reglas ordenan todo lo que sigue. Si aparece una discusión de modelado, se
 | `unit_of_measure` | **Cerrado** | [ADR-003](adr/0003-recipe-catalog.md) |
 | `resource` (antes `material`) | **Cerrado** | [ADR-003](adr/0003-recipe-catalog.md) |
 | `recipe`, `recipe_resource`, `project_recipe` (antes `building_component`) | **Cerrado** | [ADR-003](adr/0003-recipe-catalog.md) |
-| Presupuestos, planificación, proveedores | Fuera de alcance | — |
+| Recetas del estudio (`recipe.firm_id`) | **Cerrado** | [ADR-006](adr/0006-firm-recipes.md) |
+| Versiones del presupuesto (`budget_version`, `budget_version_item`, `budget_version_line`) | **Cerrado** | [ADR-007](adr/0007-budget-versions.md) |
+| Planificación (rubros, tareas, dependencias, avance) | Sprint 3, en definición | [sprint-3.md](historias/sprint-3.md) |
+| Proveedores y listas de precios | Sprint 3, en definición | [sprint-3.md](historias/sprint-3.md) |
 
 ---
 
@@ -137,9 +142,15 @@ No duplicamos diccionarios de datos: cada tabla se define en un solo lugar.
 |---|---|
 | `firm`, `account`, `role`, `permission`, `role_permission`, `platform_member`, `firm_member`, `project`, `project_member` | [ADR-002](adr/0002-authorization-model.md) §3-§7 |
 | `unit_of_measure`, `resource`, `recipe`, `recipe_resource`, `project_recipe` | [ADR-003](adr/0003-recipe-catalog.md) §2 |
+| `recipe.firm_id` | [ADR-006](adr/0006-firm-recipes.md) |
+| `budget_version`, `budget_version_item`, `budget_version_line` | [ADR-007](adr/0007-budget-versions.md) |
 | El resto | Todavía no está definido — ver §5 |
 
-Cada ADR lleva su propio diagrama: ADR-002 §3 para autorización y obras, ADR-003 §2 para el cómputo. No hay un diagrama global aparte — `docs/diagrams/der.mmd` se eliminó porque reflejaba el modelo anterior a multi-tenant y contradecía a las dos.
+**El diagrama del esquema completo es [der.md](der.md), y se genera**: sale de los modelos de SQLAlchemy con `uv run python -m scripts.generate_erd`, y el CI falla si no coincide con ellos. Muestra el estado actual, tabla por tabla, con sus `CHECK` y sus claves compuestas.
+
+El reparto es este: **`der.md` dice qué hay, las ADR dicen por qué.** Los diagramas dentro de ADR-002 §3 y ADR-003 §2 quedan como ilustración de cada decisión en el momento en que se tomó, y si difieren de `der.md` gana `der.md`. Una ADR que propone tablas nuevas las dibuja ella; pasan a `der.md` solas cuando existe el modelo.
+
+Hasta el 2026-10-07 no había diagrama global: `docs/diagrams/der.mmd` se había eliminado porque reflejaba el modelo anterior a multi-tenant. Lo que cambió no es la disciplina del equipo sino que ya no se escribe a mano.
 
 ---
 
@@ -153,7 +164,11 @@ Cada ADR lleva su propio diagrama: ADR-002 §3 para autorización y obras, ADR-0
 | `material`, con tres opciones sobre a quién pertenece | **`resource`**, del sistema, con una columna `type` (`material` / `labor` / `equipment`) que permite que una receta futura incluya mano de obra y equipo sin tablas nuevas |
 | `building_component`, con dos modelos incompatibles en discusión | **`recipe`** + **`recipe_resource`** (el catálogo: qué lleva 1 unidad) y **`project_recipe`** (la obra: cuánta cantidad). Sin composición recursiva |
 
-Lo que sigue abierto es de módulos posteriores y no bloquea a ninguna historia del sprint: recetas propias de cada estudio, precios por estudio y por proveedor, histórico de precios, mano de obra y equipo sembrados, capítulos para agrupar, y composición de recetas. ADR-003 §Consecuencias lista cada uno con la condición bajo la cual se revisa.
+El Sprint 2 cerró tres de los pendientes que quedaban anotados: las recetas propias de cada estudio ([ADR-006](adr/0006-firm-recipes.md)), la mano de obra y el equipo sembrados (T-06) y el precio congelado en un presupuesto cerrado ([ADR-007](adr/0007-budget-versions.md)).
+
+**Abierto para el Sprint 3**, todavía sin ADR: rubros y tareas de la obra, dependencias entre tareas, avance, y proveedores con sus listas de precios. Las preguntas de diseño están listadas en [sprint-3.md](historias/sprint-3.md).
+
+Sigue abierto y sin fecha: precios por estudio, histórico de precios y composición de recetas. ADR-003 §Consecuencias lista cada uno con la condición bajo la cual se revisa.
 
 ---
 
@@ -165,6 +180,7 @@ Con el repo ya montado, la verificación no es contra un DDL escrito a mano sino
 cd backend
 uv run alembic downgrade base && uv run alembic upgrade head   # corre limpio sobre base vacía
 uv run alembic check                                            # modelos y migraciones no divergieron
+uv run python -m scripts.generate_erd --check                   # der.md coincide con los modelos
 uv run pytest                                                   # invariantes y aislamiento
 ```
 

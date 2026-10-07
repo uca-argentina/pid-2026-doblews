@@ -1,6 +1,6 @@
 # ADR-008: Deploy en Azure — Container Apps, Static Web Apps y PostgreSQL Flexible Server
 
-**Estado:** Propuesta
+**Estado:** Aceptada
 **Fecha:** 2026-09-30
 **Contexto:** T-07 (deploy y promoción `dev → main`), arrastrada del Sprint 1. Reemplaza la parte "Deploy" de [ADR-001](0001-stack.md) (Render/Railway + Vercel).
 
