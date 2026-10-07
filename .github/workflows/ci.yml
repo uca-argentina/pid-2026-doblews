@@ -76,6 +76,11 @@ jobs:
         # migration shows up here.
         run: uv run alembic check
 
+      - name: Diagram and models agree
+        # docs/der.md is generated from the models. A model changed without
+        # regenerating it fails here, with the diff and the command to run.
+        run: uv run python -m scripts.generate_erd --check
+
       - name: Tests
         # conftest.py creates its own database and runs the migrations down and
         # up, so this also exercises the downgrade path.
