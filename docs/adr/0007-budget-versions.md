@@ -1,6 +1,6 @@
 # ADR-007: Versiones del presupuesto
 
-**Estado:** Propuesta
+**Estado:** Aceptada
 **Fecha:** 2026-09-25
 **Contexto:** Modelo de datos para congelar el presupuesto de una obra en versiones inmutables. Desbloquea HU-12 del Sprint 2 y resuelve dos pendientes que dejaron anotados ADR-003 y ADR-005.
 

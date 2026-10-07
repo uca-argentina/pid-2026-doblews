@@ -223,3 +223,7 @@ Tres cosas que se precisaron al implementar:
 **Queda:** nada del alcance del sprint. Falta cerrar la Definition of Done de HU-11 y HU-12: promoción `dev → main` y verificación en Azure.
 
 **2026-09-30.** **T-07 implementada** en `chore/t07-deploy-azure` ([ADR-008](../adr/0008-azure-deploy.md)). El deploy es en Azure y no en Render/Vercel, porque los planes gratis de Render y Neon ya estaban ocupados: backend en Container Apps, base en PostgreSQL Flexible Server y frontend en Static Web Apps, todo con costo USD 0. El ambiente ya está andando con las 11 migraciones y el seed demo, este último con una contraseña propia del ambiente. `.github/workflows/deploy.yml` deploya cada push a `main`. T-07 se cierra con la promoción `dev → main` (merge commit), que además es la primera corrida del workflow.
+
+**2026-10-01 (cierre).** **Sprint 2 promovido a `main`** (PR #34, merge commit) y deployado: la corrida de `deploy.yml` terminó bien. No queda nada del alcance del sprint sin mergear.
+
+**Queda:** la verificación a mano de HU-11 y HU-12 en el ambiente de Azure, que es el último punto de su Definition of Done. El Sprint 3 está en [sprint-3.md](sprint-3.md).

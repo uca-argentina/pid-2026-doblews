@@ -7,10 +7,13 @@ FastAPI + SQLAlchemy 2.0 + Alembic + PostgreSQL. Ver [../docs/adr/0001-stack.md]
 Antes de tocar modelos o migraciones, leer:
 - [../docs/adr/0002-authorization-model.md](../docs/adr/0002-authorization-model.md) — `firm`, `account`, `role`, `permission` y `project`. Es la fuente de verdad de esas tablas.
 - [../docs/modelo-datos-sprint-1.md](../docs/modelo-datos-sprint-1.md) — convenciones de modelado y qué sigue abierto.
+- [../docs/der.md](../docs/der.md) — el diagrama del esquema actual, generado desde los modelos.
 
 Toda regla que se pueda expresar en el esquema (`NOT NULL`, `CHECK`, `UNIQUE`, `FOREIGN KEY`) va en el esquema, no solo en Pydantic.
 
 El esquema real lo define **Alembic**: no hay un DDL de referencia paralelo. Para verificar que modelos y migraciones no divergieron, `alembic check`.
+
+**Al tocar un modelo, regenerar el diagrama** con `uv run python -m scripts.generate_erd` y commitear `docs/der.md` junto con el cambio. El CI lo verifica con `--check`.
 
 ## Reglas del proyecto
 
@@ -30,4 +33,5 @@ black .
 pytest
 alembic revision --autogenerate -m "..."
 alembic upgrade head
+python -m scripts.generate_erd
 ```
