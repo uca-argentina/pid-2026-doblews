@@ -49,6 +49,10 @@ PATH_PARAMETERS = {
     # real one would mean saving a budget version inside this fixture, making an
     # isolation test depend on HU-12's write path.
     "version_id": lambda world: 1,
+    # Same reasoning: the firm is resolved before the supplier is looked up, so an
+    # id that exists nowhere is enough to show a stranger is refused first.
+    "supplier_id": lambda world: 1,
+    "price_id": lambda world: 1,
 }
 
 
@@ -298,3 +302,16 @@ def test_the_budget_versions_prefix_offers_no_way_to_change_a_version():
         ("GET", f"{prefix}/{{version_id}}"),
         ("POST", f"{prefix}/{{version_id}}/load"),
     }
+
+
+# --- a supplier is never deleted ---------------------------------------------
+
+
+def test_the_suppliers_prefix_offers_no_way_to_delete_anything():
+    """Baja lógica (backend/CLAUDE.md), as topology: there is no DELETE under
+    /suppliers, only POST .../deactivate. A supplier and its price rows are the
+    firm's agreements; they go out of use, they are never erased."""
+    prefix = "/firms/{firm_id}/suppliers"
+    methods = {endpoint.method for endpoint in ENDPOINTS if endpoint.path.startswith(prefix)}
+
+    assert methods == {"GET", "POST", "PATCH"}
