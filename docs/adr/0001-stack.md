@@ -21,6 +21,7 @@ El documento de propuesta del cliente evalúa un abanico amplio de opciones (Nex
 - **PostgreSQL**, sin bases adicionales por ahora.
 - El camino crítico (CPM) del Módulo 3 se resuelve con un ordenamiento topológico sobre las tablas relacionales (`tarea` / `tarea_dependencia`), sin necesidad de una base de grafos para el volumen de tareas esperado en una obra.
 - Se deja documentado que Neo4j/Memgraph quedan como opción a reevaluar únicamente si el cálculo de camino crítico sobre SQL se vuelve un cuello de botella real (no antes de tener el módulo de planificación funcionando).
+- **Precisado el 2026-10-07 en [ADR-009](0009-project-planning.md):** el Sprint 3 implementa el camino crítico sobre PostgreSQL, como dice el punto anterior. La base de grafos deja de estar atada a un problema de rendimiento: queda como **extensión prevista**, por su valor de aprendizaje y con el visto bueno de la cátedra, en el rol de proyección y con PostgreSQL como fuente de verdad.
 
 ### Frontend
 
