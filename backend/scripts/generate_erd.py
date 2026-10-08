@@ -77,6 +77,11 @@ AREAS = (
         ("budget_version",),
         "[ADR-007](adr/0007-budget-versions.md)",
     ),
+    Area(
+        "Proveedores y precios",
+        ("supplier",),
+        "[ADR-010](adr/0010-suppliers-price-lists.md)",
+    ),
 )
 
 

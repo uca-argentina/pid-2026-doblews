@@ -197,6 +197,31 @@ erDiagram
         bigint permission_id PK, FK
         varchar(20) scope FK
     }
+    supplier {
+        bigint id PK
+        bigint firm_id FK
+        varchar(150) name
+        varchar(120) contact_name "NULL"
+        varchar(255) contact_email "NULL"
+        varchar(30) phone "NULL"
+        varchar(255) address "NULL"
+        boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    supplier_price {
+        bigint id PK
+        bigint supplier_id FK
+        bigint firm_id FK
+        bigint resource_id FK
+        numeric unit_price "14,2"
+        numeric shipping_cost "14,2"
+        varchar(3) currency
+        timestamptz price_updated_at
+        boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
     unit_of_measure {
         bigint id PK
         varchar(20) code UK
@@ -235,6 +260,9 @@ erDiagram
     unit_of_measure ||--o{ resource : "unit_of_measure_id"
     permission ||--o{ role_permission : "permission_id, scope"
     role ||--o{ role_permission : "role_id, scope"
+    firm ||--o{ supplier : "firm_id"
+    resource ||--o{ supplier_price : "resource_id"
+    supplier ||--o{ supplier_price : "supplier_id, firm_id"
 ```
 
 ## Identidad y autorización
@@ -570,3 +598,50 @@ erDiagram
 | `budget_version_item` | ON DELETE CASCADE | `(budget_version_id) → budget_version (id)` |
 | `budget_version_line` | CHECK | `quantity > 0` |
 | `budget_version_line` | ON DELETE CASCADE | `(budget_version_id) → budget_version (id)` |
+
+## Proveedores y precios
+
+Definida en: [ADR-010](adr/0010-suppliers-price-lists.md).
+
+```mermaid
+erDiagram
+    supplier {
+        bigint id PK
+        bigint firm_id FK
+        varchar(150) name
+        varchar(120) contact_name "NULL"
+        varchar(255) contact_email "NULL"
+        varchar(30) phone "NULL"
+        varchar(255) address "NULL"
+        boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    supplier_price {
+        bigint id PK
+        bigint supplier_id FK
+        bigint firm_id FK
+        bigint resource_id FK
+        numeric unit_price "14,2"
+        numeric shipping_cost "14,2"
+        varchar(3) currency
+        timestamptz price_updated_at
+        boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    firm ||--o{ supplier : "firm_id"
+    resource ||--o{ supplier_price : "resource_id"
+    supplier ||--o{ supplier_price : "supplier_id, firm_id"
+```
+
+| Tabla | Regla | Definición |
+|---|---|---|
+| `supplier` | UNIQUE | `(id, firm_id)` |
+| `supplier` | UNIQUE parcial | `(firm_id, lower(supplier.name)) WHERE is_active` |
+| `supplier_price` | CHECK | `currency ~ '^[A-Z]{3}$'` |
+| `supplier_price` | CHECK | `shipping_cost >= 0` |
+| `supplier_price` | CHECK | `unit_price >= 0` |
+| `supplier_price` | FK compuesta | `(supplier_id, firm_id) → supplier (id, firm_id)` |
+| `supplier_price` | UNIQUE parcial | `(supplier_id, resource_id) WHERE is_active` |
