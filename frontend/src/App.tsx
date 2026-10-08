@@ -18,6 +18,8 @@ import { ProjectTakeoffPage } from "./pages/ProjectTakeoffPage";
 import { ProjectTeamPage } from "./pages/ProjectTeamPage";
 import { NoFirmPage } from "./pages/NoFirmPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
+import { SupplierDetailPage } from "./pages/SupplierDetailPage";
+import { SuppliersPage } from "./pages/SuppliersPage";
 import { PlatformLayout } from "./layout/PlatformLayout";
 import { PasswordResetPage } from "./pages/PasswordResetPage";
 import { PlatformFirmsPage } from "./pages/PlatformFirmsPage";
@@ -139,6 +141,31 @@ function App() {
                 message="Tu rol en este estudio no incluye ver el catálogo."
               >
                 <CatalogPage />
+              </RequirePermission>
+            }
+          />
+          {/* HU-17: the firm's suppliers and their price lists. The detail is
+              a child of the same gate, so reading a list needs supplier.view
+              like the listing does; the client of a firm holds neither. */}
+          <Route
+            path="suppliers"
+            element={
+              <RequirePermission
+                code="supplier.view"
+                message="Tu rol en este estudio no incluye ver los proveedores."
+              >
+                <SuppliersPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="suppliers/:supplierId"
+            element={
+              <RequirePermission
+                code="supplier.view"
+                message="Tu rol en este estudio no incluye ver los proveedores."
+              >
+                <SupplierDetailPage />
               </RequirePermission>
             }
           />
