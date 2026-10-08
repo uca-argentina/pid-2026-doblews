@@ -4,7 +4,7 @@
 **Duración del sprint:** 2 semanas
 **Equipo:** 3 personas (fullstack)
 
-> **Estado de este documento: planificación cerrada, el resto en borrador.** HU-13 y HU-14 están firmes: las define [ADR-009](../adr/0009-project-planning.md). Las demás historias todavía tienen puntos sin decidir, marcados **[D-n]** y listados en [Preguntas de diseño abiertas](#preguntas-de-diseño-abiertas) con la historia que los destraba: se cierran al arrancar cada una, no antes.
+> **Estado de este documento:** HU-13 y HU-14 están firmes, las define [ADR-009](../adr/0009-project-planning.md); HU-17 y HU-18 también, por [ADR-010](../adr/0010-suppliers-price-lists.md). HU-15, HU-16 y HU-19 todavía tienen puntos sin decidir, marcados **[D-n]** y listados en [Preguntas de diseño abiertas](#preguntas-de-diseño-abiertas) con la historia que los destraba: se cierran al arrancar cada una, no antes.
 
 ## Requerimientos de la cátedra
 
@@ -69,7 +69,7 @@ No son decisiones de este sprint: son lo que los Sprints 1 y 2 dejaron fijado, y
 *Tarea de equipo, no historia de usuario. Va primero: todas las historias del sprint cambian el modelo de datos.*
 
 - **Hecho:** [ADR-009](../adr/0009-project-planning.md), planificación (tareas, dependencias, fechas calculadas, estados, camino crítico). Deja firmes HU-13 y HU-14.
-- **Falta, y bloquea a HU-17:** ADR de **proveedores y listas de precios** (D-14 y D-15).
+- **Hecho:** [ADR-010](../adr/0010-suppliers-price-lists.md), proveedores, listas de precios y comparación. Deja firmes HU-17 y HU-18.
 - **No se hace por adelantado:** las preguntas de avance, vista y dashboard se cierran al arrancar su historia, y se registran editando ADR-009 o en una ADR nueva si agregan modelo.
 
 **Depende de:** nada.
@@ -199,20 +199,26 @@ No son decisiones de este sprint: son lo que los Sprints 1 y 2 dejaron fijado, y
 
 **Criterios de aceptación**
 
-- Se pueden crear, editar y dar de baja **proveedores**, con nombre y datos de contacto. **[D-14]**
-- Cada proveedor tiene una **lista de precios**: los materiales que vende, cada uno con su **precio** y su **costo de envío**. **[D-15]**
-- **Un mismo material puede tener precios de varios proveedores**, cada uno con sus propios valores.
-- Los materiales de una lista se eligen del catálogo de recursos que ya existe, con el buscador de HU-4. Una lista lleva **materiales**: no mano de obra ni equipo.
-- Un proveedor no repite material en su lista.
-- El precio y el costo de envío no son negativos. Cada precio muestra cuándo se actualizó por última vez.
-- Dar de baja un proveedor lo saca de las comparaciones de HU-18.
-- Quién administra los proveedores y con qué permiso. **[D-14] [D-16]**
-- Aislamiento: lo que es de un estudio no lo ve otro. **[D-14]**
+- El estudio tiene una sección **"Proveedores"**. Se pueden crear, editar y dar de baja proveedores, con nombre y, opcionales, persona de contacto, email, teléfono y dirección.
+- **Los proveedores son del estudio**: los de otro estudio no aparecen en ningún listado y, pedidos por URL, dan **404**.
+- El nombre es único entre los proveedores activos del estudio.
+- Cada proveedor tiene una **lista de precios**: los materiales que vende, cada uno con su **precio unitario** y su **costo de envío**.
+- El material se elige del catálogo de la plataforma con el buscador de HU-4. Una lista lleva **materiales**: no mano de obra ni equipo.
+- El precio es por una unidad del material, en la unidad que tiene en el catálogo, y la pantalla la muestra ("$ por bolsa").
+- El costo de envío es un importe **fijo por material**, sin importar la cantidad. Puede ser cero.
+- **Un mismo material puede estar en la lista de varios proveedores**, cada uno con sus valores. Un proveedor no lo repite en la suya.
+- El precio y el envío no son negativos. Cada renglón muestra cuándo se actualizó por última vez.
+- Los renglones se agregan, editan y quitan de a uno. Baja lógica.
+- Dar de baja un proveedor lo saca de las comparaciones de HU-18, con toda su lista.
+- **El presupuesto de la obra no cambia**: sigue calculando con el precio de referencia. Las pantallas dicen siempre cuál de los dos precios muestran.
+- Leer exige `supplier.view` y escribir `supplier.manage`, los dos para `owner` y `architect`. **El `client` no ve la sección.**
+- Estado vacío con un llamado a cargar el primer proveedor.
 - Se usa bien a 375px.
 
-**Fuera de alcance:** importar una lista de precios desde un archivo; historial de precios con vigencias; órdenes de compra; condiciones de pago, descuentos por volumen o por cantidad; stock y plazos de entrega; unificación automática de catálogos de proveedores.
-**Depende de:** T-08.
-**Estimación:** 2,5 días (preliminar).
+**Fuera de alcance:** proveedores compartidos entre estudios o sembrados por la plataforma; productos propios del proveedor fuera del catálogo; importar una lista desde un archivo; historial de precios con vigencias; órdenes de compra; condiciones de pago, descuentos por volumen; stock y plazos de entrega.
+**Depende de:** T-08 (ADR-010) y HU-4.
+**Estimación:** 2,5 días.
+**Definida por:** [ADR-010](../adr/0010-suppliers-price-lists.md).
 
 ---
 
@@ -222,19 +228,22 @@ No son decisiones de este sprint: son lo que los Sprints 1 y 2 dejaron fijado, y
 
 **Criterios de aceptación**
 
-- Para un material, se ven todos los proveedores que lo ofrecen con su precio, su costo de envío y el **costo total** de comprarlo ahí. **[D-15]**
-- La lista está ordenada del más económico al más caro, y **el más económico está destacado**.
-- Dentro de una obra, hay una vista de compras con **los materiales de su cómputo** y, para cada uno, la cantidad que lleva la obra y el proveedor más económico con su costo.
-- Un material que ningún proveedor ofrece aparece igual, indicado como "sin proveedor", con su precio de referencia.
+- **Por material:** desde un material se ven todos los proveedores del estudio que lo ofrecen, con su precio unitario, su costo de envío y el **costo total** para una cantidad.
+- El costo total es **precio unitario × cantidad + envío**. La cantidad la escribe el usuario; por defecto, 1.
+- La lista está ordenada del más económico al más caro, y **el más económico está destacado**. Si dos empatan, se destacan los dos.
+- Al cambiar la cantidad, el orden se recalcula: el más económico puede ser otro.
+- **Por obra:** dentro de la obra hay una vista de compras con los **materiales de su cómputo** y, para cada uno, la cantidad que lleva la obra, el proveedor más económico para esa cantidad y su costo total.
+- Un material que ningún proveedor ofrece aparece igual, indicado como **"sin proveedor"**, con su precio de referencia.
 - **La comparación es material por material.** No se arma una compra óptima para toda la obra: lo excluye el pedido.
-- Si dos proveedores empatan, se muestran los dos.
-- Ver la comparación exige poder ver costos: **el `client` no la ve**.
-- Si no hay proveedores cargados, estado vacío con un llamado a cargar el primero.
+- Solo entran proveedores y renglones activos.
+- La vista por material exige `supplier.view`. La vista por obra exige poder ver sus costos (`project.cost.view` o `project.view_all`): **el `client` no la ve**.
+- Si el estudio no tiene proveedores, estado vacío con un llamado a cargar el primero.
 - Se usa bien a 375px.
 
-**Fuera de alcance:** optimización de la compra completa (juntar pedidos para ahorrar envíos); generar o enviar un pedido; elegir y registrar a qué proveedor se compró; comparar por calidad o por plazo.
+**Fuera de alcance:** optimización de la compra completa (juntar pedidos para ahorrar envíos); generar o enviar un pedido; elegir y registrar a qué proveedor se compró; comparar por calidad o por plazo; reemplazar el precio de referencia del presupuesto por el del proveedor.
 **Depende de:** HU-17, y HU-5 para la vista por obra.
-**Estimación:** 2 días (preliminar).
+**Estimación:** 2 días.
+**Definida por:** [ADR-010](../adr/0010-suppliers-price-lists.md).
 
 ---
 
@@ -288,13 +297,6 @@ No son decisiones de este sprint: son lo que los Sprints 1 y 2 dejaron fijado, y
 
 Lo que queda sin decidir. Cada pregunta se cierra **al arrancar la historia que la necesita**, no antes: decidir el dashboard sin tener las tareas funcionando es decidir a ciegas.
 
-**Bloquean el arranque de su historia**
-
-| | Pregunta | Destraba |
-|---|---|---|
-| **D-14** | **De quién son los proveedores.** ¿De cada estudio, de la plataforma, o de los dos? De esto depende quién los administra | HU-17 |
-| **D-15** | **Cómo se expresa el costo de envío.** ¿Por material, por proveedor o por pedido? ¿Fijo o proporcional a la cantidad? De esto depende qué es el "costo total" que compara HU-18 | HU-17 |
-
 **Se deciden al llegar**
 
 | | Pregunta | Destraba |
@@ -304,7 +306,7 @@ Lo que queda sin decidir. Cada pregunta se cierra **al arrancar la historia que 
 | **D-11** | **Cómo se agrega el avance.** Para pasar de tareas a obra, ¿cada tarea pesa por su costo, por su duración, o todas igual? | HU-16 |
 | **D-12** | **Avance y estado.** ¿Finalizar una tarea la lleva al 100%? ¿Llegar al 100% la finaliza? ¿Una tarea pendiente puede tener avance? | HU-16 |
 | **D-13** | **Historial del avance.** ¿Se guarda cada registro con su fecha, o solo el valor actual? | HU-16 |
-| **D-16** | **Permisos de proveedores, compras y dashboard.** Los de planificación ya están en ADR-009 §9 | HU-17, HU-19 |
+| **D-16** | **Permisos del dashboard.** Los de planificación están en ADR-009 §9 y los de proveedores en ADR-010 §6 | HU-19 |
 | **D-17** | **Qué es el presupuesto "original" y qué el "actualizado".** ¿El original es una versión guardada (cuál)? ¿El actualizado es el borrador vivo, o usa precios de proveedor? ¿Las versiones guardan la asignación de líneas a tareas? | HU-19 |
 | **D-18** | **Cómo se proyecta el gasto por mes.** ¿Cómo se reparte el costo de una tarea que dura varios meses, y qué pasa con el costo sin asignar a ninguna tarea? | HU-19 |
 
@@ -312,7 +314,10 @@ Lo que queda sin decidir. Cada pregunta se cierra **al arrancar la historia que 
 
 - **Rubros.** El pedido dice "dividir la obra en rubros y tareas" y no los vuelve a mencionar. Quedan fuera hasta consultarlo. Si entran, es una tabla y una FK opcional en la tarea: agregarlo después es barato.
 
-**Cerradas** (D-1 a D-8, en [ADR-009](../adr/0009-project-planning.md)): las tareas cuelgan directo de la obra; el costo sale del cómputo; el responsable es un integrante de la obra; las fechas se calculan en días hábiles; las transiciones de estado son las de HU-13; toda dependencia es obligatoria y de tipo fin → inicio; reabrir una predecesora se permite; las dependencias viven en Postgres.
+**Cerradas**
+
+- D-1 a D-8, en [ADR-009](../adr/0009-project-planning.md): las tareas cuelgan directo de la obra; el costo sale del cómputo; el responsable es un integrante de la obra; las fechas se calculan en días hábiles; las transiciones de estado son las de HU-13; toda dependencia es obligatoria y de tipo fin → inicio; reabrir una predecesora se permite; las dependencias viven en Postgres.
+- D-14 y D-15, en [ADR-010](../adr/0010-suppliers-price-lists.md): los proveedores son del estudio; el envío es un importe fijo por material.
 
 ---
 
@@ -361,4 +366,6 @@ Lo que no se recorta: el bloqueo al iniciar, una vista temporal, el avance plani
 
 **2026-10-07 (tarde).** **ADR-009 escrita** (planificación): HU-13 y HU-14 quedan firmes. Se decidió calcular las fechas desde las dependencias, que no estaba en el pedido, y dejar la base de grafos como extensión prevista. Los rubros quedan fuera hasta consultar a la cátedra.
 
-**Queda liberada:** HU-13. **Falta de T-08:** D-14 y D-15, que bloquean a HU-17.
+**ADR-010 escrita** (proveedores): HU-17 y HU-18 quedan firmes. **T-08 terminada** en lo que bloqueaba el arranque.
+
+**Quedan liberadas:** HU-13 (planificación) y HU-17 (compras), en paralelo.

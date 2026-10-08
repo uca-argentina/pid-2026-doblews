@@ -42,7 +42,7 @@ Tres reglas ordenan todo lo que sigue. Si aparece una discusión de modelado, se
 | Versiones del presupuesto (`budget_version`, `budget_version_item`, `budget_version_line`) | **Cerrado** | [ADR-007](adr/0007-budget-versions.md) |
 | Planificación: `project_task`, `project_task_dependency`, `project_recipe.task_id` | Sprint 3, **propuesto** (sin migración todavía) | [ADR-009](adr/0009-project-planning.md) |
 | Avance, línea base y rubros | Sprint 3, en definición | [sprint-3.md](historias/sprint-3.md) |
-| Proveedores y listas de precios | Sprint 3, en definición | [sprint-3.md](historias/sprint-3.md) |
+| Proveedores y listas de precios: `supplier`, `supplier_price` | Sprint 3, **propuesto** (sin migración todavía) | [ADR-010](adr/0010-suppliers-price-lists.md) |
 
 ---
 
@@ -167,7 +167,7 @@ Hasta el 2026-10-07 no había diagrama global: `docs/diagrams/der.mmd` se había
 
 El Sprint 2 cerró tres de los pendientes que quedaban anotados: las recetas propias de cada estudio ([ADR-006](adr/0006-firm-recipes.md)), la mano de obra y el equipo sembrados (T-06) y el precio congelado en un presupuesto cerrado ([ADR-007](adr/0007-budget-versions.md)).
 
-**Sprint 3.** Tareas, dependencias y fechas calculadas están definidas en [ADR-009](adr/0009-project-planning.md). Siguen sin ADR el avance, los rubros y los proveedores con sus listas de precios: las preguntas abiertas están en [sprint-3.md](historias/sprint-3.md).
+**Sprint 3.** Tareas, dependencias y fechas calculadas están definidas en [ADR-009](adr/0009-project-planning.md). Proveedores y listas de precios, en [ADR-010](adr/0010-suppliers-price-lists.md). Siguen sin ADR el avance y los rubros: las preguntas abiertas están en [sprint-3.md](historias/sprint-3.md).
 
 Sigue abierto y sin fecha: precios por estudio, histórico de precios y composición de recetas. ADR-003 §Consecuencias lista cada uno con la condición bajo la cual se revisa.
 
