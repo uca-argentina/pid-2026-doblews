@@ -301,7 +301,7 @@ class TestPrices:
 
         rows = client.get(f"{url}/{created['id']}/prices", headers=owner).json()
 
-        assert [row["resource"]["name"] for row in rows] == [BRICK, CEMENT]
+        assert [row["resource"]["name"] for row in rows] == [CEMENT, BRICK]
 
     def test_patch_changes_the_amounts_and_not_the_material(
         self, client, url, owner, resource_id

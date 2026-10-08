@@ -262,7 +262,7 @@ class TestUpdatePrice:
     def test_changing_an_amount_moves_the_date(self, db_session, world, resource_id):
         created = supplier(db_session, world.firm_a)
         row = price(db_session, world.firm_a, created.id, resource_id)
-        row.price_updated_at = datetime(2000, 1, 1, tzinfo=UTC)
+        row.price_updated_at = datetime(2000, 6, 15, 12, tzinfo=UTC)
         db_session.flush()
 
         update_price(
@@ -277,7 +277,7 @@ class TestUpdatePrice:
     ):
         created = supplier(db_session, world.firm_a)
         row = price(db_session, world.firm_a, created.id, resource_id)
-        row.price_updated_at = datetime(2000, 1, 1, tzinfo=UTC)
+        row.price_updated_at = datetime(2000, 6, 15, 12, tzinfo=UTC)
         db_session.flush()
 
         update_price(
@@ -345,7 +345,7 @@ class TestReadingPrices:
 
         entries = SupplierPriceRepository(db_session, world.firm_a).entries(created.id)
 
-        assert [entry.resource.name for entry in entries] == [BRICK, CEMENT]
+        assert [entry.resource.name for entry in entries] == [CEMENT, BRICK]
         assert all(entry.unit_abbreviation for entry in entries)
         assert all(entry.resource.reference_price > 0 for entry in entries)
 
