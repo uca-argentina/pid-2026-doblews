@@ -116,3 +116,37 @@ def project_permissions(
             )
         )
     )
+
+
+def project_accounts_granted(
+    db: Session, *, project_id: int, firm_id: int, code: str
+) -> frozenset[int]:
+    """Everyone who holds one permission inside one project of one firm.
+
+    project_permissions asked the other way round: not "what may this person
+    do here?" but "who here may do this?". HU-13 needs it to offer the people a
+    task can be assigned to, and it lives in this module because it is the only
+    one that reads role_permission.
+
+    The same joins, for the same reasons: firm_member is what makes an
+    assignment inert when its holder leaves the roster, and firm_id is what
+    keeps another firm's project from ever matching.
+    """
+    return frozenset(
+        db.scalars(
+            _granted_codes("project")
+            .with_only_columns(ProjectMember.account_id)
+            .join(ProjectMember, ProjectMember.role_id == RolePermission.role_id)
+            .join(
+                FirmMember,
+                (FirmMember.firm_id == ProjectMember.firm_id)
+                & (FirmMember.account_id == ProjectMember.account_id),
+            )
+            .where(
+                Permission.code == code,
+                ProjectMember.project_id == project_id,
+                ProjectMember.firm_id == firm_id,
+                FirmMember.is_active,
+            )
+        )
+    )

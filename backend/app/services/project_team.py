@@ -30,6 +30,7 @@ from app.services.project import (
     firm_role_code,
     project_role,
 )
+from app.services.tasks import unassign_open_tasks
 
 # The project roles a lead may hand out, which is the whole catalogue (ADR-002
 # section 7). Unlike the firm roster, where owner is deliberately withheld, there
@@ -297,4 +298,7 @@ def remove_team_member(db: Session, project: Project, *, actor_id: int, account_
             ProjectMember.account_id == account_id,
         )
     )
+    # Whoever leaves the team stops answering for what is still to be done on
+    # it; what they already finished stays theirs (ADR-009 section 6).
+    unassign_open_tasks(db, project_id=project.id, account_id=account_id)
     db.flush()
