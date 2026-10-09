@@ -152,6 +152,7 @@ Cierra lo que T-04 dejó pendiente: "si los materiales `labor` y `equipment` se 
 - **Una versión guardada no se modifica nunca.** No existe endpoint para editarla; cualquier cambio posterior se hace en el borrador y se guarda como una versión nueva.
 - Cambiar un precio del catálogo o una receta **no altera** las versiones ya guardadas: una versión muestra los números con los que se guardó.
 - La sección **"Presupuestos"** de la obra es el listado de las versiones guardadas: número, nombre/nota, fecha, autor y total. Sin versiones, estado vacío con un llamado a guardar la primera desde el cómputo.
+- El listado marca como **"Cómputo actual"** la versión cuyas líneas (receta, cantidad y nota) son exactamente las del cómputo de hoy, y no ofrece cargarla: no cambiaría nada. Pueden ser varias, si se guardó dos veces sin tocar nada, o ninguna, si el cómputo tiene cambios sin guardar. Un cambio de precio no la desmarca. El cómputo dice lo mismo desde su lado: "Igual a la v3" o "Tiene cambios sin guardar".
 - Detalle de una versión, de solo lectura, con el mismo formato agrupado de HU-11 y la fecha de los precios con los que se guardó.
 - **"Cargar esta versión"** reemplaza las líneas del borrador por las de la versión, previa confirmación. Las líneas actuales se dan de baja (lógica), no se borran. El borrador cargado vuelve a calcular con los **precios vigentes**: la versión vieja sigue intacta.
 - Si una receta de la versión se dio de baja desde entonces, esa línea no se carga y la pantalla dice cuál quedó afuera.

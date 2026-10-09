@@ -457,4 +457,16 @@ Cómo quedó resuelto:
 
 Se ajustaron los criterios de HU-11 y HU-12 en [sprint-2.md](sprint-2.md), el de HU-13 acá arriba, y el redondeo de ADR-009 §8. HU-5 no cambia: el cómputo sigue mostrando la cantidad de cada recurso y su costo.
 
-**Falta:** la revisión visual y mergear `refactor/budget-tabs` a `fix/sprint-2-and-3-polish`.
+**2026-10-09 (correcciones sobre las mismas secciones).** En la misma rama, después del reordenamiento:
+
+- **El presupuesto guardado que coincide con el cómputo queda marcado.** Al cargar una versión no quedaba ningún rastro de cuál era: "Cargar" copia las líneas y no guarda de dónde vinieron. Ahora `GET .../budget/versions` trae `matches_takeoff` por fila, calculado al leer; el listado lo muestra como la etiqueta "Cómputo actual" y deshabilita el "Cargar" de esa fila, y el cómputo dice "Igual a la v3" o "Tiene cambios sin guardar". Se descartó guardar "la última versión cargada" en la obra; el porqué está en ADR-007, alternativas descartadas. Es el único cambio de backend de la rama, sin migración.
+- **"Editar" y "Dar de baja" de la obra pasaron a la sección "Datos".** Estaban en el encabezado compartido, a la vista sobre el cómputo y la planificación como si actuaran sobre ellos. "Datos" ganó un título propio para alinearlos como el botón principal de las otras secciones.
+- **Menos texto fijo en pantalla.** Se quitaron la descripción bajo el título de Cómputo, Planificación, Presupuestos y Equipo, y la leyenda de Planificación que explicaba las fechas en gris y en negro. La distinción sigue: real en negro, prevista en gris.
+- **Nombres que abren su fila, sin subrayado.** El de una tarea y el de un presupuesto guardado se leen como el texto de la fila y toman el verde del tema al pasar el mouse (clase `.name-link` en `frontend/src/index.css`).
+- **Una sola esquina para etiquetas y botones.** Todo `Badge` usa la de los botones, definida en `frontend/src/theme.ts`; antes solo la tenía la etiqueta de estado de una tarea y el resto eran píldoras.
+
+Se ajustaron HU-3 en [sprint-1.md](sprint-1.md), HU-12 en [sprint-2.md](sprint-2.md) y ADR-007 §6.
+
+**Quedó anotado para después**, sobre `fix/sprint-2-and-3-polish`: alinear las columnas de los tres grupos del desglose del cómputo; la etiqueta de estado que se corta en la tabla de planificación; darle a los nombres alguna señal de que se tocan en mobile, donde no hay hover; igualar los enlaces a predecesoras y sucesoras del detalle de una tarea; y mostrar "Cómputo actual" también en el detalle de una versión.
+
+**Falta:** mergear `refactor/budget-tabs` a `fix/sprint-2-and-3-polish`.
