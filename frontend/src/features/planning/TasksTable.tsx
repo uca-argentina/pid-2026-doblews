@@ -64,10 +64,11 @@ export function TasksTable({
             <Table.Tr key={task.id}>
               <Table.Td>
                 <UnstyledButton
+                  className="name-link"
                   onClick={() => onOpen(task)}
                   aria-label={`Ver el detalle de ${task.name}`}
                 >
-                  <Text size="sm" fw={500} td="underline">
+                  <Text size="sm" fw={500} c="inherit">
                     {task.name}
                   </Text>
                 </UnstyledButton>

@@ -43,6 +43,7 @@ export function VersionsList({
                   <Anchor
                     component={Link}
                     to={hrefFor(version.id)}
+                    className="name-link"
                     fw={600}
                     underline="never"
                   >
@@ -84,6 +85,7 @@ export function VersionsList({
                 <Anchor
                   component={Link}
                   to={hrefFor(version.id)}
+                  className="name-link"
                   fw={600}
                   underline="never"
                 >

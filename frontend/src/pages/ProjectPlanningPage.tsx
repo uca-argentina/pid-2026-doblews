@@ -189,7 +189,6 @@ function PlanningView({
       <PageHeader
         order={4}
         title="Planificación"
-        description="Las tareas de la obra: quién hace cada una, qué tiene que terminar antes, cuándo cae y en qué estado está."
         action={
           canManage ? (
             <Button onClick={add.open}>Nueva tarea</Button>
@@ -374,12 +373,6 @@ function PlanningDates({
         </Text>
         <Text fw={700}>{formatDate(endDate)}</Text>
       </div>
-      {/* The key to the dates in the list: plain is what happened, dimmed is
-          what is expected and moves on its own. */}
-      <Text size="xs" c="dimmed" maw={360}>
-        Fechas en gris: previstas, se corren solas si algo se atrasa. En negro:
-        reales. Días hábiles, de lunes a viernes.
-      </Text>
     </Group>
   );
 }

@@ -69,7 +69,6 @@ function TeamView({
       <PageHeader
         order={4}
         title="Equipo"
-        description="Quiénes participan de esta obra y qué puede hacer cada uno."
         action={
           canManage ? (
             <Button onClick={addModal.open}>Agregar al equipo</Button>

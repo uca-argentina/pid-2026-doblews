@@ -84,11 +84,7 @@ function VersionsView({
 
   return (
     <Stack gap="md">
-      <PageHeader
-        title="Presupuestos guardados"
-        description="Cada uno guarda los números de un momento. Un presupuesto guardado no cambia nunca, aunque después cambien los precios o el cómputo."
-        order={4}
-      />
+      <PageHeader title="Presupuestos guardados" order={4} />
 
       {versions.length === 0 ? (
         <EmptyVersions takeoffPath={takeoffPath} canManage={canManage} />

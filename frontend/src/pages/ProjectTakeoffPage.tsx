@@ -142,11 +142,6 @@ function TakeoffView({
           <Stack gap="md">
             <PageHeader
               title="Cómputo de la obra"
-              description={
-                canSeeCosts
-                  ? "Lo que lleva la obra y lo que cuesta a precios de referencia del catálogo. Se recalcula solo cuando cambia una receta o un precio."
-                  : "Lo que lleva la obra, según las recetas cargadas."
-              }
               order={4}
               action={
                 // Not the filled button: "Agregar receta" below is what this
