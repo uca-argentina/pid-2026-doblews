@@ -85,13 +85,14 @@ No son decisiones de este sprint: son lo que los Sprints 1 y 2 dejaron fijado, y
 
 - Dentro de la obra hay una sección **"Planificación"** con el listado de tareas.
 - Se pueden crear, editar y dar de baja **tareas**. Cada una tiene: nombre, descripción opcional, **duración estimada** en días hábiles (entero mayor que cero), **responsable** opcional y, también opcional, una fecha **"no antes de"**.
-- El **responsable** se elige entre los integrantes del equipo de la obra (HU-6). Si después sale del equipo, sus tareas no finalizadas quedan sin responsable y las finalizadas lo conservan.
+- El **responsable** se elige entre los integrantes del equipo de la obra (HU-6) que pueden gestionar sus tareas (`project.task.manage`: `lead` y `collaborator`). Si después sale del equipo, sus tareas no finalizadas quedan sin responsable y las finalizadas lo conservan.
 - El **estado** es uno de cuatro: **pendiente**, **en curso**, **pausada** o **finalizada**. Una tarea nace pendiente.
 - El estado se cambia desde el listado y desde la tarea, con estas acciones y ninguna otra: **iniciar**, **pausar**, **reanudar**, **finalizar**, **reabrir** (una finalizada vuelve a en curso) y **deshacer inicio** (una en curso vuelve a pendiente).
 - Iniciar registra la **fecha real de inicio** y finalizar la **fecha real de fin**; por defecto hoy, y se pueden corregir. El fin no puede ser anterior al inicio.
 - El **costo** de una tarea no se escribe: es la suma de las **líneas de cómputo** asignadas a ella, a precio vigente. Desde la tarea se asignan y desasignan líneas del cómputo de la obra; una línea está en una sola tarea o en ninguna.
 - En el cómputo (HU-5), cada línea muestra a qué tarea está asignada y se puede cambiar desde ahí.
 - La planificación muestra el costo de cada tarea, el total, y aparte el importe del cómputo **sin asignar a ninguna tarea**.
+- Cargar una versión del presupuesto (HU-12) deja las líneas cargadas **sin asignar**, y la confirmación lo avisa.
 - El nombre es único entre las tareas activas de la obra.
 - **Baja lógica**, en cualquier estado, con confirmación. Sus líneas de cómputo vuelven a quedar sin asignar; no se dan de baja.
 - Escribir exige `project.task.manage` (`lead`, `collaborator`). Ver exige `project.task.view` (también `viewer` y `client`) o `project.view_all`.
@@ -316,7 +317,7 @@ Lo que queda sin decidir. Cada pregunta se cierra **al arrancar la historia que 
 
 **Cerradas**
 
-- D-1 a D-8, en [ADR-009](../adr/0009-project-planning.md): las tareas cuelgan directo de la obra; el costo sale del cómputo; el responsable es un integrante de la obra; las fechas se calculan en días hábiles; las transiciones de estado son las de HU-13; toda dependencia es obligatoria y de tipo fin → inicio; reabrir una predecesora se permite; las dependencias viven en Postgres.
+- D-1 a D-8, en [ADR-009](../adr/0009-project-planning.md): las tareas cuelgan directo de la obra; el costo sale del cómputo; el responsable es un integrante de la obra que puede gestionar sus tareas; las fechas se calculan en días hábiles; las transiciones de estado son las de HU-13; toda dependencia es obligatoria y de tipo fin → inicio; reabrir una predecesora se permite; las dependencias viven en Postgres.
 - D-14 y D-15, en [ADR-010](../adr/0010-suppliers-price-lists.md): los proveedores son del estudio; el envío es un importe fijo por material.
 
 ---
