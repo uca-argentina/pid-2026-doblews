@@ -9,7 +9,7 @@
 >
 > El CI falla si este archivo no coincide con los modelos.
 
-Es el estado **actual** del esquema: 18 tablas. Lo que todavía se está
+Es el estado **actual** del esquema: 19 tablas. Lo que todavía se está
 diseñando no aparece acá sino en la ADR que lo propone. El porqué de cada tabla está en
 las ADR que cita cada área, y las convenciones en
 [modelo-datos-sprint-1.md](modelo-datos-sprint-1.md).
@@ -147,6 +147,11 @@ erDiagram
         timestamptz created_at
         timestamptz updated_at
     }
+    project_task_dependency {
+        bigint predecessor_id PK, FK
+        bigint successor_id PK, FK
+        bigint project_id FK
+    }
     recipe {
         bigint id PK
         bigint firm_id FK "NULL"
@@ -216,6 +221,8 @@ erDiagram
     recipe ||--o{ project_recipe : "recipe_id"
     firm_member |o--o{ project_task : "firm_id, assignee_account_id"
     project ||--o{ project_task : "project_id, firm_id"
+    project_task ||--o{ project_task_dependency : "predecessor_id, project_id"
+    project_task ||--o{ project_task_dependency : "successor_id, project_id"
     firm |o--o{ recipe : "firm_id"
     unit_of_measure ||--o{ recipe : "unit_of_measure_id"
     recipe ||--o{ recipe_resource : "recipe_id"
@@ -459,9 +466,16 @@ erDiagram
         timestamptz created_at
         timestamptz updated_at
     }
+    project_task_dependency {
+        bigint predecessor_id PK, FK
+        bigint successor_id PK, FK
+        bigint project_id FK
+    }
 
     firm_member |o--o{ project_task : "firm_id, assignee_account_id"
     project ||--o{ project_task : "project_id, firm_id"
+    project_task ||--o{ project_task_dependency : "predecessor_id, project_id"
+    project_task ||--o{ project_task_dependency : "successor_id, project_id"
 ```
 
 | Tabla | Regla | Definición |
@@ -476,6 +490,9 @@ erDiagram
 | `project_task` | FK compuesta | `(project_id, firm_id) → project (id, firm_id)` |
 | `project_task` | UNIQUE | `(id, project_id)` |
 | `project_task` | UNIQUE parcial | `(project_id, lower(project_task.name)) WHERE is_active` |
+| `project_task_dependency` | CHECK | `predecessor_id <> successor_id` |
+| `project_task_dependency` | FK compuesta | `(predecessor_id, project_id) → project_task (id, project_id)` |
+| `project_task_dependency` | FK compuesta | `(successor_id, project_id) → project_task (id, project_id)` |
 
 ## Versiones del presupuesto
 

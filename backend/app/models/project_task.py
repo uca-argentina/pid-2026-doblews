@@ -1,4 +1,5 @@
-"""The planning of one work: the tasks it is split into (HU-13, ADR-009).
+"""The planning of one work: the tasks it is split into and what waits for what
+(HU-13, HU-14, ADR-009).
 
 A task stores what a person loads and what a change of status records. Its
 planned dates, its slack and its cost are not here: they are computed on read,
@@ -76,7 +77,7 @@ class ProjectTask(Base):
             ["firm_member.firm_id", "firm_member.account_id"],
         ),
         # Target of the composite FKs that must stay inside one work:
-        # project_recipe.task_id today, the dependencies of HU-14 next.
+        # project_recipe.task_id and both ends of project_task_dependency.
         UniqueConstraint("id", "project_id"),
         Index("ix_project_task_project_id", "project_id"),
         # Every read filters by firm_id, from the base repository (ADR-002 8).
@@ -124,3 +125,42 @@ Index(
     unique=True,
     postgresql_where=text("is_active"),
 )
+
+
+class ProjectTaskDependency(Base):
+    """ "The successor cannot start until the predecessor is finished" (HU-14).
+
+    Every dependency is mandatory and finish-to-start (ADR-009 section 3), so
+    there is nothing to say about one beyond the two tasks it joins.
+
+    A pure link and not an entity, like recipe_resource: no is_active, no
+    timestamps, and it is really deleted when removed, or when either of its
+    tasks is. A tombstone would only have to be filtered out of every walk of
+    the graph.
+
+    No cycles is a rule over many rows, which no constraint can see: the
+    service checks it, under a lock on the work (ADR-009 section 10).
+    """
+
+    __tablename__ = "project_task_dependency"
+    __table_args__ = (
+        CheckConstraint("predecessor_id <> successor_id", name="not_self"),
+        # Both ends against project_task (id, project_id) with the same
+        # project_id: the two tasks are of one work, by construction.
+        ForeignKeyConstraint(
+            ["predecessor_id", "project_id"],
+            ["project_task.id", "project_task.project_id"],
+        ),
+        ForeignKeyConstraint(
+            ["successor_id", "project_id"],
+            ["project_task.id", "project_task.project_id"],
+        ),
+        # The other direction of the primary key: "what does this task wait
+        # for?", which is the question starting a task asks.
+        Index("ix_project_task_dependency_successor_id", "successor_id"),
+        Index("ix_project_task_dependency_project_id", "project_id"),
+    )
+
+    predecessor_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    successor_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    project_id: Mapped[int] = mapped_column(BigInteger)
