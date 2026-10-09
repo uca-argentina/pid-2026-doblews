@@ -389,6 +389,50 @@ def add_takeoff_line(db: Connection):
     return _add
 
 
+@pytest.fixture
+def add_task(db: Connection):
+    """Insert one project_task row: a task of this work, in any state.
+
+    Raw SQL for the same reason as add_takeoff_line: the tests about what the
+    schema refuses, and the reads, need tasks to exist without going through
+    the service that writes them.
+    """
+
+    def _add(
+        project: int,
+        firm: int,
+        name: str = "Tarea de prueba",
+        *,
+        duration: int = 5,
+        status: str = "pending",
+        assignee: int | None = None,
+        actual_start: str | None = None,
+        actual_end: str | None = None,
+        is_active: bool = True,
+    ) -> int:
+        return db.execute(
+            text(
+                "INSERT INTO project_task"
+                " (project_id, firm_id, name, estimated_duration_days, status,"
+                "  assignee_account_id, actual_start_date, actual_end_date, is_active)"
+                " VALUES (:p, :f, :n, :d, :s, :a, :start, :end, :active) RETURNING id"
+            ),
+            {
+                "p": project,
+                "f": firm,
+                "n": name,
+                "d": duration,
+                "s": status,
+                "a": assignee,
+                "start": actual_start,
+                "end": actual_end,
+                "active": is_active,
+            },
+        ).scalar_one()
+
+    return _add
+
+
 # The password every account in the API tests answers to.
 TEST_PASSWORD = "test-password"
 
