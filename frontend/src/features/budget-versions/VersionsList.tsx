@@ -1,5 +1,14 @@
 import type { ReactNode } from "react";
-import { Anchor, Box, Card, Group, Stack, Table, Text } from "@mantine/core";
+import {
+  Anchor,
+  Badge,
+  Box,
+  Card,
+  Group,
+  Stack,
+  Table,
+  Text,
+} from "@mantine/core";
 import dayjs from "dayjs";
 import { Link } from "react-router-dom";
 import { formatMoney } from "../../lib/format";
@@ -40,15 +49,18 @@ export function VersionsList({
             {versions.map((version) => (
               <Table.Tr key={version.id}>
                 <Table.Td>
-                  <Anchor
-                    component={Link}
-                    to={hrefFor(version.id)}
-                    className="name-link"
-                    fw={600}
-                    underline="never"
-                  >
-                    v{version.version_number}
-                  </Anchor>
+                  <Group gap="xs" wrap="nowrap">
+                    <Anchor
+                      component={Link}
+                      to={hrefFor(version.id)}
+                      className="name-link"
+                      fw={600}
+                      underline="never"
+                    >
+                      v{version.version_number}
+                    </Anchor>
+                    {version.matches_takeoff && <CurrentBadge />}
+                  </Group>
                   {version.note && (
                     <Text size="sm" c="dimmed">
                       {version.note}
@@ -82,15 +94,18 @@ export function VersionsList({
           <Card key={version.id} withBorder padding="md" radius="md">
             <Stack gap={4}>
               <Group justify="space-between" gap="xs" wrap="nowrap">
-                <Anchor
-                  component={Link}
-                  to={hrefFor(version.id)}
-                  className="name-link"
-                  fw={600}
-                  underline="never"
-                >
-                  v{version.version_number}
-                </Anchor>
+                <Group gap="xs" wrap="nowrap">
+                  <Anchor
+                    component={Link}
+                    to={hrefFor(version.id)}
+                    className="name-link"
+                    fw={600}
+                    underline="never"
+                  >
+                    v{version.version_number}
+                  </Anchor>
+                  {version.matches_takeoff && <CurrentBadge />}
+                </Group>
                 <Text fw={600}>
                   {formatMoney(version.total, version.currency)}
                 </Text>
@@ -114,5 +129,16 @@ export function VersionsList({
         ))}
       </Stack>
     </>
+  );
+}
+
+/** Marks the version whose lines are the take-off of today. More than one row
+ * can carry it — saving twice without touching anything gives two — and none
+ * does while the take-off has changes that were never saved. */
+function CurrentBadge() {
+  return (
+    <Badge variant="light" color="obra" size="sm">
+      Cómputo actual
+    </Badge>
   );
 }

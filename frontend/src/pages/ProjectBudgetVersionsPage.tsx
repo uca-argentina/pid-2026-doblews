@@ -98,6 +98,15 @@ function VersionsView({
                   <Button
                     variant="default"
                     size="compact-sm"
+                    // Loading the version the take-off already matches would
+                    // replace every line with an identical one and, on the
+                    // way, unassign them all from their tasks (HU-13).
+                    disabled={version.matches_takeoff}
+                    title={
+                      version.matches_takeoff
+                        ? "El cómputo ya es el de esta versión"
+                        : undefined
+                    }
                     onClick={() => setLoading(version)}
                   >
                     Cargar

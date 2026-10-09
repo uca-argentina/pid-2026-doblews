@@ -15,6 +15,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { SaveVersionModal } from "../features/budget-versions/SaveVersionModal";
+import { useBudgetVersions } from "../features/budget-versions/useBudgetVersions";
+import type { BudgetVersionSummary } from "../features/budget-versions/types";
 import { BudgetGroupSection } from "../features/budget/BudgetGroupSection";
 import { BudgetTotal } from "../features/budget/BudgetTotal";
 import { toSectionGroups } from "../features/budget/types";
@@ -101,6 +103,9 @@ function TakeoffView({
   // rest. Both hang below the work's key, so editing a line refetches the two
   // together and the total never trails the recipes above it.
   const budget = useBudget(firmId, projectId, canSeeCosts);
+  // Only to say which saved budget this take-off is, if any. Not waited for
+  // and not reported when it fails: it is one line under the total.
+  const versions = useBudgetVersions(firmId, projectId, canSeeCosts);
   const [adding, add] = useDisclosure(false);
   const [saving, save] = useDisclosure(false);
   // The line each modal is open for; null means that modal is closed.
@@ -164,11 +169,16 @@ function TakeoffView({
             )}
 
             {canSeeCosts && (
-              <div>
+              <Group gap="xs">
                 <Anchor component={Link} to={versionsPath} size="sm">
                   Ver presupuestos guardados
                 </Anchor>
-              </div>
+                {versions.data && versions.data.length > 0 && (
+                  <Text size="sm" c="dimmed">
+                    · {savedAs(versions.data)}
+                  </Text>
+                )}
+              </Group>
             )}
           </Stack>
 
@@ -260,6 +270,21 @@ function TakeoffView({
       )}
     </>
   );
+}
+
+/** How the take-off of today relates to the budgets saved from it. The
+ * backend decides which versions match; this only words it. */
+function savedAs(versions: BudgetVersionSummary[]): string {
+  const matching = versions
+    .filter((version) => version.matches_takeoff)
+    .map((version) => `v${version.version_number}`);
+
+  if (matching.length === 0) return "Tiene cambios sin guardar";
+  // Newest first, as the listing: saving twice in a row gives two.
+  const names = new Intl.ListFormat("es", { type: "conjunction" }).format(
+    matching,
+  );
+  return `Igual a ${matching.length > 1 ? "las" : "la"} ${names}`;
 }
 
 /** A take-off with no lines has no materials either. An empty table with its

@@ -16,11 +16,20 @@ export const versionKeys = {
     [...versionKeys.all(firmId, projectId), versionId] as const,
 };
 
-/** Every saved version of one work, newest first. */
-export function useBudgetVersions(firmId: number, projectId: number) {
+/** Every saved version of one work, newest first.
+ *
+ * `enabled` is for the take-off, which reads the listing to say which version
+ * it matches and must not ask on behalf of whoever may not see costs: the
+ * endpoint answers 403 to the project client. */
+export function useBudgetVersions(
+  firmId: number,
+  projectId: number,
+  enabled = true,
+) {
   return useQuery({
     queryKey: versionKeys.all(firmId, projectId),
     queryFn: () => fetchVersions(firmId, projectId),
+    enabled,
   });
 }
 
