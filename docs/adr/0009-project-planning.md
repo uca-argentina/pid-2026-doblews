@@ -196,6 +196,8 @@ Las líneas sin asignar siguen contando en el presupuesto de la obra. En la plan
 
 **Redondeo.** El costo de cada tarea y el importe sin asignar se redondean a dos decimales cada uno, y el total de la planificación es la suma de esos importes ya redondeados: lo que se ve en la pantalla siempre cierra. El presupuesto de HU-11 redondea por recurso y no por tarea, así que los dos totales pueden diferir en centavos. Es el mismo criterio de HU-5 y HU-11 (cada pantalla suma lo que muestra), aplicado a otra forma de agrupar las mismas líneas.
 
+> **Precisado el 2026-10-09.** La planificación ya no muestra ese total: el de la obra se ve una sola vez, en el cómputo, y la planificación muestra el costo de cada tarea y el importe sin asignar. `GET /tasks` lo sigue devolviendo en `total_cost`, calculado como dice este párrafo.
+
 ### 9. Permisos
 
 | Ámbito | Código | Roles |
