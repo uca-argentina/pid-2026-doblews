@@ -81,6 +81,9 @@ LINE_NOT_AVAILABLE = (
     "Alguna de las líneas elegidas ya no está en el cómputo de esta obra. "
     "Recargá la página y volvé a intentar."
 )
+TASK_NOT_AVAILABLE = (
+    "Esa tarea ya no está en la planificación de esta obra. Recargá la página y elegí otra."
+)
 DATE_NOT_EXPECTED = "Solo iniciar y finalizar una tarea registran una fecha."
 FUTURE_DATE = "Una fecha real no puede ser posterior a hoy."
 END_BEFORE_START = "La fecha real de fin no puede ser anterior a la de inicio."

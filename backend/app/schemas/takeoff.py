@@ -63,6 +63,13 @@ class RecipeRef(BaseModel):
     unit: UnitRef
 
 
+class TaskRef(BaseModel):
+    """The task a line is assigned to: enough to name it and to link to it."""
+
+    id: int
+    name: str
+
+
 class TakeoffLineOut(BaseModel):
     """One line of the take-off, as the listing shows it and a write answers with."""
 
@@ -70,6 +77,19 @@ class TakeoffLineOut(BaseModel):
     recipe: RecipeRef
     quantity: Decimal
     note: str | None
+    # The task of the planning this line is carried out in (HU-13), or null
+    # while it is assigned to none.
+    task: TaskRef | None
+
+
+class TakeoffLineTask(BaseModel):
+    """Which task a line goes to, sent from the take-off. null unassigns it.
+
+    A required key on purpose: a body that forgot it would otherwise read as
+    "unassign", which is the one thing nobody means by leaving a field out.
+    """
+
+    task_id: int | None
 
 
 class TakeoffMaterialOut(BaseModel):
