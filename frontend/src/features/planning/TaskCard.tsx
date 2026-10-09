@@ -9,6 +9,9 @@ import type { TaskOut } from "./types";
 interface TaskCardProps {
   task: TaskOut;
   currency: string;
+  /** The status as a control that changes it, for those who may manage the
+   * planning. Omitted for everyone else, who get the plain badge. */
+  status?: ReactNode;
   /** What this task offers to do, for those who may manage the planning. */
   actions?: ReactNode;
 }
@@ -18,13 +21,13 @@ interface TaskCardProps {
  *
  * The actual dates only take a line once there is one to show: a pending task
  * has neither, and two dashes would be noise on a small screen. */
-export function TaskCard({ task, currency, actions }: TaskCardProps) {
+export function TaskCard({ task, currency, status, actions }: TaskCardProps) {
   return (
     <Card withBorder padding="md" radius="md">
       <Stack gap={6}>
         <Group justify="space-between" wrap="nowrap" align="flex-start">
           <Text fw={600}>{task.name}</Text>
-          <TaskStatusBadge status={task.status} />
+          {status ?? <TaskStatusBadge status={task.status} />}
         </Group>
 
         {task.description && (

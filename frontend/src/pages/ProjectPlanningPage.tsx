@@ -10,18 +10,34 @@ import {
   Text,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
+import { notifications } from "@mantine/notifications";
 import { PageHeader } from "../components/PageHeader";
 import { useCurrentFirm } from "../features/firms/firmContext";
+import { ActualDatesModal } from "../features/planning/ActualDatesModal";
 import { PlanningTotals } from "../features/planning/PlanningTotals";
 import { RemoveTaskModal } from "../features/planning/RemoveTaskModal";
 import { TaskActionsMenu } from "../features/planning/TaskActionsMenu";
 import { TaskCard } from "../features/planning/TaskCard";
 import { TaskFormModal } from "../features/planning/TaskFormModal";
+import { TaskStatusMenu } from "../features/planning/TaskStatusMenu";
 import { TasksTable } from "../features/planning/TasksTable";
-import type { TaskOut } from "../features/planning/types";
-import { usePlanning } from "../features/planning/usePlanning";
+import {
+  ACTION_LABELS,
+  STATUS_LABELS,
+  recordsDate,
+} from "../features/planning/taskStatus";
+import {
+  TransitionDateModal,
+  type DatedTransition,
+} from "../features/planning/TransitionDateModal";
+import type { TaskAction, TaskOut } from "../features/planning/types";
+import {
+  usePlanning,
+  useTransitionTask,
+} from "../features/planning/usePlanning";
 import { usePlanningAccess } from "../features/planning/usePlanningAccess";
 import { useCurrentProject } from "../features/projects/projectContext";
+import { apiErrorMessage } from "../lib/apiError";
 
 /** HU-13: the tasks a work is split into, who answers for each, and what each
  * costs.
@@ -71,15 +87,69 @@ function PlanningView({
   // screen rather than one per task.
   const [editing, setEditing] = useState<TaskOut | null>(null);
   const [removing, setRemoving] = useState<TaskOut | null>(null);
+  const [fixingDates, setFixingDates] = useState<TaskOut | null>(null);
+  const [confirming, setConfirming] = useState<DatedTransition | null>(null);
+
+  const transitionTask = useTransitionTask(firmId, projectId);
+  // Which task and action a one-click transition is in flight for, so only
+  // that row shows a spinner.
+  const inFlight = transitionTask.isPending
+    ? transitionTask.variables
+    : undefined;
+
+  // The single entry point of every status action, all of which come from
+  // the status badge's menu. Starting and finishing record a date, so they go through the
+  // confirmation that asks for it; the other four have nothing to ask and run
+  // at once.
+  const handleAction = async (task: TaskOut, action: TaskAction) => {
+    if (recordsDate(action)) {
+      setConfirming({ task, action: action as DatedTransition["action"] });
+      return;
+    }
+
+    try {
+      const updated = await transitionTask.mutateAsync({
+        taskId: task.id,
+        payload: { action },
+      });
+      notifications.show({
+        title: `${ACTION_LABELS[action]}: ${task.name}`,
+        message: `La tarea quedó ${STATUS_LABELS[updated.status].toLowerCase()}.`,
+        color: "obra",
+      });
+    } catch (error) {
+      // No form to show it next to, so the refusal is a notification. The 409
+      // to expect is a status someone else already moved.
+      notifications.show({
+        title: "No se pudo cambiar el estado",
+        message: apiErrorMessage(
+          error,
+          "No pudimos cambiar el estado de la tarea.",
+        ),
+        color: "red",
+      });
+    }
+  };
 
   // What a task offers to do, the same for the table row and the card. Only
-  // for those who may manage the planning: a button that fails is worse than
-  // none.
+  // for those who may manage the planning: a control that fails is worse than
+  // none. Two of them, on purpose — the status badge moves the task between
+  // statuses, the ⋯ menu acts on the task itself.
+  const renderStatus = canManage
+    ? (task: TaskOut) => (
+        <TaskStatusMenu
+          task={task}
+          pending={inFlight?.taskId === task.id}
+          onAction={handleAction}
+        />
+      )
+    : undefined;
   const renderActions = canManage
     ? (task: TaskOut) => (
         <TaskActionsMenu
           task={task}
           onEdit={setEditing}
+          onFixDates={setFixingDates}
           onRemove={setRemoving}
         />
       )
@@ -121,6 +191,18 @@ function PlanningView({
             projectId={projectId}
             onClose={() => setRemoving(null)}
           />
+          <TransitionDateModal
+            transition={confirming}
+            firmId={firmId}
+            projectId={projectId}
+            onClose={() => setConfirming(null)}
+          />
+          <ActualDatesModal
+            task={fixingDates}
+            firmId={firmId}
+            projectId={projectId}
+            onClose={() => setFixingDates(null)}
+          />
         </>
       )}
 
@@ -150,6 +232,7 @@ function PlanningView({
                   tasks={planning.tasks}
                   currency={planning.currency}
                   showsCost={planning.total_cost !== null}
+                  renderStatus={renderStatus}
                   renderActions={renderActions}
                 />
               </Box>
@@ -159,6 +242,7 @@ function PlanningView({
                     key={task.id}
                     task={task}
                     currency={planning.currency}
+                    status={renderStatus?.(task)}
                     actions={renderActions?.(task)}
                   />
                 ))}

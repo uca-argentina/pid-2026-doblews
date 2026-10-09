@@ -12,6 +12,9 @@ interface TasksTableProps {
   /** Whether the response carries costs at all. Decided once by the page from
    * total_cost, so the column is there for every row or for none. */
   showsCost: boolean;
+  /** The status as a control that changes it, for those who may manage the
+   * planning. Omitted for everyone else, who get the plain badge. */
+  renderStatus?: (task: TaskOut) => ReactNode;
   /** What each task offers to do, for those who may manage the planning.
    * Omitted for everyone else, and then no actions column. */
   renderActions?: (task: TaskOut) => ReactNode;
@@ -27,6 +30,7 @@ export function TasksTable({
   tasks,
   currency,
   showsCost,
+  renderStatus,
   renderActions,
 }: TasksTableProps) {
   return (
@@ -41,9 +45,9 @@ export function TasksTable({
             <Table.Th>Inicio real</Table.Th>
             <Table.Th>Fin real</Table.Th>
             {showsCost && <Table.Th ta="right">Costo</Table.Th>}
-            {/* No heading, like the team's actions column: the buttons say
-                what they do. */}
-            {renderActions && <Table.Th />}
+            {/* No heading, like the team's actions column: the menu's own
+                label says what it does. */}
+            {renderActions && <Table.Th w={60} />}
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
@@ -70,7 +74,9 @@ export function TasksTable({
                 </Text>
               </Table.Td>
               <Table.Td>
-                <TaskStatusBadge status={task.status} />
+                {renderStatus?.(task) ?? (
+                  <TaskStatusBadge status={task.status} />
+                )}
               </Table.Td>
               <Table.Td>
                 <Text size="sm">{formatDate(task.actual_start_date)}</Text>

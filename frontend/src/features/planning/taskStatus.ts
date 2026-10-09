@@ -32,9 +32,8 @@ export const ACTION_LABELS: Record<TaskAction, string> = {
 };
 
 /** The diagram of ADR-009 section 5, from the screen's side: what can be done
- * to a task in each status. The first one of each list is the one offered as
- * a button; the rest go in the ⋯ menu. A finished task has no button, since
- * reopening it is the exception and not the next step.
+ * to a task in each status, in the order the status menu lists them — the
+ * usual next step first.
  *
  * The backend holds the same table and is the one that decides: this only
  * keeps the screen from offering an action that would come back as a 409. */
@@ -44,11 +43,6 @@ export const ACTIONS_BY_STATUS: Record<TaskStatus, TaskAction[]> = {
   paused: ["resume"],
   finished: ["reopen"],
 };
-
-/** The action a row offers as its button, or null when it has none. */
-export function primaryAction(status: TaskStatus): TaskAction | null {
-  return status === "finished" ? null : ACTIONS_BY_STATUS[status][0];
-}
 
 /** The actions that record a date, and so ask for one before running. */
 export function recordsDate(action: TaskAction): boolean {
