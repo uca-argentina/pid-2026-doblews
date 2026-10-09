@@ -12,10 +12,12 @@ CHECK sees one row, and every one of them needs to look at another table.
 """
 
 from datetime import date
+from typing import Literal
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from app.core.clock import today
 from app.models import Account, Project, ProjectRecipe, ProjectTask
 from app.repositories.project_recipe import ProjectRecipeRepository
 from app.repositories.project_task import AssigneeLabel, ProjectTaskRepository
@@ -26,7 +28,46 @@ from app.services.authz import project_accounts_granted, project_permissions
 # change its status (ADR-009 section 6).
 TASK_MANAGE = "project.task.manage"
 
+PENDING = "pending"
+IN_PROGRESS = "in_progress"
+PAUSED = "paused"
 FINISHED = "finished"
+
+# The six things that can be done to a task's status, and nothing else (HU-13).
+# A Literal so the request schema can use it as a field type: an action that is
+# not one of these is a 422 from Pydantic before any code here runs.
+TaskAction = Literal["start", "pause", "resume", "finish", "reopen", "undo_start"]
+
+# (status, action) -> the status it leads to. The diagram of ADR-009 section 5,
+# as data: a pair that is not here is a transition that does not exist.
+TRANSITIONS: dict[tuple[str, str], str] = {
+    (PENDING, "start"): IN_PROGRESS,
+    (IN_PROGRESS, "pause"): PAUSED,
+    (PAUSED, "resume"): IN_PROGRESS,
+    (IN_PROGRESS, "finish"): FINISHED,
+    (FINISHED, "reopen"): IN_PROGRESS,
+    (IN_PROGRESS, "undo_start"): PENDING,
+}
+
+# The actions that record a date, which is therefore the only ones that take one.
+DATED_ACTIONS = ("start", "finish")
+
+# How each action and status reads inside a refusal: "No se puede pausar una
+# tarea finalizada."
+_ACTION_VERBS = {
+    "start": "iniciar",
+    "pause": "pausar",
+    "resume": "reanudar",
+    "finish": "finalizar",
+    "reopen": "reabrir",
+    "undo_start": "deshacer el inicio de",
+}
+_STATUS_ADJECTIVES = {
+    PENDING: "pendiente",
+    IN_PROGRESS: "en curso",
+    PAUSED: "pausada",
+    FINISHED: "finalizada",
+}
 
 # What the architect reads when a rule says no. Spanish, because they are
 # rendered as they are, and constants so the tests assert against these very
@@ -40,6 +81,20 @@ LINE_NOT_AVAILABLE = (
     "Alguna de las líneas elegidas ya no está en el cómputo de esta obra. "
     "Recargá la página y volvé a intentar."
 )
+DATE_NOT_EXPECTED = "Solo iniciar y finalizar una tarea registran una fecha."
+FUTURE_DATE = "Una fecha real no puede ser posterior a hoy."
+END_BEFORE_START = "La fecha real de fin no puede ser anterior a la de inicio."
+PENDING_HAS_NO_DATES = (
+    "Una tarea pendiente no tiene fechas reales. Iniciala para registrar cuándo empezó."
+)
+START_REQUIRED = "Una tarea que ya empezó necesita su fecha real de inicio."
+END_ONLY_WHEN_FINISHED = "Solo una tarea finalizada tiene fecha real de fin."
+END_REQUIRED = "Una tarea finalizada necesita su fecha real de fin."
+
+
+def invalid_transition(status: str, action: str) -> str:
+    """The refusal for an action the task's status does not allow."""
+    return f"No se puede {_ACTION_VERBS[action]} una tarea {_STATUS_ADJECTIVES[status]}."
 
 
 class TaskError(Exception):
@@ -249,3 +304,99 @@ def unassign_open_tasks(db: Session, *, project_id: int, account_id: int) -> Non
         )
         .values(assignee_account_id=None)
     )
+
+
+def _check_actual_dates(start: date | None, end: date | None) -> None:
+    """What holds for any pair of actual dates, whatever the status.
+
+    Neither is in the future: an actual date is something that happened. And the
+    end is not before the start, which the schema also refuses, but as a CHECK
+    violation the person would read as a 500.
+
+    "The future" is measured in Argentina and not on the server (core/clock.py).
+    """
+    current = today()
+    if any(value is not None and value > current for value in (start, end)):
+        raise TaskError(FUTURE_DATE)
+    if start is not None and end is not None and end < start:
+        raise TaskError(END_BEFORE_START)
+
+
+def transition(
+    db: Session, task: ProjectTask, action: TaskAction, *, on_date: date | None = None
+) -> ProjectTask:
+    """Change a task's status by one of the six actions of HU-13.
+
+    Rule 3 of ADR-009 section 10: only the transitions of section 5 exist.
+    Anything else is refused with a sentence naming the action and the status,
+    which is also what a double click gets — the second "iniciar" finds the task
+    already in progress.
+
+    Starting records the actual start and finishing the actual end: on_date, or
+    today when it is left out. The other four take no date, and sending one is
+    refused rather than ignored, so a caller cannot believe it was recorded.
+    Reopening forgets the end and undoing the start forgets the start, which is
+    what keeps the row inside the CHECKs that tie the dates to the status.
+
+    HU-14 adds one more refusal to "start": a task cannot start while one of its
+    predecessors is unfinished (rule 2). It belongs right where the comment
+    below is, and nowhere else changes.
+    """
+    target = TRANSITIONS.get((task.status, action))
+    if target is None:
+        raise TaskError(invalid_transition(task.status, action))
+    if on_date is not None and action not in DATED_ACTIONS:
+        raise TaskError(DATE_NOT_EXPECTED)
+
+    if action == "start":
+        # HU-14: refuse here if any active predecessor is not finished.
+        started = on_date or today()
+        _check_actual_dates(started, None)
+        task.actual_start_date = started
+    elif action == "finish":
+        finished = on_date or today()
+        _check_actual_dates(task.actual_start_date, finished)
+        task.actual_end_date = finished
+    elif action == "reopen":
+        task.actual_end_date = None
+    elif action == "undo_start":
+        task.actual_start_date = None
+
+    task.status = target
+    db.flush()
+    return task
+
+
+def correct_actual_dates(
+    db: Session,
+    task: ProjectTask,
+    *,
+    actual_start_date: date | None,
+    actual_end_date: date | None,
+) -> ProjectTask:
+    """Fix the dates a transition recorded, without changing the status.
+
+    HU-13: "por defecto hoy, y se pueden corregir". The task was started last
+    Thursday and nobody pressed the button until Monday.
+
+    Both dates are sent every time, like every form here, and which ones a task
+    may carry is decided by its status: none while pending, the start once it
+    began, and both only when finished. Those are the same four CHECKs of the
+    schema, said first and in words.
+    """
+    if task.status == PENDING:
+        if actual_start_date is not None or actual_end_date is not None:
+            raise TaskError(PENDING_HAS_NO_DATES)
+    else:
+        if actual_start_date is None:
+            raise TaskError(START_REQUIRED)
+        if task.status == FINISHED and actual_end_date is None:
+            raise TaskError(END_REQUIRED)
+        if task.status != FINISHED and actual_end_date is not None:
+            raise TaskError(END_ONLY_WHEN_FINISHED)
+    _check_actual_dates(actual_start_date, actual_end_date)
+
+    task.actual_start_date = actual_start_date
+    task.actual_end_date = actual_end_date
+    db.flush()
+    return task
