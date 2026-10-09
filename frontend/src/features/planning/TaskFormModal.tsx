@@ -5,6 +5,7 @@ import {
   Button,
   Group,
   Modal,
+  MultiSelect,
   NumberInput,
   Select,
   Stack,
@@ -14,8 +15,14 @@ import {
 import { DateInput } from "@mantine/dates";
 import { notifications } from "@mantine/notifications";
 import { apiErrorMessage } from "../../lib/apiError";
+import { dependentsOf } from "./taskFields";
 import type { TaskOut, TaskWrite } from "./types";
-import { useCreateTask, useTaskAssignees, useUpdateTask } from "./usePlanning";
+import {
+  useCreateTask,
+  usePlanning,
+  useTaskAssignees,
+  useUpdateTask,
+} from "./usePlanning";
 
 // The same limits the backend enforces, so the usual mistakes are caught
 // before a round trip. They are not the protection: the API validates every
@@ -40,9 +47,12 @@ interface FormValues {
   estimated_duration_days: number | string;
   not_before_date: string | null;
   assignee_account_id: string | null;
+  // MultiSelect speaks strings too.
+  predecessor_ids: string[];
 }
 
-/** HU-13's form, the same one for creating and for editing a task.
+/** HU-13's form, the same one for creating and for editing a task, with
+ * HU-14's predecessors.
  *
  * One form because the backend has one shape for both: the edit is a PUT that
  * takes the whole task. The status and the actual dates are not here — they
@@ -84,6 +94,8 @@ function TaskForm({
   onClose,
 }: Omit<TaskFormModalProps, "opened">) {
   const assignees = useTaskAssignees(firmId, projectId);
+  // Already in the cache: the form is only opened from the planning screen.
+  const planning = usePlanning(firmId, projectId);
   const createTask = useCreateTask(firmId, projectId);
   const updateTask = useUpdateTask(firmId, projectId);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -111,6 +123,14 @@ function TaskForm({
     });
   }
 
+  // Every other live task, except the ones that already wait for this one:
+  // picking any of those would close a cycle (HU-14).
+  const tasks = planning.data?.tasks ?? [];
+  const excluded = task ? dependentsOf(task.id, tasks) : new Set<number>();
+  const predecessorOptions = tasks
+    .filter((other) => other.id !== task?.id && !excluded.has(other.id))
+    .map((other) => ({ value: other.id.toString(), label: other.name }));
+
   const form = useForm<FormValues>({
     initialValues: {
       name: task?.name ?? "",
@@ -120,6 +140,9 @@ function TaskForm({
       // Mantine's Select speaks strings; the payload turns it back into a
       // number below.
       assignee_account_id: task?.assignee?.account_id.toString() ?? null,
+      predecessor_ids:
+        task?.predecessors.map((predecessor) => predecessor.id.toString()) ??
+        [],
     },
     validate: {
       name: (value) => {
@@ -153,6 +176,7 @@ function TaskForm({
       assignee_account_id: values.assignee_account_id
         ? Number(values.assignee_account_id)
         : null,
+      predecessor_ids: values.predecessor_ids.map(Number),
     };
 
     try {
@@ -169,8 +193,10 @@ function TaskForm({
       onClose();
     } catch (error) {
       // Stays open with the message above the fields. The 409s to expect are
-      // a name another task of the work already has, and an assignee who left
-      // the team while the form was open; the wording is the backend's.
+      // a name another task of the work already has, an assignee who left
+      // the team while the form was open, and a predecessor someone else
+      // changed meanwhile so that it now closes a cycle; the wording is the
+      // backend's.
       setSubmitError(apiErrorMessage(error, "No pudimos guardar la tarea."));
     }
   });
@@ -212,6 +238,17 @@ function TaskForm({
           disabled={assignees.isLoading}
           error={assignees.isError ? "No pudimos cargar el equipo" : undefined}
           {...form.getInputProps("assignee_account_id")}
+        />
+
+        <MultiSelect
+          label="Predecesoras"
+          description="Opcional. Las tareas que tienen que estar finalizadas para que esta pueda empezar."
+          placeholder={predecessorOptions.length ? "Ninguna" : undefined}
+          data={predecessorOptions}
+          searchable
+          clearable
+          nothingFoundMessage="No hay otra tarea con ese nombre"
+          {...form.getInputProps("predecessor_ids")}
         />
 
         {/* Its value is already a "YYYY-MM-DD" string in Mantine 9, the same

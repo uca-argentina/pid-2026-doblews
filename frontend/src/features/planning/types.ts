@@ -16,6 +16,13 @@ export interface AssigneeOut {
   name: string;
 }
 
+/** Another task, as a dependency names it: enough to say whether it is done. */
+export interface TaskRefOut {
+  id: number;
+  name: string;
+  status: TaskStatus;
+}
+
 /** One task, as the planning lists it and every write answers with. */
 export interface TaskOut {
   id: number;
@@ -34,12 +41,31 @@ export interface TaskOut {
   /** What its take-off lines cost at today's prices: "0.00" with none. null
    * when the caller may not see costs — the project client (ADR-009 9). */
   cost: string | null;
+  /** Computed on every read (HU-14), and null while the work has no start
+   * date. Once the task started this is its actual start, and once it
+   * finished both are its actual dates: what happened replaces the plan. */
+  planned_start_date: string | null;
+  planned_end_date: string | null;
+  /** Working days it may slip without moving the end of the work. null once
+   * finished, or with no start date. */
+  slack_days: number | null;
+  /** Slack zero: a delay here is a delay of the work. */
+  is_critical: boolean;
+  /** What it waits for and what waits for it, each with its status. */
+  predecessors: TaskRefOut[];
+  successors: TaskRefOut[];
 }
 
 /** GET .../projects/{projectId}/tasks: the tasks and what they add up to, in
  * one answer so the list and the totals never disagree on screen. */
 export interface PlanningOut {
+  /** In planned order: by planned start, then in the order they were loaded. */
   tasks: TaskOut[];
+  /** The work's start date, which every planned date counts from. null means
+   * the screen asks for it. */
+  project_start_date: string | null;
+  /** When the work is planned to end: the latest planned end of its tasks. */
+  planned_end_date: string | null;
   /** What the take-off lines assigned to no task cost. */
   unassigned_cost: string | null;
   /** The tasks' costs plus the unassigned amount, as shown. null when the
@@ -58,6 +84,8 @@ export interface TaskWrite {
   estimated_duration_days: number;
   not_before_date: string | null;
   assignee_account_id: number | null;
+  /** Every task this one waits for. The list replaces the ones it had. */
+  predecessor_ids: number[];
 }
 
 /** One action on a task's status. on_date is only read by "start" and
