@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   Center,
+  Group,
   Loader,
   Stack,
   Text,
@@ -16,8 +17,11 @@ import { useCurrentFirm } from "../features/firms/firmContext";
 import { ActualDatesModal } from "../features/planning/ActualDatesModal";
 import { PlanningTotals } from "../features/planning/PlanningTotals";
 import { RemoveTaskModal } from "../features/planning/RemoveTaskModal";
+import { ReopenTaskModal } from "../features/planning/ReopenTaskModal";
 import { TaskActionsMenu } from "../features/planning/TaskActionsMenu";
 import { TaskCard } from "../features/planning/TaskCard";
+import { TaskDetailModal } from "../features/planning/TaskDetailModal";
+import { startedSuccessors } from "../features/planning/taskFields";
 import { TaskFormModal } from "../features/planning/TaskFormModal";
 import { TaskLinesModal } from "../features/planning/TaskLinesModal";
 import { TaskStatusMenu } from "../features/planning/TaskStatusMenu";
@@ -38,6 +42,9 @@ import {
 } from "../features/planning/usePlanning";
 import { usePlanningAccess } from "../features/planning/usePlanningAccess";
 import { useCurrentProject } from "../features/projects/projectContext";
+import { formatDate } from "../features/projects/projectFields";
+import { ProjectFormModal } from "../features/projects/ProjectFormModal";
+import type { ProjectDetail } from "../features/projects/types";
 import { apiErrorMessage } from "../lib/apiError";
 
 /** HU-13: the tasks a work is split into, who answers for each, and what each
@@ -50,7 +57,7 @@ import { apiErrorMessage } from "../lib/apiError";
  * who may do it. */
 export function ProjectPlanningPage() {
   const { firm } = useCurrentFirm();
-  const { project } = useCurrentProject();
+  const { project, can } = useCurrentProject();
   const { canView, canManage } = usePlanningAccess();
 
   if (!canView) {
@@ -66,21 +73,26 @@ export function ProjectPlanningPage() {
   return (
     <PlanningView
       firmId={firm.id}
-      projectId={project.id}
+      project={project}
       canManage={canManage}
+      canEditProject={can("project.edit")}
     />
   );
 }
 
 function PlanningView({
   firmId,
-  projectId,
+  project,
   canManage,
+  canEditProject,
 }: {
   firmId: number;
-  projectId: number;
+  project: ProjectDetail;
   canManage: boolean;
+  /** May set the work's start date, which every planned date counts from. */
+  canEditProject: boolean;
 }) {
+  const projectId = project.id;
   const { data: planning, isLoading, isError } = usePlanning(firmId, projectId);
   const [adding, add] = useDisclosure(false);
   // The task each modal is open for; null means that modal is closed. Kept
@@ -91,6 +103,13 @@ function PlanningView({
   const [fixingDates, setFixingDates] = useState<TaskOut | null>(null);
   const [assigningLines, setAssigningLines] = useState<TaskOut | null>(null);
   const [confirming, setConfirming] = useState<DatedTransition | null>(null);
+  const [reopening, setReopening] = useState<TaskOut | null>(null);
+  const [editingProject, setEditingProject] = useState(false);
+  // The detail is kept by id and read from the planning on every render, so
+  // it follows the list when a write refreshes it — and when the detail
+  // itself moves on to a predecessor or a successor.
+  const [detailId, setDetailId] = useState<number | null>(null);
+  const detail = planning?.tasks.find((task) => task.id === detailId) ?? null;
 
   const transitionTask = useTransitionTask(firmId, projectId);
   // Which task and action a one-click transition is in flight for, so only
@@ -106,6 +125,13 @@ function PlanningView({
   const handleAction = async (task: TaskOut, action: TaskAction) => {
     if (recordsDate(action)) {
       setConfirming({ task, action: action as DatedTransition["action"] });
+      return;
+    }
+    // Reopening is allowed even when successors already started (ADR-009
+    // section 5), but not by accident: those go through a confirmation that
+    // names them. Without any, it is one click like the rest.
+    if (action === "reopen" && startedSuccessors(task).length > 0) {
+      setReopening(task);
       return;
     }
 
@@ -163,7 +189,7 @@ function PlanningView({
       <PageHeader
         order={4}
         title="Planificación"
-        description="Las tareas de la obra: quién hace cada una, cuánto lleva y en qué estado está."
+        description="Las tareas de la obra: quién hace cada una, qué tiene que terminar antes, cuándo cae y en qué estado está."
         action={
           canManage ? (
             <Button onClick={add.open}>Nueva tarea</Button>
@@ -212,8 +238,27 @@ function PlanningView({
             projectId={projectId}
             onClose={() => setAssigningLines(null)}
           />
+          <ReopenTaskModal
+            task={reopening}
+            firmId={firmId}
+            projectId={projectId}
+            onClose={() => setReopening(null)}
+          />
         </>
       )}
+      {canEditProject && (
+        <ProjectFormModal
+          opened={editingProject}
+          project={project}
+          onClose={() => setEditingProject(false)}
+        />
+      )}
+      <TaskDetailModal
+        task={detail}
+        currency={planning?.currency ?? "ARS"}
+        onSelect={setDetailId}
+        onClose={() => setDetailId(null)}
+      />
 
       {isLoading && (
         <Center>
@@ -229,6 +274,13 @@ function PlanningView({
 
       {planning && (
         <>
+          <PlanningDates
+            startDate={planning.project_start_date}
+            endDate={planning.planned_end_date}
+            canEditProject={canEditProject}
+            onEditProject={() => setEditingProject(true)}
+          />
+
           {planning.tasks.length === 0 ? (
             <EmptyPlanning canManage={canManage} onAdd={add.open} />
           ) : (
@@ -241,6 +293,7 @@ function PlanningView({
                   tasks={planning.tasks}
                   currency={planning.currency}
                   showsCost={planning.total_cost !== null}
+                  onOpen={(task) => setDetailId(task.id)}
                   renderStatus={renderStatus}
                   renderActions={renderActions}
                 />
@@ -251,6 +304,7 @@ function PlanningView({
                     key={task.id}
                     task={task}
                     currency={planning.currency}
+                    onOpen={(task) => setDetailId(task.id)}
                     status={renderStatus?.(task)}
                     actions={renderActions?.(task)}
                   />
@@ -266,6 +320,67 @@ function PlanningView({
         </>
       )}
     </Stack>
+  );
+}
+
+/** When the work starts and when it is planned to end (HU-14).
+ *
+ * Without a start date nothing can be planned, so this becomes the request
+ * for one: with a button to the work's form for whoever may edit it, and a
+ * plain notice for everyone else. The tasks are still listed below, without
+ * dates — they exist and can be loaded before the work is scheduled. */
+function PlanningDates({
+  startDate,
+  endDate,
+  canEditProject,
+  onEditProject,
+}: {
+  startDate: string | null;
+  endDate: string | null;
+  canEditProject: boolean;
+  onEditProject: () => void;
+}) {
+  if (startDate === null) {
+    return (
+      <Alert color="yellow" variant="light" title="Falta la fecha de inicio">
+        <Stack gap="sm" align="flex-start">
+          <Text size="sm">
+            Las fechas de las tareas se calculan desde el inicio de la obra.
+            {canEditProject
+              ? " Cargala para ver cuándo cae cada una y cuándo termina la obra."
+              : " Cuando se cargue, vas a ver acá cuándo cae cada tarea."}
+          </Text>
+          {canEditProject && (
+            <Button size="xs" onClick={onEditProject}>
+              Cargar fecha de inicio
+            </Button>
+          )}
+        </Stack>
+      </Alert>
+    );
+  }
+
+  return (
+    <Group gap="xl" px={{ sm: "sm" }}>
+      <div>
+        <Text size="xs" c="dimmed">
+          Inicio de la obra
+        </Text>
+        <Text fw={500}>{formatDate(startDate)}</Text>
+      </div>
+      <div>
+        <Text size="xs" c="dimmed">
+          Fin previsto
+        </Text>
+        <Text fw={700}>{formatDate(endDate)}</Text>
+      </div>
+      {/* The key to the dates in the list: plain is what happened, dimmed is
+          what is expected and moves on its own. */}
+      <Text size="xs" c="dimmed" maw={360}>
+        Fechas en gris: previstas, se corren solas si algo se atrasa. En negro:
+        reales. Días hábiles, de lunes a viernes.
+      </Text>
+    </Group>
   );
 }
 
