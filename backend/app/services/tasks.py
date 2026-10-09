@@ -1,4 +1,5 @@
-"""The rules for loading, editing and removing the tasks of a work (HU-13, ADR-009).
+"""The rules for loading, editing and removing the tasks of a work, and for what
+waits for what (HU-13, HU-14, ADR-009).
 
 Plain functions over the session, like the rest of the services: they return
 data and never raise HTTPException. A broken rule is a TaskError, and turning it
@@ -14,14 +15,15 @@ CHECK sees one row, and every one of them needs to look at another table.
 from datetime import date
 from typing import Literal
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, insert, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.clock import today
-from app.models import Account, Project, ProjectRecipe, ProjectTask
+from app.models import Account, Project, ProjectRecipe, ProjectTask, ProjectTaskDependency
 from app.repositories.project_recipe import ProjectRecipeRepository
 from app.repositories.project_task import AssigneeLabel, ProjectTaskRepository
 from app.services.authz import project_accounts_granted, project_permissions
+from app.services.schedule import cycle_with_predecessors
 
 # The permission that makes someone eligible to answer for a task. The same one
 # every write of the planning demands, so whoever is assigned a task can always
@@ -93,6 +95,34 @@ PENDING_HAS_NO_DATES = (
 START_REQUIRED = "Una tarea que ya empezó necesita su fecha real de inicio."
 END_ONLY_WHEN_FINISHED = "Solo una tarea finalizada tiene fecha real de fin."
 END_REQUIRED = "Una tarea finalizada necesita su fecha real de fin."
+SELF_DEPENDENCY = "Una tarea no puede ser predecesora de sí misma."
+PREDECESSOR_NOT_AVAILABLE = (
+    "Alguna de las predecesoras elegidas ya no está en la planificación de esta obra. "
+    "Recargá la página y volvé a intentar."
+)
+
+
+def _names(names: list[str]) -> str:
+    """How a list of tasks reads in a sentence: «A», «A» y «B», «A», «B» y «C»."""
+    quoted = [f"«{name}»" for name in names]
+    return quoted[0] if len(quoted) == 1 else f"{', '.join(quoted[:-1])} y {quoted[-1]}"
+
+
+def dependency_cycle(names: list[str]) -> str:
+    """The refusal for predecessors that would close a cycle, naming it.
+
+    `names` goes around the cycle and back to where it started: A, B, A.
+    """
+    return (
+        f"Esa dependencia formaría un ciclo: {' → '.join(names)}. "
+        "Una tarea no puede esperar, ni directa ni indirectamente, a sí misma."
+    )
+
+
+def blocked_start(task_name: str, waiting_for: list[str]) -> str:
+    """The refusal for starting a task whose predecessors are not all finished."""
+    verb = "finalice" if len(waiting_for) == 1 else "finalicen"
+    return f"No se puede iniciar «{task_name}» hasta que {verb} {_names(waiting_for)}."
 
 
 def invalid_transition(status: str, action: str) -> str:
@@ -164,6 +194,7 @@ def create_task(
     description: str | None = None,
     not_before_date: date | None = None,
     assignee_account_id: int | None = None,
+    predecessor_ids: list[int] | None = None,
 ) -> ProjectTask:
     """Load a task onto a work. It is born pending, with no actual dates.
 
@@ -178,6 +209,9 @@ def create_task(
     _check_name(db, project, name)
     if assignee_account_id is not None:
         _check_assignee(db, project, assignee_account_id)
+    # A task that does not exist yet has no successors, so it cannot close a
+    # cycle: only whether the predecessors are there is asked.
+    predecessors = _check_predecessors(db, project, None, predecessor_ids or [])
 
     task = ProjectTask(
         project_id=project.id,
@@ -190,6 +224,7 @@ def create_task(
     )
     db.add(task)
     db.flush()  # assigns the id the route reads the task back with
+    _write_predecessors(db, task, predecessors)
     # Reload what the database filled in: status is a server default.
     db.refresh(task)
     return task
@@ -205,6 +240,7 @@ def update_task(
     description: str | None = None,
     not_before_date: date | None = None,
     assignee_account_id: int | None = None,
+    predecessor_ids: list[int] | None = None,
 ) -> ProjectTask:
     """Replace what the edit form holds. Every field is written every time.
 
@@ -216,10 +252,19 @@ def update_task(
     keeps the tasks they already had, and so does whoever finished a task and
     then left the team. Re-checking an unchanged assignee would refuse to save a
     rename of exactly those tasks.
+
+    The predecessors replace the ones the task had. None leaves them alone,
+    which is what a caller that is not the form means; the API always sends a
+    list, and an empty one clears them.
     """
     _check_name(db, project, name, exclude_id=task.id)
     if assignee_account_id is not None and assignee_account_id != task.assignee_account_id:
         _check_assignee(db, project, assignee_account_id)
+    predecessors = (
+        None
+        if predecessor_ids is None
+        else _check_predecessors(db, project, task.id, predecessor_ids)
+    )
 
     task.name = name
     task.description = description
@@ -227,7 +272,63 @@ def update_task(
     task.not_before_date = not_before_date
     task.assignee_account_id = assignee_account_id
     db.flush()
+    if predecessors is not None:
+        _write_predecessors(db, task, predecessors)
     return task
+
+
+def _check_predecessors(
+    db: Session, project: Project, task_id: int | None, predecessor_ids: list[int]
+) -> set[int]:
+    """May these be the predecessors of this task? The ids, deduplicated, if so.
+
+    Rules 1 and 7 of ADR-009 section 10, and the CHECK of the schema said in
+    words: not itself, only live tasks of this same work, and no cycle — direct
+    or along a longer chain. A repeated id is the same dependency twice, so it
+    is merged rather than refused.
+
+    The work's row is locked first (rule 1). Two people each adding one half
+    of a cycle at the same time would both find none; with the lock the second
+    waits, and then sees the first.
+    """
+    wanted = set(predecessor_ids)
+    if task_id is not None and task_id in wanted:
+        raise TaskError(SELF_DEPENDENCY)
+
+    db.execute(select(Project.id).where(Project.id == project.id).with_for_update())
+
+    tasks = ProjectTaskRepository(db, firm_id=project.firm_id)
+    if len(tasks.refs(project.id, wanted)) != len(wanted):
+        raise TaskError(PREDECESSOR_NOT_AVAILABLE)
+
+    if task_id is not None and wanted:
+        cycle = cycle_with_predecessors(tasks.edges(project.id), task_id, sorted(wanted))
+        if cycle is not None:
+            names = {ref.id: ref.name for ref in tasks.refs(project.id, set(cycle))}
+            raise TaskError(dependency_cycle([names[step] for step in cycle]))
+    return wanted
+
+
+def _write_predecessors(db: Session, task: ProjectTask, predecessor_ids: set[int]) -> None:
+    """Make these, and only these, the tasks this one waits for.
+
+    A dependency is a pure link (ADR-009 section 1), so replacing them is a
+    real delete and insert, like a recipe's lines.
+    """
+    db.execute(delete(ProjectTaskDependency).where(ProjectTaskDependency.successor_id == task.id))
+    if predecessor_ids:
+        db.execute(
+            insert(ProjectTaskDependency),
+            [
+                {
+                    "predecessor_id": predecessor_id,
+                    "successor_id": task.id,
+                    "project_id": task.project_id,
+                }
+                for predecessor_id in sorted(predecessor_ids)
+            ],
+        )
+    db.flush()
 
 
 def remove_task(db: Session, task: ProjectTask) -> ProjectTask:
@@ -240,9 +341,20 @@ def remove_task(db: Session, task: ProjectTask) -> ProjectTask:
 
     Every line pointing here is cleared, removed ones included, so nothing is
     left referring to a task that no read will ever return.
+
+    Its dependencies are deleted, both ways (ADR-009 section 7): its successors
+    stop waiting for it, and it stops waiting for anything.
     """
     task.is_active = False
     db.execute(update(ProjectRecipe).where(ProjectRecipe.task_id == task.id).values(task_id=None))
+    db.execute(
+        delete(ProjectTaskDependency).where(
+            or_(
+                ProjectTaskDependency.predecessor_id == task.id,
+                ProjectTaskDependency.successor_id == task.id,
+            )
+        )
+    )
     db.flush()
     return task
 
@@ -341,9 +453,11 @@ def transition(
     Reopening forgets the end and undoing the start forgets the start, which is
     what keeps the row inside the CHECKs that tie the dates to the status.
 
-    HU-14 adds one more refusal to "start": a task cannot start while one of its
-    predecessors is unfinished (rule 2). It belongs right where the comment
-    below is, and nowhere else changes.
+    Starting is also refused while any live predecessor is unfinished (rule 2,
+    HU-14), naming the ones missing. It is checked here and only here: the
+    block is about the moment of starting, not a lasting invariant, so
+    reopening a predecessor whose successors already started is allowed
+    (ADR-009 section 5).
     """
     target = TRANSITIONS.get((task.status, action))
     if target is None:
@@ -352,7 +466,14 @@ def transition(
         raise TaskError(DATE_NOT_EXPECTED)
 
     if action == "start":
-        # HU-14: refuse here if any active predecessor is not finished.
+        tasks = ProjectTaskRepository(db, firm_id=task.firm_id)
+        waiting_for = [
+            ref.name
+            for ref in tasks.predecessors(task.project_id, task.id)
+            if ref.status != FINISHED
+        ]
+        if waiting_for:
+            raise TaskError(blocked_start(task.name, waiting_for))
         started = on_date or today()
         _check_actual_dates(started, None)
         task.actual_start_date = started

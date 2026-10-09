@@ -1,4 +1,5 @@
-"""Reads a work's planning: the tasks loaded on it (HU-13, ADR-009).
+"""Reads a work's planning: the tasks loaded on it and their dependencies (HU-13,
+HU-14, ADR-009).
 Always inside one firm, from the base repository (ADR-002 section 8), so the
 planning screen and its writes never reach another firm's tasks.
 """
@@ -6,9 +7,9 @@ planning screen and its writes never reach another firm's tasks.
 from dataclasses import dataclass
 from datetime import date
 
-from sqlalchemy import Row, Select, func
+from sqlalchemy import Row, Select, func, select
 
-from app.models import Account, ProjectTask
+from app.models import Account, ProjectTask, ProjectTaskDependency
 from app.repositories.base import FirmScopedRepository
 
 
@@ -38,6 +39,15 @@ class TaskEntry:
     assignee: AssigneeLabel | None
     actual_start_date: date | None
     actual_end_date: date | None
+
+
+@dataclass(frozen=True)
+class TaskRef:
+    """Another task, as much of it as a dependency is shown with."""
+
+    id: int
+    name: str
+    status: str
 
 
 def _to_entry(row: Row) -> TaskEntry:
@@ -89,7 +99,8 @@ class ProjectTaskRepository(FirmScopedRepository[ProjectTask]):
         """The tasks of a work, in the order they were loaded.
 
         By id, so the list does not reshuffle between reloads or when a task is
-        renamed. HU-14 is what will give them an order in time.
+        renamed. The order in time is the schedule's (services/schedule.py),
+        which the route applies on top of this one.
         """
         rows = self.db.execute(self._entries(project_id).order_by(ProjectTask.id)).all()
         return [_to_entry(row) for row in rows]
@@ -136,3 +147,55 @@ class ProjectTaskRepository(FirmScopedRepository[ProjectTask]):
         if exclude_id is not None:
             statement = statement.where(ProjectTask.id != exclude_id)
         return self.db.execute(statement).first() is not None
+
+    def _active_ids(self, project_id: int) -> Select:
+        """The ids of this work's live tasks, as a subquery to filter edges by."""
+        return (
+            self.select()
+            .with_only_columns(ProjectTask.id)
+            .where(ProjectTask.project_id == project_id)
+        )
+
+    def edges(self, project_id: int) -> list[tuple[int, int]]:
+        """Every dependency of a work, as (predecessor_id, successor_id).
+
+        Only between live tasks of this firm: removing a task deletes its
+        dependencies (ADR-009 section 7), and filtering here too means a
+        leftover could never block a start or bend the schedule.
+        """
+        active = self._active_ids(project_id)
+        rows = self.db.execute(
+            select(ProjectTaskDependency.predecessor_id, ProjectTaskDependency.successor_id)
+            .where(
+                ProjectTaskDependency.project_id == project_id,
+                ProjectTaskDependency.predecessor_id.in_(active),
+                ProjectTaskDependency.successor_id.in_(active),
+            )
+            .order_by(ProjectTaskDependency.predecessor_id, ProjectTaskDependency.successor_id)
+        ).all()
+        return [(row.predecessor_id, row.successor_id) for row in rows]
+
+    def refs(self, project_id: int, task_ids: set[int] | list[int]) -> list[TaskRef]:
+        """These live tasks of this work, by id, with their name and status.
+
+        Whatever is not a live task of this work is simply absent, which is how
+        the service tells a predecessor that is no longer available.
+        """
+        rows = self.db.scalars(
+            self.select()
+            .where(ProjectTask.project_id == project_id, ProjectTask.id.in_(task_ids))
+            .order_by(ProjectTask.id)
+        ).all()
+        return [TaskRef(id=task.id, name=task.name, status=task.status) for task in rows]
+
+    def predecessors(self, project_id: int, task_id: int) -> list[TaskRef]:
+        """The live tasks this one waits for. What starting it asks."""
+        waits_for = select(ProjectTaskDependency.predecessor_id).where(
+            ProjectTaskDependency.successor_id == task_id
+        )
+        rows = self.db.scalars(
+            self.select()
+            .where(ProjectTask.project_id == project_id, ProjectTask.id.in_(waits_for))
+            .order_by(ProjectTask.id)
+        ).all()
+        return [TaskRef(id=task.id, name=task.name, status=task.status) for task in rows]
