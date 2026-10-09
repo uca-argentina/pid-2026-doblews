@@ -170,6 +170,138 @@ class TestLines:
         assert len(repo(db_session, world.firm_a).lines(world.project_a)) == 1
 
 
+class TestLineTask:
+    """HU-13: each line of the take-off shows which task it is assigned to."""
+
+    def test_an_assigned_line_carries_its_task(
+        self, db_session, world, recipe_id, add_takeoff_line, add_task
+    ):
+        task = add_task(world.project_a, world.firm_a, "Mampostería")
+        add_takeoff_line(world.project_a, world.firm_a, recipe_id[WALL], "120", task=task)
+
+        (line,) = repo(db_session, world.firm_a).lines(world.project_a)
+
+        assert (line.task.id, line.task.name) == (task, "Mampostería")
+
+    def test_an_unassigned_line_has_no_task(self, db_session, world, recipe_id, add_takeoff_line):
+        add_takeoff_line(world.project_a, world.firm_a, recipe_id[WALL], "120")
+
+        (line,) = repo(db_session, world.firm_a).lines(world.project_a)
+
+        assert line.task is None
+
+    def test_a_line_left_pointing_at_a_removed_task_reads_as_unassigned(
+        self, db_session, world, recipe_id, add_takeoff_line, add_task
+    ):
+        """The service clears the pointer when it removes a task. This is what a
+        read says if one is ever left behind: the line is still listed, with no task."""
+        task = add_task(world.project_a, world.firm_a, is_active=False)
+        add_takeoff_line(world.project_a, world.firm_a, recipe_id[WALL], "120", task=task)
+
+        (line,) = repo(db_session, world.firm_a).lines(world.project_a)
+
+        assert line.task is None
+
+
+# What 1 m2 of the seeded wall costs: the six rows of
+# test_the_wall_of_adr_003_computes_its_bricks_and_cement, 3,877,800.00 for 120 m2.
+WALL_PER_M2 = Decimal("32315.00")
+
+
+class TestCostByTask:
+    """HU-13: a task costs what the take-off lines assigned to it cost."""
+
+    def test_each_task_adds_up_its_own_lines_and_the_rest_is_unassigned(
+        self, db_session, world, recipe_id, add_takeoff_line, add_task
+    ):
+        ground = add_task(world.project_a, world.firm_a, "Mampostería PB")
+        upper = add_task(world.project_a, world.firm_a, "Mampostería PA")
+        add_takeoff_line(world.project_a, world.firm_a, recipe_id[WALL], "70", task=ground)
+        add_takeoff_line(world.project_a, world.firm_a, recipe_id[WALL], "20", task=ground)
+        add_takeoff_line(world.project_a, world.firm_a, recipe_id[WALL], "50", task=upper)
+        add_takeoff_line(world.project_a, world.firm_a, recipe_id[WALL], "10")
+
+        costs = repo(db_session, world.firm_a).cost_by_task(world.project_a)
+
+        assert costs == {
+            ground: 90 * WALL_PER_M2,
+            upper: 50 * WALL_PER_M2,
+            None: 10 * WALL_PER_M2,
+        }
+
+    def test_the_slices_add_up_to_the_whole_take_off(
+        self, db_session, world, recipe_id, add_takeoff_line, add_task
+    ):
+        """Two ways of slicing the same lines: per task here, per resource in
+        materials(). With amounts that do not need rounding they agree exactly."""
+        task = add_task(world.project_a, world.firm_a)
+        add_takeoff_line(world.project_a, world.firm_a, recipe_id[WALL], "70", task=task)
+        add_takeoff_line(world.project_a, world.firm_a, recipe_id[SUBFLOOR], "50")
+
+        repository = repo(db_session, world.firm_a)
+        by_task = repository.cost_by_task(world.project_a)
+        by_resource = repository.materials(world.project_a)
+
+        assert sum(by_task.values()) == sum(material.cost for material in by_resource)
+
+    def test_a_cost_is_rounded_to_two_decimals(
+        self, db_session, world, recipe_id, add_takeoff_line, add_task
+    ):
+        task = add_task(world.project_a, world.firm_a)
+        add_takeoff_line(world.project_a, world.firm_a, recipe_id[SCREED], "33.333", task=task)
+
+        cost = repo(db_session, world.firm_a).cost_by_task(world.project_a)[task]
+
+        assert cost == cost.quantize(Decimal("0.01"))
+
+    def test_a_task_with_no_lines_is_absent(self, db_session, world, add_task):
+        """Not a zero: there is no row to group. The caller reads it with .get()."""
+        add_task(world.project_a, world.firm_a)
+
+        assert repo(db_session, world.firm_a).cost_by_task(world.project_a) == {}
+
+    def test_a_removed_line_does_not_count(
+        self, db_session, world, recipe_id, add_takeoff_line, add_task
+    ):
+        task = add_task(world.project_a, world.firm_a)
+        add_takeoff_line(world.project_a, world.firm_a, recipe_id[WALL], "10", task=task)
+        add_takeoff_line(
+            world.project_a, world.firm_a, recipe_id[WALL], "500", task=task, is_active=False
+        )
+
+        costs = repo(db_session, world.firm_a).cost_by_task(world.project_a)
+
+        assert costs == {task: 10 * WALL_PER_M2}
+
+    def test_a_line_left_pointing_at_a_removed_task_counts_as_unassigned(
+        self, db_session, world, recipe_id, add_takeoff_line, add_task
+    ):
+        """Its money must not vanish from a planning that only lists live tasks."""
+        removed = add_task(world.project_a, world.firm_a, is_active=False)
+        add_takeoff_line(world.project_a, world.firm_a, recipe_id[WALL], "10", task=removed)
+
+        costs = repo(db_session, world.firm_a).cost_by_task(world.project_a)
+
+        assert costs == {None: 10 * WALL_PER_M2}
+
+    def test_another_firm_reads_no_costs(
+        self, db_session, world, recipe_id, add_takeoff_line, add_task
+    ):
+        task = add_task(world.project_b, world.firm_b)
+        add_takeoff_line(world.project_b, world.firm_b, recipe_id[WALL], "10", task=task)
+
+        assert repo(db_session, world.firm_a).cost_by_task(world.project_b) == {}
+
+    def test_another_work_of_the_same_firm_does_not_leak_in(
+        self, db_session, world, recipe_id, add_takeoff_line, add_task, new_project
+    ):
+        other = new_project(world.firm_a, world.account_a, "Casa Otra")
+        task = add_task(other, world.firm_a)
+        add_takeoff_line(other, world.firm_a, recipe_id[WALL], "10", task=task)
+
+        assert repo(db_session, world.firm_a).cost_by_task(world.project_a) == {}
+
+
 class TestOneLine:
     def test_a_line_of_this_work_is_found(self, db_session, world, recipe_id, add_takeoff_line):
         line_id = add_takeoff_line(world.project_a, world.firm_a, recipe_id[WALL], "120")

@@ -376,14 +376,23 @@ def add_takeoff_line(db: Connection):
         quantity: str,
         note: str | None = None,
         is_active: bool = True,
+        task: int | None = None,
     ) -> int:
         return db.execute(
             text(
                 "INSERT INTO project_recipe"
-                " (project_id, firm_id, recipe_id, quantity, note, is_active)"
-                " VALUES (:p, :f, :r, :q, :n, :a) RETURNING id"
+                " (project_id, firm_id, recipe_id, quantity, note, is_active, task_id)"
+                " VALUES (:p, :f, :r, :q, :n, :a, :t) RETURNING id"
             ),
-            {"p": project, "f": firm, "r": recipe, "q": quantity, "n": note, "a": is_active},
+            {
+                "p": project,
+                "f": firm,
+                "r": recipe,
+                "q": quantity,
+                "n": note,
+                "a": is_active,
+                "t": task,
+            },
         ).scalar_one()
 
     return _add
