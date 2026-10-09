@@ -11,10 +11,15 @@ export const budgetKeys = {
     [...projectKeys.one(firmId, projectId), "budget"] as const,
 };
 
-/** The estimated budget of one work: the three groups and their totals. */
-export function useBudget(firmId: number, projectId: number) {
+/** The estimated budget of one work: the three groups and their totals.
+ *
+ * `enabled` is for the take-off, which shows the budget to whoever may see
+ * costs and must not ask for it otherwise: the endpoint answers 403 to the
+ * project client, who still opens that screen for the quantities. */
+export function useBudget(firmId: number, projectId: number, enabled = true) {
   return useQuery({
     queryKey: budgetKeys.one(firmId, projectId),
     queryFn: () => fetchBudget(firmId, projectId),
+    enabled,
   });
 }

@@ -13,6 +13,10 @@ export interface BudgetVersionSummary {
   currency: string;
   created_at: string;
   created_by_name: string;
+  /** Whether this version's lines are exactly the take-off of today: the
+   * saved budget the work is standing on. Computed by the backend on every
+   * read, so it turns false by itself as soon as a line is edited. */
+  matches_takeoff: boolean;
 }
 
 /** One frozen resource. Its unit is the abbreviation as it was saved, not a

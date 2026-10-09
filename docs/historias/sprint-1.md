@@ -119,6 +119,7 @@ Tarea de equipo, no historia de usuario. Timebox: 30 minutos. Bloquea el repo, F
 - El `owner` del estudio ve todas las obras de su estudio, porque tiene el permiso `project.view_all`. Sigue sin ver las de otros estudios.
 - Baja lógica.
 - Al entrar a una obra veo su pantalla de detalle, con el nombre visible como contexto en toda la navegación interna.
+- **Editar** y **dar de baja** la obra se hacen desde su sección "Datos", que es lo que modifican. El encabezado que comparten todas las secciones lleva solo el nombre y el cliente. *(Precisado el 2026-10-09: antes estaban en ese encabezado, a la vista también sobre el cómputo y la planificación; ver "Dónde estamos" del [Sprint 3](sprint-3.md#dónde-estamos).)*
 - El listado se ve como tarjetas en mobile, no como tabla horizontal.
 
 **Fuera de alcance:** invitar clientes por email, adjuntar planos, estado de la obra, presupuesto.

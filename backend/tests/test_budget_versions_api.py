@@ -186,6 +186,95 @@ class TestRead:
         assert client.get(versions_url(world), headers=auth_header(team["lead"])).status_code == 404
 
 
+class TestMatchesTakeoff:
+    """Which saved budget the work is standing on: the one whose lines are the
+    take-off of today. Computed on every read, so each of these is a read."""
+
+    def matching(self, client, world, team, auth_header) -> list[int]:
+        body = client.get(versions_url(world), headers=auth_header(team["lead"])).json()
+        return [row["version_number"] for row in body if row["matches_takeoff"]]
+
+    def save(self, client, world, team, auth_header) -> dict:
+        return client.post(
+            versions_url(world), json={"note": None}, headers=auth_header(team["lead"])
+        ).json()
+
+    def test_a_version_just_saved_matches(self, client, world, team, version, auth_header):
+        assert self.matching(client, world, team, auth_header) == [1]
+
+    def test_a_new_line_leaves_no_version_matching(
+        self, client, world, team, version, recipe_id, add_takeoff_line, auth_header
+    ):
+        add_takeoff_line(world.project_a, world.firm_a, recipe_id[SUBFLOOR], "40")
+
+        assert self.matching(client, world, team, auth_header) == []
+
+    def test_another_quantity_of_the_same_recipe_does_not_match(
+        self, client, db, world, team, version, wall, auth_header
+    ):
+        db.execute(text("UPDATE project_recipe SET quantity = 121 WHERE id = :l"), {"l": wall})
+
+        assert self.matching(client, world, team, auth_header) == []
+
+    def test_another_note_on_the_same_line_does_not_match(
+        self, client, db, world, team, version, wall, auth_header
+    ):
+        db.execute(text("UPDATE project_recipe SET note = 'PA' WHERE id = :l"), {"l": wall})
+
+        assert self.matching(client, world, team, auth_header) == []
+
+    def test_a_removed_line_is_not_part_of_the_take_off(
+        self, client, world, team, version, recipe_id, add_takeoff_line, auth_header
+    ):
+        add_takeoff_line(world.project_a, world.firm_a, recipe_id[SUBFLOOR], "40", is_active=False)
+
+        assert self.matching(client, world, team, auth_header) == [1]
+
+    def test_two_equal_lines_are_not_one(
+        self, client, world, team, version, recipe_id, add_takeoff_line, auth_header
+    ):
+        """The version froze one wall line; a second identical one is a change."""
+        add_takeoff_line(world.project_a, world.firm_a, recipe_id[WALL], "120", note="PB")
+
+        assert self.matching(client, world, team, auth_header) == []
+
+    def test_saving_twice_without_changes_marks_both(
+        self, client, world, team, version, auth_header
+    ):
+        self.save(client, world, team, auth_header)
+
+        assert self.matching(client, world, team, auth_header) == [2, 1]
+
+    def test_loading_an_older_version_moves_the_mark_to_it(
+        self, client, world, team, version, recipe_id, add_takeoff_line, auth_header
+    ):
+        add_takeoff_line(world.project_a, world.firm_a, recipe_id[SUBFLOOR], "40")
+        self.save(client, world, team, auth_header)
+        assert self.matching(client, world, team, auth_header) == [2]
+
+        client.post(
+            f"{versions_url(world, version_id=version['id'])}/load",
+            headers=auth_header(team["lead"]),
+        )
+
+        assert self.matching(client, world, team, auth_header) == [1]
+
+    def test_a_price_change_does_not_unmark_a_version(
+        self, client, db, world, team, version, auth_header
+    ):
+        """Same quantities at another price are still the same take-off."""
+        db.execute(text("UPDATE resource SET reference_price = reference_price * 2"))
+
+        assert self.matching(client, world, team, auth_header) == [1]
+
+    def test_another_works_take_off_does_not_count(
+        self, client, world, team, version, recipe_id, add_takeoff_line, auth_header
+    ):
+        add_takeoff_line(world.project_b, world.firm_b, recipe_id[SUBFLOOR], "40")
+
+        assert self.matching(client, world, team, auth_header) == [1]
+
+
 class TestLoad:
     def load_url(self, world, version_id: int) -> str:
         return f"{versions_url(world, version_id=version_id)}/load"

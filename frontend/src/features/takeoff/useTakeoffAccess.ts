@@ -19,9 +19,8 @@ export interface TakeoffAccess {
  *
  * Writing has one height only: view_all opens the reading, never the writing.
  *
- * Whether costs are shown is not decided here. The backend already withholds
- * them from whoever may not see them, so the screen reads total_cost instead
- * of repeating that rule. */
+ * Whether costs are shown is not decided here: that is useBudgetAccess, the
+ * rule of the budget the take-off's screen shows next to its lines. */
 export function useTakeoffAccess(): TakeoffAccess {
   const firm = useCurrentFirm();
   const project = useCurrentProject();

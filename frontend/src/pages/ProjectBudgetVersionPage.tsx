@@ -24,8 +24,8 @@ import { formatMoney, formatQuantity } from "../lib/format";
 /** One saved version, read-only — and read-only all the way down: there is no
  * endpoint that could change it, so there is nothing here to edit with.
  *
- * The groups render through the same component as the draft, so a version and
- * the budget it came from read identically. What differs is the date next to
+ * The groups render through the same component as the take-off's live budget,
+ * so a version and the numbers it came from read identically. What differs is the date next to
  * the prices: here it is when they were current, not today. */
 export function ProjectBudgetVersionPage() {
   const { firm } = useCurrentFirm();
@@ -34,13 +34,13 @@ export function ProjectBudgetVersionPage() {
   const canView = useBudgetAccess();
 
   const versionId = Number(param);
-  const { data: version, isLoading, isError } = useBudgetVersion(
-    firm.id,
-    project.id,
-    versionId,
-  );
+  const {
+    data: version,
+    isLoading,
+    isError,
+  } = useBudgetVersion(firm.id, project.id, versionId);
 
-  const versionsPath = `/firms/${firm.id}/projects/${project.id}/budget/versions`;
+  const versionsPath = `/firms/${firm.id}/projects/${project.id}/budget`;
 
   if (!canView) {
     return (
@@ -63,7 +63,7 @@ export function ProjectBudgetVersionPage() {
       <Stack gap="md">
         <BackLink to={versionsPath} />
         <Alert color="red" variant="light">
-          No encontramos esa versión del presupuesto.
+          No encontramos ese presupuesto guardado.
         </Alert>
       </Stack>
     );
@@ -107,7 +107,7 @@ export function ProjectBudgetVersionPage() {
         <Text size="xs" c="dimmed">
           Precios de referencia al{" "}
           {dayjs(version.prices_as_of).format("DD/MM/YYYY")}, que son los que
-          tenía el catálogo cuando se guardó. El presupuesto actual puede dar
+          tenía el catálogo cuando se guardó. El cómputo de hoy puede dar
           distinto: esta versión no se mueve.
         </Text>
       </Stack>
@@ -121,7 +121,7 @@ function BackLink({ to }: { to: string }) {
   return (
     <div>
       <Anchor component={Link} to={to} size="sm" c="dimmed">
-        ← Versiones
+        ← Presupuestos
       </Anchor>
     </div>
   );

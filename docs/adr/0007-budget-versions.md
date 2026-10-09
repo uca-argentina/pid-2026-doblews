@@ -141,6 +141,8 @@ Calcadas de la forma de `app/api/routes/takeoff.py` (mismo prefijo `/firms/{firm
 
 Deliberadamente **sin** `PUT`/`PATCH`/`DELETE`: es la regla de servicio 2 hecha topología de rutas, no solo un chequeo de autorización.
 
+> **Precisado el 2026-10-09.** Cada fila de `GET .../budget/versions` suma `matches_takeoff: bool`: verdadero cuando las líneas de esa versión son exactamente las líneas activas del cómputo de la obra, comparadas por receta, cantidad y nota y **contadas** (dos líneas iguales son dos). Es lo que le permite al listado decir sobre cuál presupuesto guardado está parada la obra. **Se calcula en cada lectura y no se guarda**: no hay columna ni migración (`BudgetVersionRepository.matching_takeoff`). Los precios no entran en la comparación, así que un cambio en el catálogo no desmarca una versión aunque su total guardado ya no sea el de hoy.
+
 ---
 
 ## Consecuencias
@@ -176,6 +178,8 @@ Deliberadamente **sin** `PUT`/`PATCH`/`DELETE`: es la regla de servicio 2 hecha 
 **Versionar `project_recipe` agregándole una columna `version_id`, en vez de tablas separadas.** Menos tablas nuevas. Descartada porque mezcla dos ciclos de vida en una sola tabla: el borrador es mutable y de precio vivo, una versión es inmutable y de precio congelado. Toda lectura del borrador tendría que acordarse de filtrar `version_id IS NULL` en todos lados — la misma trampa que `modelo-datos §3.3` ya advierte para `is_active` —, y habría que agregarle a `project_recipe` columnas de precio y subtotal que solo tienen sentido para las filas congeladas. Separar tablas deja a `project_recipe` intacta, tal como la definió ADR-003 §2: mismo principio aditivo que ADR-003 §6 ya usó para diferir la copia de receta.
 
 **Un solo `budget_version_item`, sin `budget_version_line` separada.** Menos tablas. Descartada por granularidad: el ítem agrupa **por recurso** (lo que pide la pantalla de HU-11/HU-12), y la línea es **por entrada de cómputo** — hace falta para recargar fielmente dos líneas de la misma receta con notas distintas ("planta baja"/"planta alta", ADR-003 §5) como dos filas, no fundidas en una. Es el mismo desdoblamiento que ya existe en vivo entre `project_recipe` (líneas) y la agregación por recurso de la query de ADR-003 §2; congelar simplemente fija las dos vistas que ya se calculan hoy.
+
+**Guardar en la obra cuál fue la última versión cargada** (`project.loaded_budget_version_id`), para marcar el presupuesto "activo". Evaluada el 2026-10-09 y descartada a favor de comparar las líneas: la columna seguiría nombrando una versión después de que el cómputo se editara y dejara de parecérsele, no diría nada de una versión recién guardada desde ese mismo cómputo, y obligaría a decidir cuándo se borra. Comparar responde lo que se pregunta al mirar el listado —"¿cuál de estos es el que tengo ahora?"— y no puede quedar desactualizado. Lo que no responde es "¿de dónde salió este cómputo?", que nadie pidió.
 
 **Numeración global de versiones**, una sola secuencia para toda la plataforma en vez de correlativa por obra. Más simple de implementar. Descartada porque contradice literalmente lo pedido ("correlativo por obra", "v1, v2… por obra") y porque filtraría información entre estudios: uno podría inferir cuántas versiones guarda otro por los huecos en la numeración de sus propias obras — el mismo tipo de fuga que el modelo multi-tenant existe para evitar.
 

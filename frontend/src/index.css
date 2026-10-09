@@ -29,3 +29,18 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* The name of a row that opens it: a task in the planning, a saved budget.
+   Reads as the row's own text until the pointer is over it, and then takes the
+   accent, instead of carrying an underline in every row of the list. One class
+   and not a prop per component because the two are different elements — a
+   button that opens a modal and a link that navigates — and Mantine has no
+   hover colour prop to give either. */
+.name-link {
+  color: var(--mantine-color-text);
+  transition: color 100ms ease;
+}
+
+.name-link:hover {
+  color: var(--mantine-primary-color-filled);
+}
