@@ -131,7 +131,7 @@ function TakeoffView({
         (group) => group.items.length > 0,
       )
     : [];
-  const versionsPath = `/firms/${firmId}/projects/${projectId}/budget/versions`;
+  const versionsPath = `/firms/${firmId}/projects/${projectId}/budget`;
 
   return (
     <>

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   Alert,
-  Anchor,
   Button,
   Card,
   Center,
@@ -19,7 +18,9 @@ import { useBudgetAccess } from "../features/budget/useBudgetAccess";
 import { useCurrentFirm } from "../features/firms/firmContext";
 import { useCurrentProject } from "../features/projects/projectContext";
 
-/** HU-12: every budget this work has saved, newest first.
+/** HU-12: every budget this work has saved, newest first. It is what the
+ * "Presupuestos" tab opens on: the live budget is on the take-off, and this is
+ * what was frozen from it.
  *
  * Reading them asks exactly what reading the cost asks — no permission of its
  * own — so useBudgetAccess is reused rather than copied. Loading one back is
@@ -55,13 +56,15 @@ function VersionsView({
   projectId: number;
   canManage: boolean;
 }) {
-  const { data: versions, isLoading, isError } = useBudgetVersions(
-    firmId,
-    projectId,
-  );
+  const {
+    data: versions,
+    isLoading,
+    isError,
+  } = useBudgetVersions(firmId, projectId);
   const [loading, setLoading] = useState<BudgetVersionSummary | null>(null);
 
-  const budgetPath = `/firms/${firmId}/projects/${projectId}/budget`;
+  const projectPath = `/firms/${firmId}/projects/${projectId}`;
+  const takeoffPath = `${projectPath}/takeoff`;
 
   if (isLoading) {
     return (
@@ -81,24 +84,18 @@ function VersionsView({
 
   return (
     <Stack gap="md">
-      <div>
-        <Anchor component={Link} to={budgetPath} size="sm" c="dimmed">
-          ← Presupuesto
-        </Anchor>
-      </div>
-
       <PageHeader
-        title="Versiones del presupuesto"
-        description="Cada una guarda los números de un momento. Una versión guardada no cambia nunca, aunque después cambien los precios o el cómputo."
+        title="Presupuestos guardados"
+        description="Cada uno guarda los números de un momento. Un presupuesto guardado no cambia nunca, aunque después cambien los precios o el cómputo."
         order={4}
       />
 
       {versions.length === 0 ? (
-        <EmptyVersions budgetPath={budgetPath} canManage={canManage} />
+        <EmptyVersions takeoffPath={takeoffPath} canManage={canManage} />
       ) : (
         <VersionsList
           versions={versions}
-          hrefFor={(versionId) => `${budgetPath}/versions/${versionId}`}
+          hrefFor={(versionId) => `${projectPath}/budget/versions/${versionId}`}
           renderActions={
             canManage
               ? (version) => (
@@ -129,27 +126,27 @@ function VersionsView({
   );
 }
 
-/** A work whose budget was never saved. The call to action is the budget
- * screen, because that is where the button lives. */
+/** A work whose budget was never saved. The call to action is the take-off,
+ * because that is where the button lives. */
 function EmptyVersions({
-  budgetPath,
+  takeoffPath,
   canManage,
 }: {
-  budgetPath: string;
+  takeoffPath: string;
   canManage: boolean;
 }) {
   return (
     <Card withBorder padding="xl" radius="md">
       <Stack gap={4} align="center">
-        <Text fw={500}>Todavía no guardaste ninguna versión</Text>
+        <Text fw={500}>Todavía no hay presupuestos guardados</Text>
         <Text size="sm" c="dimmed" ta="center">
           {canManage
-            ? "Cuando el presupuesto esté como querés presentarlo, guardalo: queda fijo y podés seguir editando el cómputo sin tocarlo."
-            : "Vas a ver acá las versiones que se guarden del presupuesto de esta obra."}
+            ? "Cuando el cómputo esté como querés presentarlo, guardá una versión desde ahí: queda fija y podés seguir editándolo sin tocarla."
+            : "Vas a ver acá los presupuestos que se guarden de esta obra."}
         </Text>
         {canManage && (
-          <Button mt="sm" component={Link} to={budgetPath}>
-            Ir al presupuesto
+          <Button mt="sm" component={Link} to={takeoffPath}>
+            Ir al cómputo
           </Button>
         )}
       </Stack>

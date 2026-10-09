@@ -8,7 +8,6 @@ import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { HomeRedirect } from "./pages/HomeRedirect";
 import { LoginPage } from "./pages/LoginPage";
 import { MembersPage } from "./pages/MembersPage";
-import { ProjectBudgetPage } from "./pages/ProjectBudgetPage";
 import { ProjectBudgetVersionPage } from "./pages/ProjectBudgetVersionPage";
 import { ProjectBudgetVersionsPage } from "./pages/ProjectBudgetVersionsPage";
 import { ProjectDetailPage } from "./pages/ProjectDetailPage";
@@ -102,20 +101,24 @@ function App() {
           <Route path="projects" element={<ProjectsPage />} />
           {/* One work, with its name as the context of everything inside it
               (HU-3). Each tab of the work is a child route: the index is its
-              data, "takeoff" is HU-5's take-off, "budget" is HU-11's, and
-              HU-6's team joins them the same way. */}
+              data, "takeoff" is the take-off with its live budget (HU-5 and
+              HU-11), "budget" is the budgets saved from it (HU-12), and HU-6's
+              team joins them the same way. */}
           <Route path="projects/:projectId" element={<ProjectLayout />}>
             <Route index element={<ProjectDetailPage />} />
             <Route path="takeoff" element={<ProjectTakeoffPage />} />
             <Route path="planning" element={<ProjectPlanningPage />} />
-            <Route path="budget" element={<ProjectBudgetPage />} />
-            {/* Under "budget" and not beside it, so the Presupuesto tab stays
-                selected while reading a version: the tab matches on the first
-                segment after the work's id (HU-12). */}
+            <Route path="budget" element={<ProjectBudgetVersionsPage />} />
+            {/* The listing used to live here, one level below the live budget
+                that "budget" showed. Kept as a redirect so a saved link still
+                lands on it. */}
             <Route
               path="budget/versions"
-              element={<ProjectBudgetVersionsPage />}
+              element={<Navigate to=".." relative="path" replace />}
             />
+            {/* Under "budget" and not beside it, so the Presupuestos tab stays
+                selected while reading a version: the tab matches on the first
+                segment after the work's id (HU-12). */}
             <Route
               path="budget/versions/:versionId"
               element={<ProjectBudgetVersionPage />}

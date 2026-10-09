@@ -224,9 +224,11 @@ function ProjectTabs({ basePath, project, firmCan }: ProjectTabsProps) {
     {
       value: "budget",
       path: "budget",
-      label: "Presupuesto",
+      // Plural: the tab is the list of budgets saved from the take-off, not
+      // the live one, which is on "Cómputo".
+      label: "Presupuestos",
       // Costs, so a tighter rule than the take-off above: project.cost.view is
-      // what the client of the work lacks, and HU-11 asks for the section to be
+      // what the client of the work lacks, and HU-12 keeps the saved budgets
       // closed to them rather than emptied. project.view_all still lets the
       // owner audit a work they are not on, as everywhere else.
       visible:
