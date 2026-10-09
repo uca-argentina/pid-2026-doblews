@@ -1,14 +1,17 @@
 import type { ReactNode } from "react";
-import { Card, Group, Stack, Text } from "@mantine/core";
+import { Card, Group, Stack, Text, UnstyledButton } from "@mantine/core";
 import { formatMoney } from "../../lib/format";
-import { formatDate } from "../projects/projectFields";
-import { formatDuration } from "./taskFields";
+import { SlackBadge } from "./SlackBadge";
+import { formatWorkingDays, taskEnd, taskStart } from "./taskFields";
+import { TaskDateText } from "./TaskDateText";
 import { TaskStatusBadge } from "./TaskStatusBadge";
 import type { TaskOut } from "./types";
 
 interface TaskCardProps {
   task: TaskOut;
   currency: string;
+  /** Opens the task's detail, from its name. */
+  onOpen: (task: TaskOut) => void;
   /** The status as a control that changes it, for those who may manage the
    * planning. Omitted for everyone else, who get the plain badge. */
   status?: ReactNode;
@@ -19,14 +22,38 @@ interface TaskCardProps {
 /** One task on a phone. Same data as a table row, stacked instead of side by
  * side, so 375px needs no horizontal scrolling.
  *
- * The actual dates only take a line once there is one to show: a pending task
- * has neither, and two dashes would be noise on a small screen. */
-export function TaskCard({ task, currency, status, actions }: TaskCardProps) {
+ * The dates take one line, start to end, and only once there is something to
+ * show: with no start date on the work nothing is planned, and two dashes
+ * would be noise on a small screen. A critical task gets a red border, as the
+ * row of the table gets its badge (HU-14). */
+export function TaskCard({
+  task,
+  currency,
+  onOpen,
+  status,
+  actions,
+}: TaskCardProps) {
   return (
-    <Card withBorder padding="md" radius="md">
+    <Card
+      withBorder
+      padding="md"
+      radius="md"
+      style={
+        task.is_critical
+          ? { borderColor: "var(--mantine-color-red-filled)" }
+          : undefined
+      }
+    >
       <Stack gap={6}>
         <Group justify="space-between" wrap="nowrap" align="flex-start">
-          <Text fw={600}>{task.name}</Text>
+          <UnstyledButton
+            onClick={() => onOpen(task)}
+            aria-label={`Ver el detalle de ${task.name}`}
+          >
+            <Text fw={600} td="underline">
+              {task.name}
+            </Text>
+          </UnstyledButton>
           {status ?? <TaskStatusBadge status={task.status} />}
         </Group>
 
@@ -38,15 +65,17 @@ export function TaskCard({ task, currency, status, actions }: TaskCardProps) {
 
         <Text size="sm">
           {task.assignee?.name ?? "Sin responsable"} ·{" "}
-          {formatDuration(task.estimated_duration_days)} hábiles
+          {formatWorkingDays(task.estimated_duration_days)}
         </Text>
 
-        {task.actual_start_date && (
-          <Text size="xs" c="dimmed">
-            Inicio real: {formatDate(task.actual_start_date)}
-            {task.actual_end_date &&
-              ` · Fin real: ${formatDate(task.actual_end_date)}`}
-          </Text>
+        {task.planned_start_date !== null && (
+          <Group justify="space-between" wrap="nowrap" gap="xs">
+            <Text size="sm">
+              <TaskDateText date={taskStart(task)} /> →{" "}
+              <TaskDateText date={taskEnd(task)} />
+            </Text>
+            <SlackBadge task={task} labelled />
+          </Group>
         )}
 
         {(task.cost !== null || actions) && (

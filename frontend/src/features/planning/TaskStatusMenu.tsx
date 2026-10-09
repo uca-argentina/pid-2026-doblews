@@ -1,4 +1,5 @@
-import { Badge, Loader, Menu } from "@mantine/core";
+import { Badge, Loader, Menu, Text } from "@mantine/core";
+import { joinTaskNames, unfinishedPredecessors } from "./taskFields";
 import {
   ACTION_LABELS,
   ACTIONS_BY_STATUS,
@@ -59,11 +60,28 @@ export function TaskStatusMenu({
         </Badge>
       </Menu.Target>
       <Menu.Dropdown>
-        {ACTIONS_BY_STATUS[task.status].map((action) => (
-          <Menu.Item key={action} onClick={() => onAction(task, action)}>
-            {ACTION_LABELS[action]}
-          </Menu.Item>
-        ))}
+        {ACTIONS_BY_STATUS[task.status].map((action) => {
+          // HU-14: a task cannot start while a predecessor is unfinished.
+          // Offered disabled, saying what it waits for, rather than hidden:
+          // an "Iniciar" that vanished would read as a bug.
+          const waitingFor =
+            action === "start" ? unfinishedPredecessors(task) : [];
+          return (
+            <Menu.Item
+              key={action}
+              disabled={waitingFor.length > 0}
+              onClick={() => onAction(task, action)}
+            >
+              {ACTION_LABELS[action]}
+              {waitingFor.length > 0 && (
+                <Text size="xs" c="dimmed" maw={240}>
+                  Falta que {waitingFor.length === 1 ? "finalice" : "finalicen"}{" "}
+                  {joinTaskNames(waitingFor)}.
+                </Text>
+              )}
+            </Menu.Item>
+          );
+        })}
       </Menu.Dropdown>
     </Menu>
   );
