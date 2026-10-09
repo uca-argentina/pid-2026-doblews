@@ -370,3 +370,29 @@ Lo que no se recorta: el bloqueo al iniciar, una vista temporal, el avance plani
 **ADR-010 escrita** (proveedores): HU-17 y HU-18 quedan firmes. **T-08 terminada** en lo que bloqueaba el arranque.
 
 **Quedan liberadas:** HU-13 (planificación) y HU-17 (compras), en paralelo.
+
+**2026-10-09.** **Backend de HU-13 implementado** (`feat/hu13-tasks-back`): la tabla `project_task`, la columna `project_recipe.task_id`, los permisos `project.task.view` y `project.task.manage`, y las nueve rutas de la planificación. `project_task_dependency` no se creó: entra con HU-14.
+
+Al implementar se afinó ADR-009 en tres puntos:
+
+- **Responsable:** solo quien tiene `project.task.manage` en la obra (`lead` y `collaborator`), y la regla se chequea al asignar. Cambiar de rol no desasigna; salir del equipo, sí.
+- **Redondeo:** cada tarea y el "sin asignar" se redondean por separado y el total de la planificación es su suma. Puede diferir en centavos del total de Presupuesto, que redondea por recurso.
+- **Cargar una versión (HU-12)** deja las líneas cargadas sin asignar. Que la versión guarde la tarea de cada línea queda para HU-19 (D-17).
+
+**Contrato para el front de HU-13**, todo bajo `/firms/{firm_id}/projects/{project_id}`:
+
+| Ruta | Para qué |
+|---|---|
+| `GET /tasks` | El listado: tareas, costo de cada una, `unassigned_cost` y `total_cost`. Los tres costos llegan en `null` a quien no puede ver costos |
+| `GET /tasks/assignees` | Las opciones del desplegable de responsable |
+| `POST /tasks`, `PUT /tasks/{id}`, `DELETE /tasks/{id}` | Alta, edición y baja |
+| `POST /tasks/{id}/transitions` | Cambiar el estado: `{"action": "start" \| "pause" \| "resume" \| "finish" \| "reopen" \| "undo_start", "on_date": "2026-10-01"}`. `on_date` es opcional y solo vale en `start` y `finish` |
+| `PUT /tasks/{id}/actual-dates` | Corregir las fechas reales |
+| `PUT /tasks/{id}/lines` | Reemplazar las líneas de cómputo de la tarea: `{"line_ids": [...]}` |
+| `PUT /takeoff/lines/{id}/task` | Asignar una línea desde el cómputo: `{"task_id": 7}` o `{"task_id": null}` |
+
+Cada línea de `GET /takeoff` trae ahora `task: {id, name}` o `null`. Una regla rota responde **409** con el texto para mostrar en `detail`, como en HU-5.
+
+**Queda para el front:** la sección "Planificación", la tarea de cada línea en el cómputo, y un aviso en la confirmación de "Cargar versión" de que las líneas cargadas quedan sin asignar a ninguna tarea.
+
+**Queda liberada:** HU-14, en lo que es backend. El punto donde entra el bloqueo por predecesoras está marcado en `transition()` de `backend/app/services/tasks.py`.
