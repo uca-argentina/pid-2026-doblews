@@ -18,6 +18,12 @@ body {
 }
 
 html {
+  /* Keeps the room for the vertical scrollbar even while the page is short.
+     The document is what scrolls, so without this the scrollbar comes and goes
+     with the height of each screen and everything pinned to the right edge —
+     the header's logout, a work's "Editar" and "Dar de baja" — jumps sideways
+     when moving between the tabs of a work. */
+  scrollbar-gutter: stable;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

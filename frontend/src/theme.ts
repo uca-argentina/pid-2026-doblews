@@ -1,5 +1,6 @@
 import {
   createTheme,
+  Modal,
   NavLink,
   type CSSVariablesResolver,
   type MantineColorsTuple,
@@ -52,6 +53,14 @@ export const theme = createTheme({
   // changes all of them together.
   defaultRadius: "sm",
   components: {
+    // An open modal still stops the page behind it from scrolling, but no
+    // longer hides the page's scrollbar to do it. Hiding it makes Mantine pad
+    // the page by the scrollbar's width to make up for it, and index.css
+    // already keeps that room reserved (scrollbar-gutter): with both, opening
+    // a modal over a long screen pushed the whole page sideways.
+    Modal: Modal.extend({
+      defaultProps: { removeScrollProps: { removeScrollBar: false } },
+    }),
     // The sidebar links. NavLink is the one pressable component Mantine draws
     // with square corners and no radius prop, so next to a Button its
     // highlighted row read as a different kind of thing.
