@@ -16,6 +16,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models import FirmMember, Project, ProjectMember, Role
+from app.services.tasks import unassign_open_tasks
 
 # Project role codes, compared as literals for the same reason the partial
 # indexes on project_member do: role_code is the one column a rule can name
@@ -143,12 +144,25 @@ def _set_client(db: Session, project: Project, client_account_id: int | None) ->
     if client_account_id is not None:
         _check_client(db, project.firm_id, client_account_id)
 
+    outgoing = db.scalar(
+        select(ProjectMember.account_id).where(
+            ProjectMember.project_id == project.id,
+            ProjectMember.role_code == CLIENT,
+        )
+    )
+
     db.execute(
         delete(ProjectMember).where(
             ProjectMember.project_id == project.id,
             ProjectMember.role_code == CLIENT,
         )
     )
+    # The other place someone leaves a work's team, so the same rule as in
+    # remove_team_member (ADR-009 section 6). Not when the form re-sends the
+    # client it already had: that row is deleted and written back, and nobody
+    # left.
+    if outgoing is not None and outgoing != client_account_id:
+        unassign_open_tasks(db, project_id=project.id, account_id=outgoing)
     db.flush()
 
     if client_account_id is not None:

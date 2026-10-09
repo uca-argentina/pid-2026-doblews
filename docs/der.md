@@ -9,7 +9,7 @@
 >
 > El CI falla si este archivo no coincide con los modelos.
 
-Es el estado **actual** del esquema: 17 tablas. Lo que todavía se está
+Es el estado **actual** del esquema: 18 tablas. Lo que todavía se está
 diseñando no aparece acá sino en la ADR que lo propone. El porqué de cada tabla está en
 las ADR que cita cada área, y las convenciones en
 [modelo-datos-sprint-1.md](modelo-datos-sprint-1.md).
@@ -124,8 +124,25 @@ erDiagram
         bigint project_id FK
         bigint firm_id FK
         bigint recipe_id FK
+        bigint task_id FK "NULL"
         numeric quantity "14,3"
         varchar(150) note "NULL"
+        boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    project_task {
+        bigint id PK
+        bigint project_id FK
+        bigint firm_id FK
+        varchar(150) name
+        text description "NULL"
+        integer estimated_duration_days
+        date not_before_date "NULL"
+        varchar(20) status
+        bigint assignee_account_id FK "NULL"
+        date actual_start_date "NULL"
+        date actual_end_date "NULL"
         boolean is_active
         timestamptz created_at
         timestamptz updated_at
@@ -195,7 +212,10 @@ erDiagram
     project ||--o{ project_member : "project_id, firm_id"
     role ||--o{ project_member : "role_id, role_scope, role_code"
     project ||--o{ project_recipe : "project_id, firm_id"
+    project_task |o--o{ project_recipe : "task_id, project_id"
     recipe ||--o{ project_recipe : "recipe_id"
+    firm_member |o--o{ project_task : "firm_id, assignee_account_id"
+    project ||--o{ project_task : "project_id, firm_id"
     firm |o--o{ recipe : "firm_id"
     unit_of_measure ||--o{ recipe : "unit_of_measure_id"
     recipe ||--o{ recipe_resource : "recipe_id"
@@ -386,6 +406,7 @@ erDiagram
         bigint project_id FK
         bigint firm_id FK
         bigint recipe_id FK
+        bigint task_id FK "NULL"
         numeric quantity "14,3"
         varchar(150) note "NULL"
         boolean is_active
@@ -399,6 +420,7 @@ erDiagram
     project ||--o{ project_member : "project_id, firm_id"
     role ||--o{ project_member : "role_id, role_scope, role_code"
     project ||--o{ project_recipe : "project_id, firm_id"
+    project_task |o--o{ project_recipe : "task_id, project_id"
     recipe ||--o{ project_recipe : "recipe_id"
 ```
 
@@ -413,6 +435,47 @@ erDiagram
 | `project_member` | UNIQUE parcial | `(project_id) WHERE role_code = 'lead'` |
 | `project_recipe` | CHECK | `quantity > 0` |
 | `project_recipe` | FK compuesta | `(project_id, firm_id) → project (id, firm_id)` |
+| `project_recipe` | FK compuesta | `(task_id, project_id) → project_task (id, project_id)` |
+
+## Planificación
+
+Definida en: [ADR-009](adr/0009-project-planning.md).
+
+```mermaid
+erDiagram
+    project_task {
+        bigint id PK
+        bigint project_id FK
+        bigint firm_id FK
+        varchar(150) name
+        text description "NULL"
+        integer estimated_duration_days
+        date not_before_date "NULL"
+        varchar(20) status
+        bigint assignee_account_id FK "NULL"
+        date actual_start_date "NULL"
+        date actual_end_date "NULL"
+        boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    firm_member |o--o{ project_task : "firm_id, assignee_account_id"
+    project ||--o{ project_task : "project_id, firm_id"
+```
+
+| Tabla | Regla | Definición |
+|---|---|---|
+| `project_task` | CHECK | `(status = 'finished') = (actual_end_date IS NOT NULL)` |
+| `project_task` | CHECK | `actual_end_date >= actual_start_date` |
+| `project_task` | CHECK | `estimated_duration_days > 0` |
+| `project_task` | CHECK | `status <> 'pending' OR actual_start_date IS NULL` |
+| `project_task` | CHECK | `status = 'pending' OR actual_start_date IS NOT NULL` |
+| `project_task` | CHECK | `status IN ('pending', 'in_progress', 'paused', 'finished')` |
+| `project_task` | FK compuesta | `(firm_id, assignee_account_id) → firm_member (firm_id, account_id)` |
+| `project_task` | FK compuesta | `(project_id, firm_id) → project (id, firm_id)` |
+| `project_task` | UNIQUE | `(id, project_id)` |
+| `project_task` | UNIQUE parcial | `(project_id, lower(project_task.name)) WHERE is_active` |
 
 ## Versiones del presupuesto
 

@@ -1,5 +1,5 @@
 """The seeded catalogue, checked against ADR-002 section 7, ADR-003 section 8,
-ADR-005 section 2 and ADR-006 section 3.
+ADR-005 section 2, ADR-006 section 3, ADR-007 section 4 and ADR-009 section 9.
 
 The expected matrix is typed out here by hand rather than imported from the seed
 migrations. That duplication is the test: a check that reads the same source as
@@ -12,8 +12,8 @@ from sqlalchemy import Connection, text
 # (role code, scope) -> permission codes it grants. The catalogue.* and
 # project.recipe.*/project.cost.* rows come from ADR-003 section 8; catalog.manage
 # comes from ADR-005 section 2; recipe.manage from ADR-006 section 3;
-# project.budget.manage from ADR-007 section 4; everything else from ADR-002
-# section 7.
+# project.budget.manage from ADR-007 section 4; project.task.* from ADR-009
+# section 9; everything else from ADR-002 section 7.
 EXPECTED: dict[tuple[str, str], set[str]] = {
     ("support", "platform"): {
         "firm.create",
@@ -59,6 +59,8 @@ EXPECTED: dict[tuple[str, str], set[str]] = {
         "project.recipe.manage",
         "project.cost.view",
         "project.budget.manage",
+        "project.task.view",
+        "project.task.manage",
     },
     ("collaborator", "project"): {
         "project.view",
@@ -68,19 +70,25 @@ EXPECTED: dict[tuple[str, str], set[str]] = {
         "project.recipe.manage",
         "project.cost.view",
         "project.budget.manage",
+        "project.task.view",
+        "project.task.manage",
     },
     # No project.budget.manage: the viewer reads the budget and its versions
     # through project.cost.view, and never freezes or replaces the draft
-    # (ADR-007 section 4).
+    # (ADR-007 section 4). No project.task.manage either: they read the planning
+    # and never change it (ADR-009 section 9).
     ("viewer", "project"): {
         "project.view",
         "project.member.view",
         "project.recipe.view",
         "project.cost.view",
+        "project.task.view",
     },
     # No project.cost.view: the client sees how much material their work takes,
-    # never what it costs the studio (ADR-003 section 8).
-    ("client", "project"): {"project.view", "project.recipe.view"},
+    # never what it costs the studio (ADR-003 section 8). The same goes for the
+    # planning: project.task.view shows them the tasks, not what each one costs
+    # (ADR-009 section 9).
+    ("client", "project"): {"project.view", "project.recipe.view", "project.task.view"},
 }
 
 GRANTS = text("""

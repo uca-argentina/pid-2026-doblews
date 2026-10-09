@@ -376,6 +376,144 @@ def test_editing_a_resource_moves_updated_at_but_not_the_price_date(db: Connecti
     assert row.priced.year == 2000
 
 
+# --- planning: the tasks of a work -------------------------------------------
+#
+# ADR-009 section 1. What is checked here is what the schema promises on its
+# own: a task carries exactly the actual dates its status implies, its name is
+# unique among the live tasks of its work, and neither a task nor the line
+# assigned to it can cross into another work or another firm. Which status may
+# follow which, and who may be made the assignee, are the service's rules.
+
+
+def test_a_task_must_last_at_least_one_day(db: Connection, world, add_task) -> None:
+    with pytest.raises(IntegrityError, match="ck_project_task_estimated_duration_days_positive"):
+        add_task(world.project_a, world.firm_a, duration=0)
+
+
+def test_a_task_status_is_one_of_the_four(db: Connection, world, add_task) -> None:
+    with pytest.raises(IntegrityError, match="ck_project_task_status_valid"):
+        add_task(world.project_a, world.firm_a, status="cancelled", actual_start="2026-10-01")
+
+
+def test_a_pending_task_has_no_actual_start(db: Connection, world, add_task) -> None:
+    with pytest.raises(IntegrityError, match="ck_project_task_pending_has_no_actual_start"):
+        add_task(world.project_a, world.firm_a, actual_start="2026-10-01")
+
+
+@pytest.mark.parametrize("status", ["in_progress", "paused", "finished"])
+def test_a_started_task_has_its_actual_start(db: Connection, world, add_task, status) -> None:
+    with pytest.raises(IntegrityError, match="ck_project_task_started_has_actual_start"):
+        # The end is given to a finished one, so only the missing start is at fault.
+        add_task(
+            world.project_a,
+            world.firm_a,
+            status=status,
+            actual_end="2026-10-05" if status == "finished" else None,
+        )
+
+
+def test_a_finished_task_has_its_actual_end(db: Connection, world, add_task) -> None:
+    with pytest.raises(IntegrityError, match="ck_project_task_actual_end_iff_finished"):
+        add_task(world.project_a, world.firm_a, status="finished", actual_start="2026-10-01")
+
+
+def test_only_a_finished_task_has_an_actual_end(db: Connection, world, add_task) -> None:
+    with pytest.raises(IntegrityError, match="ck_project_task_actual_end_iff_finished"):
+        add_task(
+            world.project_a,
+            world.firm_a,
+            status="in_progress",
+            actual_start="2026-10-01",
+            actual_end="2026-10-05",
+        )
+
+
+def test_a_task_cannot_end_before_it_started(db: Connection, world, add_task) -> None:
+    with pytest.raises(IntegrityError, match="ck_project_task_actual_end_not_before_start"):
+        add_task(
+            world.project_a,
+            world.firm_a,
+            status="finished",
+            actual_start="2026-10-05",
+            actual_end="2026-10-01",
+        )
+
+
+def test_a_task_may_start_and_end_on_the_same_day(db: Connection, world, add_task) -> None:
+    """The positive half of the rule above: >= and not >."""
+    add_task(
+        world.project_a,
+        world.firm_a,
+        status="finished",
+        actual_start="2026-10-01",
+        actual_end="2026-10-01",
+    )
+
+
+def test_two_active_tasks_of_a_work_cannot_share_a_name(db: Connection, world, add_task) -> None:
+    add_task(world.project_a, world.firm_a, "Mampostería")
+
+    with pytest.raises(IntegrityError, match="uq_project_task_name_active"):
+        add_task(world.project_a, world.firm_a, "MAMPOSTERÍA")
+
+
+def test_a_removed_task_frees_its_name(db: Connection, world, add_task) -> None:
+    """Why the index is partial (modelo-datos 3.4): the name is a label."""
+    add_task(world.project_a, world.firm_a, "Mampostería", is_active=False)
+
+    add_task(world.project_a, world.firm_a, "Mampostería")
+
+
+def test_two_works_may_each_have_a_task_of_the_same_name(
+    db: Connection, world, add_task, new_project
+) -> None:
+    other = new_project(world.firm_a, world.account_a, "Casa Este")
+
+    add_task(world.project_a, world.firm_a, "Mampostería")
+    add_task(other, world.firm_a, "Mampostería")
+
+
+def test_a_task_cannot_be_hung_off_another_firms_work(db: Connection, world, add_task) -> None:
+    with pytest.raises(IntegrityError, match="fk_project_task_project_id"):
+        add_task(world.project_a, world.firm_b)
+
+
+def test_a_task_assignee_must_be_on_that_firms_roster(db: Connection, world, add_task) -> None:
+    """account_b exists, but only on firm B's roster."""
+    with pytest.raises(IntegrityError, match="fk_project_task_firm_id"):
+        add_task(world.project_a, world.firm_a, assignee=world.account_b)
+
+
+def test_a_take_off_line_cannot_be_assigned_to_another_works_task(
+    db: Connection, world, add_task, add_takeoff_line, new_project
+) -> None:
+    """Same firm, different work: the firm filter alone would let this through."""
+    other = new_project(world.firm_a, world.account_a, "Casa Este")
+    task = add_task(other, world.firm_a)
+    line = add_takeoff_line(world.project_a, world.firm_a, new_recipe(db), "120")
+
+    with pytest.raises(IntegrityError, match="fk_project_recipe_task_id"):
+        db.execute(
+            text("UPDATE project_recipe SET task_id = :task WHERE id = :line"),
+            {"task": task, "line": line},
+        )
+
+
+def test_editing_a_task_moves_its_updated_at(db: Connection, world, add_task) -> None:
+    """The trigger of modelo-datos 3.11, which only the migration creates."""
+    task = add_task(world.project_a, world.firm_a)
+    db.execute(
+        text("UPDATE project_task SET updated_at = '2000-01-01' WHERE id = :id"), {"id": task}
+    )
+
+    db.execute(text("UPDATE project_task SET name = 'Renombrada' WHERE id = :id"), {"id": task})
+
+    touched = db.execute(
+        text("SELECT updated_at = now() FROM project_task WHERE id = :id"), {"id": task}
+    ).scalar_one()
+    assert touched is True
+
+
 # --- saved budget versions --------------------------------------------------
 #
 # ADR-007's three tables. What is checked here is what the schema promises on its

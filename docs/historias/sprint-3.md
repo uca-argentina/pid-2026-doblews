@@ -85,13 +85,14 @@ No son decisiones de este sprint: son lo que los Sprints 1 y 2 dejaron fijado, y
 
 - Dentro de la obra hay una sección **"Planificación"** con el listado de tareas.
 - Se pueden crear, editar y dar de baja **tareas**. Cada una tiene: nombre, descripción opcional, **duración estimada** en días hábiles (entero mayor que cero), **responsable** opcional y, también opcional, una fecha **"no antes de"**.
-- El **responsable** se elige entre los integrantes del equipo de la obra (HU-6). Si después sale del equipo, sus tareas no finalizadas quedan sin responsable y las finalizadas lo conservan.
+- El **responsable** se elige entre los integrantes del equipo de la obra (HU-6) que pueden gestionar sus tareas (`project.task.manage`: `lead` y `collaborator`). Si después sale del equipo, sus tareas no finalizadas quedan sin responsable y las finalizadas lo conservan.
 - El **estado** es uno de cuatro: **pendiente**, **en curso**, **pausada** o **finalizada**. Una tarea nace pendiente.
 - El estado se cambia desde el listado y desde la tarea, con estas acciones y ninguna otra: **iniciar**, **pausar**, **reanudar**, **finalizar**, **reabrir** (una finalizada vuelve a en curso) y **deshacer inicio** (una en curso vuelve a pendiente).
 - Iniciar registra la **fecha real de inicio** y finalizar la **fecha real de fin**; por defecto hoy, y se pueden corregir. El fin no puede ser anterior al inicio.
 - El **costo** de una tarea no se escribe: es la suma de las **líneas de cómputo** asignadas a ella, a precio vigente. Desde la tarea se asignan y desasignan líneas del cómputo de la obra; una línea está en una sola tarea o en ninguna.
 - En el cómputo (HU-5), cada línea muestra a qué tarea está asignada y se puede cambiar desde ahí.
 - La planificación muestra el costo de cada tarea, el total, y aparte el importe del cómputo **sin asignar a ninguna tarea**.
+- Cargar una versión del presupuesto (HU-12) deja las líneas cargadas **sin asignar**, y la confirmación lo avisa.
 - El nombre es único entre las tareas activas de la obra.
 - **Baja lógica**, en cualquier estado, con confirmación. Sus líneas de cómputo vuelven a quedar sin asignar; no se dan de baja.
 - Escribir exige `project.task.manage` (`lead`, `collaborator`). Ver exige `project.task.view` (también `viewer` y `client`) o `project.view_all`.
@@ -316,7 +317,7 @@ Lo que queda sin decidir. Cada pregunta se cierra **al arrancar la historia que 
 
 **Cerradas**
 
-- D-1 a D-8, en [ADR-009](../adr/0009-project-planning.md): las tareas cuelgan directo de la obra; el costo sale del cómputo; el responsable es un integrante de la obra; las fechas se calculan en días hábiles; las transiciones de estado son las de HU-13; toda dependencia es obligatoria y de tipo fin → inicio; reabrir una predecesora se permite; las dependencias viven en Postgres.
+- D-1 a D-8, en [ADR-009](../adr/0009-project-planning.md): las tareas cuelgan directo de la obra; el costo sale del cómputo; el responsable es un integrante de la obra que puede gestionar sus tareas; las fechas se calculan en días hábiles; las transiciones de estado son las de HU-13; toda dependencia es obligatoria y de tipo fin → inicio; reabrir una predecesora se permite; las dependencias viven en Postgres.
 - D-14 y D-15, en [ADR-010](../adr/0010-suppliers-price-lists.md): los proveedores son del estudio; el envío es un importe fijo por material.
 
 ---
@@ -369,3 +370,29 @@ Lo que no se recorta: el bloqueo al iniciar, una vista temporal, el avance plani
 **ADR-010 escrita** (proveedores): HU-17 y HU-18 quedan firmes. **T-08 terminada** en lo que bloqueaba el arranque.
 
 **Quedan liberadas:** HU-13 (planificación) y HU-17 (compras), en paralelo.
+
+**2026-10-09.** **Backend de HU-13 implementado** (`feat/hu13-tasks-back`): la tabla `project_task`, la columna `project_recipe.task_id`, los permisos `project.task.view` y `project.task.manage`, y las nueve rutas de la planificación. `project_task_dependency` no se creó: entra con HU-14.
+
+Al implementar se afinó ADR-009 en tres puntos:
+
+- **Responsable:** solo quien tiene `project.task.manage` en la obra (`lead` y `collaborator`), y la regla se chequea al asignar. Cambiar de rol no desasigna; salir del equipo, sí.
+- **Redondeo:** cada tarea y el "sin asignar" se redondean por separado y el total de la planificación es su suma. Puede diferir en centavos del total de Presupuesto, que redondea por recurso.
+- **Cargar una versión (HU-12)** deja las líneas cargadas sin asignar. Que la versión guarde la tarea de cada línea queda para HU-19 (D-17).
+
+**Contrato para el front de HU-13**, todo bajo `/firms/{firm_id}/projects/{project_id}`:
+
+| Ruta | Para qué |
+|---|---|
+| `GET /tasks` | El listado: tareas, costo de cada una, `unassigned_cost` y `total_cost`. Los tres costos llegan en `null` a quien no puede ver costos |
+| `GET /tasks/assignees` | Las opciones del desplegable de responsable |
+| `POST /tasks`, `PUT /tasks/{id}`, `DELETE /tasks/{id}` | Alta, edición y baja |
+| `POST /tasks/{id}/transitions` | Cambiar el estado: `{"action": "start" \| "pause" \| "resume" \| "finish" \| "reopen" \| "undo_start", "on_date": "2026-10-01"}`. `on_date` es opcional y solo vale en `start` y `finish` |
+| `PUT /tasks/{id}/actual-dates` | Corregir las fechas reales |
+| `PUT /tasks/{id}/lines` | Reemplazar las líneas de cómputo de la tarea: `{"line_ids": [...]}` |
+| `PUT /takeoff/lines/{id}/task` | Asignar una línea desde el cómputo: `{"task_id": 7}` o `{"task_id": null}` |
+
+Cada línea de `GET /takeoff` trae ahora `task: {id, name}` o `null`. Una regla rota responde **409** con el texto para mostrar en `detail`, como en HU-5.
+
+**Queda para el front:** la sección "Planificación", la tarea de cada línea en el cómputo, y un aviso en la confirmación de "Cargar versión" de que las líneas cargadas quedan sin asignar a ninguna tarea.
+
+**Queda liberada:** HU-14, en lo que es backend. El punto donde entra el bloqueo por predecesoras está marcado en `transition()` de `backend/app/services/tasks.py`.

@@ -15,6 +15,7 @@ from app.models.firm import Firm
 from app.models.membership import FirmMember, PlatformMember
 from app.models.project import Project, ProjectMember
 from app.models.project_recipe import ProjectRecipe
+from app.models.project_task import ProjectTask
 from app.models.role import Permission, Role, RolePermission
 from app.models.unit_of_measure import UnitOfMeasure
 
@@ -32,6 +33,7 @@ __all__ = [
     "Project",
     "ProjectMember",
     "ProjectRecipe",
+    "ProjectTask",
     "Recipe",
     "RecipeResource",
     "Resource",

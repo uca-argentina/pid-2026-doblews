@@ -167,9 +167,10 @@ stateDiagram-v2
 
 ### 6. Responsable
 
-Un integrante del equipo de la obra, opcional. Se guarda contra **`firm_member`** y no contra `project_member`, porque `project_member` se borra de verdad: una FK ahí impediría sacar del equipo a quien terminó tareas, o perdería quién las hizo.
+Un integrante del equipo de la obra **que pueda gestionar sus tareas**, opcional. Se guarda contra **`firm_member`** y no contra `project_member`, porque `project_member` se borra de verdad: una FK ahí impediría sacar del equipo a quien terminó tareas, o perdería quién las hizo.
 
-- Al **asignar**, el servicio exige que la persona integre la obra.
+- Al **asignar**, el servicio exige que la persona tenga `project.task.manage` en la obra: hoy, `lead` y `collaborator` (§9). La regla es un permiso y no una lista de roles (ADR-002), y garantiza que el responsable pueda cambiar el estado de su propia tarea. Quedan afuera el `viewer` y el `client`.
+- La regla se chequea **al asignar y no después**: a quien le cambian el rol dentro de la obra conserva las tareas que ya tenía.
 - Al **salir del equipo**, sus tareas no finalizadas quedan sin responsable; las finalizadas lo conservan.
 
 ### 7. Baja de una tarea
@@ -184,6 +185,8 @@ Baja lógica, en cualquier estado, con confirmación. En la misma transacción:
 El costo de una tarea es la suma del costo de sus líneas de cómputo, con el mismo cálculo y los mismos precios vigentes del presupuesto de HU-11. Una tarea sin líneas cuesta cero.
 
 Las líneas sin asignar siguen contando en el presupuesto de la obra. En la planificación aparecen como un total "sin asignar a ninguna tarea".
+
+**Redondeo.** El costo de cada tarea y el importe sin asignar se redondean a dos decimales cada uno, y el total de la planificación es la suma de esos importes ya redondeados: lo que se ve en la pantalla siempre cierra. El presupuesto de HU-11 redondea por recurso y no por tarea, así que los dos totales pueden diferir en centavos. Es el mismo criterio de HU-5 y HU-11 (cada pantalla suma lo que muestra), aplicado a otra forma de agrupar las mismas líneas.
 
 ### 9. Permisos
 
@@ -201,7 +204,7 @@ Van en el servicio, cada una con su test:
 1. **No hay ciclos de dependencias.** Además, escribir una dependencia toma un bloqueo sobre la fila de la obra, para que dos altas simultáneas no cierren un ciclo entre las dos.
 2. **Una tarea no se inicia con predecesoras sin finalizar.**
 3. **Solo se permiten las transiciones de §5.**
-4. **El responsable integra la obra** al momento de asignarlo.
+4. **El responsable tiene `project.task.manage` en la obra** al momento de asignarlo.
 5. **Dar de baja una tarea** borra sus dependencias y desasigna sus líneas.
 6. **Sacar a alguien del equipo** desasigna sus tareas no finalizadas.
 7. **Una dependencia no une tareas dadas de baja**, y una línea de cómputo no se asigna a una.
@@ -237,7 +240,7 @@ Es también la costura para la extensión de §Consecuencias: el resto de la apl
 | **Línea base.** Acordado en principio y **revisable**: un botón "Fijar planificación" copia las fechas previstas de cada tarea (dos columnas `DATE` en `project_task` y una fecha en `project`); la comparación planificado/real es contra esa copia; volver a fijar reemplaza la anterior | HU-16 |
 | Avance: cómo se calcula el planificado, cómo se agrega a la obra, relación con el estado, historial | HU-16 |
 | Calendario o Gantt, y con qué componente | HU-15 |
-| Si las versiones del presupuesto guardan la asignación de líneas a tareas | HU-19 |
+| **Versiones del presupuesto y asignación a tareas.** Cargar una versión (HU-12) da de baja las líneas del cómputo y crea otras nuevas, así que hoy **las líneas cargadas quedan sin asignar** y la pantalla lo avisa. Previsto: que `budget_version_line` guarde `task_id` y la carga lo restaure si la tarea sigue activa | HU-19 (D-17) |
 
 **Extensiones previstas, no descartadas:**
 
@@ -262,6 +265,10 @@ Es también la costura para la extensión de §Consecuencias: el resto de la apl
 **Dependencias obligatorias y no obligatorias.** Lectura más literal del pedido. Descartada porque una dependencia que no bloquea no dice nada: si no hay que esperar, no se conecta.
 
 **Responsable con FK a `project_member`.** Dejaría en el esquema que el responsable integra la obra. Descartada porque `project_member` se borra: habría que elegir entre no poder sacar a alguien del equipo o perder quién hizo cada tarea.
+
+**Cualquier integrante de la obra como responsable.** Lectura literal de "integrantes del equipo". Descartada porque incluía al `client` y al `viewer`, que no pueden cambiar el estado de la tarea de la que serían responsables. Limitarlo al rol de estudio `architect` tampoco servía: deja afuera al `owner` que es `lead` de su obra.
+
+**Reasignar por coincidencia al cargar una versión.** Cada línea cargada heredaría la tarea de la línea anterior con la misma receta, cantidad y nota. Descartada porque es una adivinanza: cuando la versión difiere del borrador no coincide, y falla sin decir en cuál.
 
 **Costo de la tarea cargado a mano.** Más simple y sirve para tareas sin cómputo. Descartada porque crea un segundo número de costo de la obra, sin nada que lo haga coincidir con el presupuesto.
 
