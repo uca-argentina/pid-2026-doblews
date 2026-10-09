@@ -12,8 +12,10 @@ import {
 import { useDisclosure } from "@mantine/hooks";
 import { useState } from "react";
 import { useCurrentFirm } from "../features/firms/firmContext";
+import { usePlanningAccess } from "../features/planning/usePlanningAccess";
 import { useCurrentProject } from "../features/projects/projectContext";
 import { AddLineModal } from "../features/takeoff/AddLineModal";
+import { AssignLineTaskModal } from "../features/takeoff/AssignLineTaskModal";
 import { EditLineModal } from "../features/takeoff/EditLineModal";
 import { LineActionsMenu } from "../features/takeoff/LineActionsMenu";
 import { RemoveLineModal } from "../features/takeoff/RemoveLineModal";
@@ -34,6 +36,9 @@ export function ProjectTakeoffPage() {
   const { firm } = useCurrentFirm();
   const { project } = useCurrentProject();
   const { canView, canManage } = useTakeoffAccess();
+  // Where a line is planned answers to the planning's permission, not the
+  // take-off's (HU-13). The same roles hold both today.
+  const { canManage: canAssignTasks } = usePlanningAccess();
 
   if (!canView) {
     // The tab is already hidden; this answers someone who typed the URL. The
@@ -50,6 +55,7 @@ export function ProjectTakeoffPage() {
       firmId={firm.id}
       projectId={project.id}
       canManage={canManage}
+      canAssignTasks={canAssignTasks}
     />
   );
 }
@@ -58,16 +64,19 @@ function TakeoffView({
   firmId,
   projectId,
   canManage,
+  canAssignTasks,
 }: {
   firmId: number;
   projectId: number;
   canManage: boolean;
+  canAssignTasks: boolean;
 }) {
   const { data: takeoff, isLoading, isError } = useTakeoff(firmId, projectId);
   const [adding, add] = useDisclosure(false);
   // The line each modal is open for; null means that modal is closed.
   const [editing, setEditing] = useState<TakeoffLineOut | null>(null);
   const [removing, setRemoving] = useState<TakeoffLineOut | null>(null);
+  const [assigning, setAssigning] = useState<TakeoffLineOut | null>(null);
 
   if (isLoading) {
     return (
@@ -107,12 +116,13 @@ function TakeoffView({
             <TakeoffLines
               lines={takeoff.lines}
               renderActions={
-                canManage
+                canManage || canAssignTasks
                   ? (line) => (
                       <LineActionsMenu
                         line={line}
-                        onEdit={setEditing}
-                        onRemove={setRemoving}
+                        onEdit={canManage ? setEditing : undefined}
+                        onRemove={canManage ? setRemoving : undefined}
+                        onAssignTask={canAssignTasks ? setAssigning : undefined}
                       />
                     )
                   : undefined
@@ -148,6 +158,14 @@ function TakeoffView({
             onClose={() => setRemoving(null)}
           />
         </>
+      )}
+      {canAssignTasks && (
+        <AssignLineTaskModal
+          line={assigning}
+          firmId={firmId}
+          projectId={projectId}
+          onClose={() => setAssigning(null)}
+        />
       )}
     </>
   );

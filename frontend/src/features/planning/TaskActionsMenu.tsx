@@ -5,6 +5,7 @@ interface TaskActionsMenuProps {
   task: TaskOut;
   onEdit: (task: TaskOut) => void;
   onFixDates: (task: TaskOut) => void;
+  onAssignLines: (task: TaskOut) => void;
   onRemove: (task: TaskOut) => void;
 }
 
@@ -20,6 +21,7 @@ export function TaskActionsMenu({
   task,
   onEdit,
   onFixDates,
+  onAssignLines,
   onRemove,
 }: TaskActionsMenuProps) {
   return (
@@ -35,6 +37,9 @@ export function TaskActionsMenu({
       </Menu.Target>
       <Menu.Dropdown>
         <Menu.Item onClick={() => onEdit(task)}>Editar</Menu.Item>
+        <Menu.Item onClick={() => onAssignLines(task)}>
+          Líneas de cómputo
+        </Menu.Item>
         {/* A pending task has no actual dates to correct. */}
         {task.status !== "pending" && (
           <Menu.Item onClick={() => onFixDates(task)}>

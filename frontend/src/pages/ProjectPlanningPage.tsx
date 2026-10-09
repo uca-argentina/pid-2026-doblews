@@ -19,6 +19,7 @@ import { RemoveTaskModal } from "../features/planning/RemoveTaskModal";
 import { TaskActionsMenu } from "../features/planning/TaskActionsMenu";
 import { TaskCard } from "../features/planning/TaskCard";
 import { TaskFormModal } from "../features/planning/TaskFormModal";
+import { TaskLinesModal } from "../features/planning/TaskLinesModal";
 import { TaskStatusMenu } from "../features/planning/TaskStatusMenu";
 import { TasksTable } from "../features/planning/TasksTable";
 import {
@@ -88,6 +89,7 @@ function PlanningView({
   const [editing, setEditing] = useState<TaskOut | null>(null);
   const [removing, setRemoving] = useState<TaskOut | null>(null);
   const [fixingDates, setFixingDates] = useState<TaskOut | null>(null);
+  const [assigningLines, setAssigningLines] = useState<TaskOut | null>(null);
   const [confirming, setConfirming] = useState<DatedTransition | null>(null);
 
   const transitionTask = useTransitionTask(firmId, projectId);
@@ -150,6 +152,7 @@ function PlanningView({
           task={task}
           onEdit={setEditing}
           onFixDates={setFixingDates}
+          onAssignLines={setAssigningLines}
           onRemove={setRemoving}
         />
       )
@@ -202,6 +205,12 @@ function PlanningView({
             firmId={firmId}
             projectId={projectId}
             onClose={() => setFixingDates(null)}
+          />
+          <TaskLinesModal
+            task={assigningLines}
+            firmId={firmId}
+            projectId={projectId}
+            onClose={() => setAssigningLines(null)}
           />
         </>
       )}
