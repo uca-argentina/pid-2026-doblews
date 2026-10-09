@@ -38,19 +38,16 @@ def team(world, new_member, add_project_member):
     the same people: what changes between them is the guard, not the roster.
     """
     collaborator = new_member(world.firm_a, "carlos@test.com", "architect")
-    viewer = new_member(world.firm_a, "vera@test.com", "architect")
     client = new_member(world.firm_a, "clara@test.com", "client")
     bystander = new_member(world.firm_a, "otto@test.com", "architect")
 
     add_project_member(world.project_a, world.account_a2, world.firm_a, "lead")
     add_project_member(world.project_a, collaborator, world.firm_a, "collaborator")
-    add_project_member(world.project_a, viewer, world.firm_a, "viewer")
     add_project_member(world.project_a, client, world.firm_a, "client")
 
     return {
         "lead": world.account_a2,
         "collaborator": collaborator,
-        "viewer": viewer,
         "client": client,
         "owner": world.account_a,
         "bystander": bystander,
@@ -170,9 +167,9 @@ class TestRead:
 
 
 class TestWhoMayRead:
-    @pytest.mark.parametrize("role", ["lead", "collaborator", "viewer", "owner"])
+    @pytest.mark.parametrize("role", ["lead", "collaborator", "owner"])
     def test_these_roles_read_the_budget(self, client, world, team, wall, auth_header, role):
-        """viewer holds project.cost.view; the owner comes in through project.view_all."""
+        """The owner is on no work and comes in through project.view_all."""
         response = client.get(budget_url(world), headers=auth_header(team[role]))
 
         assert response.status_code == 200

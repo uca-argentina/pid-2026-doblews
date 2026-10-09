@@ -67,7 +67,9 @@ class TestAdd:
     def test_refuses_someone_who_is_not_on_the_roster(self, db_session, world, project):
         """Bruno belongs to firm B. Nothing about him is firm A's to assign."""
         with pytest.raises(ProjectTeamError) as refused:
-            add_team_member(db_session, project, account_id=world.account_b, role_code="viewer")
+            add_team_member(
+                db_session, project, account_id=world.account_b, role_code="collaborator"
+            )
 
         assert refused.value.detail == NOT_ON_ROSTER
         assert team(db_session, project.id) == {world.account_a: "lead"}
@@ -83,10 +85,12 @@ class TestAdd:
         assert refused.value.detail == NOT_ON_ROSTER
 
     def test_refuses_someone_already_on_the_team(self, db_session, world, project):
-        add_team_member(db_session, project, account_id=world.account_a2, role_code="viewer")
+        add_team_member(db_session, project, account_id=world.account_a2, role_code="collaborator")
 
         with pytest.raises(ProjectTeamError) as refused:
-            add_team_member(db_session, project, account_id=world.account_a2, role_code="viewer")
+            add_team_member(
+                db_session, project, account_id=world.account_a2, role_code="collaborator"
+            )
 
         assert refused.value.detail == ALREADY_ON_TEAM
 
@@ -139,26 +143,26 @@ class TestChangeRole:
             project,
             actor_id=world.account_a,
             account_id=world.account_a2,
-            role_code="viewer",
+            role_code="client",
         )
 
-        assert team(db_session, project.id)[world.account_a2] == "viewer"
+        assert team(db_session, project.id)[world.account_a2] == "client"
 
     def test_asking_for_the_role_they_already_hold_changes_nothing(
         self, db_session, world, project
     ):
         """A double-submitted form is harmless."""
-        add_team_member(db_session, project, account_id=world.account_a2, role_code="viewer")
+        add_team_member(db_session, project, account_id=world.account_a2, role_code="collaborator")
 
         change_team_role(
             db_session,
             project,
             actor_id=world.account_a,
             account_id=world.account_a2,
-            role_code="viewer",
+            role_code="collaborator",
         )
 
-        assert team(db_session, project.id)[world.account_a2] == "viewer"
+        assert team(db_session, project.id)[world.account_a2] == "collaborator"
 
     def test_refuses_moving_the_lead_off_the_lead_role(self, db_session, world, project):
         """The one way to leave a work with nobody responsible."""
@@ -175,7 +179,7 @@ class TestChangeRole:
         assert team(db_session, project.id) == {world.account_a: "lead"}
 
     def test_promoting_someone_to_lead_transfers_it(self, db_session, world, project):
-        add_team_member(db_session, project, account_id=world.account_a2, role_code="viewer")
+        add_team_member(db_session, project, account_id=world.account_a2, role_code="collaborator")
 
         change_team_role(
             db_session,
@@ -197,7 +201,7 @@ class TestChangeRole:
                 project,
                 actor_id=world.account_a,
                 account_id=world.account_a2,
-                role_code="viewer",
+                role_code="collaborator",
             )
 
     def test_refuses_when_the_person_left_the_roster(self, db_session, world, project, new_member):
@@ -255,13 +259,12 @@ class TestRemove:
 
 
 class TestAssignableRoles:
-    def test_offers_the_four_project_roles_with_their_seeded_labels(self, db_session):
+    def test_offers_the_three_project_roles_with_their_seeded_labels(self, db_session):
         """Read from the seed, so the frontend keeps no dictionary of its own."""
         roles = {role.code: role.name for role in list_assignable_roles(db_session)}
 
         assert roles == {
             "lead": "Responsable",
             "collaborator": "Colaborador",
-            "viewer": "Lector",
             "client": "Cliente",
         }
