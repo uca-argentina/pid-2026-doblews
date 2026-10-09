@@ -1,5 +1,6 @@
 import {
   createTheme,
+  NavLink,
   type CSSVariablesResolver,
   type MantineColorsTuple,
 } from "@mantine/core";
@@ -45,6 +46,19 @@ const stone: MantineColorsTuple = [
 export const theme = createTheme({
   primaryColor: "obra",
   colors: { obra, gray: stone },
+  // One corner for everything that is pressed. Spelled out although "sm" is
+  // already Mantine's default, because it is the value the overrides below and
+  // the status menu of the planning are matched to: changing it here is what
+  // changes all of them together.
+  defaultRadius: "sm",
+  components: {
+    // The sidebar links. NavLink is the one pressable component Mantine draws
+    // with square corners and no radius prop, so next to a Button its
+    // highlighted row read as a different kind of thing.
+    NavLink: NavLink.extend({
+      styles: { root: { borderRadius: "var(--mantine-radius-default)" } },
+    }),
+  },
 });
 
 // Two tokens that are not part of a colour scale.
