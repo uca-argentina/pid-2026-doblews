@@ -60,3 +60,18 @@ export async function removeLine(
 ): Promise<void> {
   await api.delete(`${takeoffUrl(firmId, projectId)}/lines/${lineId}`);
 }
+
+/** Assigns a line to a task of the work's planning, or to none with null.
+ * A 409 means that task was removed while the picker was open. */
+export async function setLineTask(
+  firmId: number,
+  projectId: number,
+  lineId: number,
+  taskId: number | null,
+): Promise<TakeoffLineOut> {
+  const { data } = await api.put<TakeoffLineOut>(
+    `${takeoffUrl(firmId, projectId)}/lines/${lineId}/task`,
+    { task_id: taskId },
+  );
+  return data;
+}

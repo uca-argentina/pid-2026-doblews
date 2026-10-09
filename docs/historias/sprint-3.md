@@ -396,3 +396,17 @@ Cada línea de `GET /takeoff` trae ahora `task: {id, name}` o `null`. Una regla 
 **Queda para el front:** la sección "Planificación", la tarea de cada línea en el cómputo, y un aviso en la confirmación de "Cargar versión" de que las líneas cargadas quedan sin asignar a ninguna tarea.
 
 **Queda liberada:** HU-14, en lo que es backend. El punto donde entra el bloqueo por predecesoras está marcado en `transition()` de `backend/app/services/tasks.py`.
+
+**2026-10-09 (tarde).** **Front de HU-13 implementado** (`feat/hu13-tasks-front`): la pestaña "Planificación" de la obra, con el listado de tareas, su costo, el importe sin asignar y el total; alta, edición y baja; cambio de estado; corrección de fechas reales; y la asignación de líneas de cómputo desde la tarea y desde el cómputo.
+
+Cómo quedó resuelto lo que la historia dejaba abierto:
+
+- **El estado se cambia desde su propia etiqueta**, que es un desplegable con las acciones que ese estado admite. Todas las transiciones salen del mismo lugar; el menú ⋯ de la tarea queda para editar, líneas de cómputo, corregir fechas y dar de baja.
+- **Iniciar y finalizar piden la fecha** en una confirmación, precargada en hoy y sin días futuros. Las otras cuatro acciones son de un clic.
+- **"La tarea" es un conjunto de modales sobre el listado**, como en Equipo y Cómputo. No hay página de detalle por tarea; si HU-14 o HU-15 la necesitan, se agrega ahí.
+- **El cómputo muestra siempre la columna "Tarea"**, con "Sin asignar" donde corresponde.
+- **"Cargar versión" avisa** que las líneas cargadas quedan sin asignar a ninguna tarea.
+
+De paso se unificó el redondeo de lo que se presiona: los enlaces del panel lateral y la etiqueta de estado usan el mismo que los botones, definido una sola vez en `frontend/src/theme.ts`.
+
+**Falta para cerrar HU-13:** la revisión visual de los criterios y de 375px sobre lo mergeado en `dev`.

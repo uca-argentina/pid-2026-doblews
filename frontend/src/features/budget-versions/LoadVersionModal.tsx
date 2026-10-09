@@ -102,7 +102,9 @@ export function LoadVersionModal({
     <Modal
       opened={version !== null}
       onClose={close}
-      title={version ? `Cargar la v${version.version_number} en el cómputo` : ""}
+      title={
+        version ? `Cargar la v${version.version_number} en el cómputo` : ""
+      }
       centered
     >
       <Stack gap="md">
@@ -125,6 +127,14 @@ export function LoadVersionModal({
             queda intacta.
           </Text>
         </Alert>
+
+        {/* HU-13: a version does not record which task each line was in, and
+            the lines it loads are new ones (ADR-009, pending for HU-19). */}
+        <Text size="sm">
+          Las líneas cargadas quedan{" "}
+          <strong>sin asignar a ninguna tarea</strong>: si la obra tiene
+          planificación, vas a tener que volver a asignarlas.
+        </Text>
 
         <Group justify="flex-end" gap="sm">
           <Button variant="subtle" onClick={close} disabled={load.isPending}>
