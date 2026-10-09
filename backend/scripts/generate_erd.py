@@ -68,6 +68,11 @@ AREAS = (
         "[ADR-002](adr/0002-authorization-model.md) §3-§5, [ADR-003](adr/0003-recipe-catalog.md)",
     ),
     Area(
+        "Planificación",
+        ("project_task",),
+        "[ADR-009](adr/0009-project-planning.md)",
+    ),
+    Area(
         "Versiones del presupuesto",
         ("budget_version",),
         "[ADR-007](adr/0007-budget-versions.md)",
