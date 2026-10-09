@@ -117,6 +117,7 @@ Las "fechas" que pide la cátedra son, entonces, cuatro: dos previstas (calculad
 - **Toda dependencia es obligatoria.** El pedido dice "predecesoras obligatorias"; lo leemos como "las predecesoras, que son obligatorias". Si una tarea no tiene que esperar a otra, no se conecta. No hay columna para distinguirlas.
 - **Un solo tipo: fin → inicio.** La sucesora empieza el día hábil siguiente al fin de la predecesora. Sin días de espera entre tareas: un fraguado o una entrega se cargan como una tarea propia, que además queda a la vista en el Gantt.
 - **Sin ciclos.** Al agregar `A → B` se rechaza si ya existe un camino de `B` a `A`.
+- **Se editan desde la sucesora.** El formulario de la tarea manda la lista completa de sus predecesoras, que reemplaza a la anterior; el ciclo se busca con las aristas nuevas, y el rechazo nombra el ciclo entero.
 
 ### 4. Cómo se calculan las fechas
 
@@ -139,6 +140,13 @@ Tres consecuencias de esa tabla:
 El **inicio de la obra** es `project.estimated_start_date`, que ya existe y es opcional. Sin ella no se calcula: la sección pide cargarla.
 
 **Recorrido hacia atrás**, desde el fin previsto de la obra: da para cada tarea no finalizada su **holgura** en días hábiles (cuánto puede atrasarse sin mover el fin de la obra). Una tarea con holgura cero es **crítica**.
+
+Precisiones que salieron al implementar (HU-14):
+
+- **Fin inclusivo.** Una tarea de *n* días que empieza el día *d* ocupa *d* y los *n − 1* hábiles siguientes; su sucesora empieza el hábil siguiente al fin.
+- **Fines de semana.** Un inicio que cae sábado o domingo (el de la obra, un "no antes de") se corre al lunes. "Hoy", como piso, es el primer día hábil desde hoy: un sábado no se planifica nada para el fin de semana. Las fechas reales se respetan como se cargaron.
+- **Solo las sucesoras pendientes limitan hacia atrás.** Una sucesora que ya arrancó ya no espera a su predecesora (es el caso de reabrir, §5), así que no le quita holgura.
+- **Sin fecha de inicio no hay cronograma**: ninguna tarea tiene fechas previstas ni holgura, y la planificación pide cargarla.
 
 El porcentaje de avance **no entra** en este cálculo.
 

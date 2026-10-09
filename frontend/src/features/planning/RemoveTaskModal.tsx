@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Alert, Button, Group, Modal, Stack, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { apiErrorMessage } from "../../lib/apiError";
+import { joinTaskNames } from "./taskFields";
 import type { TaskOut } from "./types";
 import { useRemoveTask } from "./usePlanning";
 
@@ -71,6 +72,19 @@ export function RemoveTaskModal({
           baja: vuelven a quedar sin asignar, siguen contando en el presupuesto
           y podés asignarlas a otra tarea.
         </Text>
+
+        {/* Its dependencies go with it, both ways (ADR-009 section 7). Only
+            the successors are named: they are the tasks whose dates and
+            whose start this changes. */}
+        {task && task.successors.length > 0 && (
+          <Text size="sm">
+            {task.successors.length === 1
+              ? "Esta tarea deja de esperarla"
+              : "Estas tareas dejan de esperarla"}{" "}
+            y sus fechas se recalculan:{" "}
+            {joinTaskNames(task.successors.map((successor) => successor.name))}.
+          </Text>
+        )}
 
         <Group justify="flex-end" gap="sm">
           <Button

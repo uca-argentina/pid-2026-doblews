@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
-import { Table, Text } from "@mantine/core";
+import { Table, Text, UnstyledButton } from "@mantine/core";
 import { formatMoney } from "../../lib/format";
-import { EMPTY, formatDate } from "../projects/projectFields";
-import { formatDuration } from "./taskFields";
+import { EMPTY } from "../projects/projectFields";
+import { SlackBadge } from "./SlackBadge";
+import { formatDuration, taskEnd, taskStart } from "./taskFields";
+import { TaskDateText } from "./TaskDateText";
 import { TaskStatusBadge } from "./TaskStatusBadge";
 import type { TaskOut } from "./types";
 
@@ -12,6 +14,8 @@ interface TasksTableProps {
   /** Whether the response carries costs at all. Decided once by the page from
    * total_cost, so the column is there for every row or for none. */
   showsCost: boolean;
+  /** Opens the task's detail, from its name. */
+  onOpen: (task: TaskOut) => void;
   /** The status as a control that changes it, for those who may manage the
    * planning. Omitted for everyone else, who get the plain badge. */
   renderStatus?: (task: TaskOut) => ReactNode;
@@ -23,18 +27,22 @@ interface TasksTableProps {
 /** The planning as a table, for screens wide enough to read one. Mobile gets
  * TaskCard instead (frontend/CLAUDE.md: cards, never a horizontal table).
  *
- * The order is the backend's — the order the tasks were loaded in — so
- * nothing reshuffles between reloads or when one is renamed. HU-14 is what
- * will order them in time. */
+ * The order is the backend's: by planned start, so the list reads in time
+ * (HU-14), and in the order they were loaded where that ties.
+ *
+ * "Inicio" and "Fin" are one column each and not two: the planned date is
+ * the actual one once it happened, so showing both would repeat it. The text
+ * says which one it is — plain when actual, dimmed when planned. */
 export function TasksTable({
   tasks,
   currency,
   showsCost,
+  onOpen,
   renderStatus,
   renderActions,
 }: TasksTableProps) {
   return (
-    <Table.ScrollContainer minWidth={760}>
+    <Table.ScrollContainer minWidth={860}>
       <Table verticalSpacing="sm" highlightOnHover>
         <Table.Thead>
           <Table.Tr>
@@ -42,8 +50,9 @@ export function TasksTable({
             <Table.Th>Responsable</Table.Th>
             <Table.Th>Duración</Table.Th>
             <Table.Th>Estado</Table.Th>
-            <Table.Th>Inicio real</Table.Th>
-            <Table.Th>Fin real</Table.Th>
+            <Table.Th>Inicio</Table.Th>
+            <Table.Th>Fin</Table.Th>
+            <Table.Th>Holgura</Table.Th>
             {showsCost && <Table.Th ta="right">Costo</Table.Th>}
             {/* No heading, like the team's actions column: the menu's own
                 label says what it does. */}
@@ -54,9 +63,14 @@ export function TasksTable({
           {tasks.map((task) => (
             <Table.Tr key={task.id}>
               <Table.Td>
-                <Text size="sm" fw={500}>
-                  {task.name}
-                </Text>
+                <UnstyledButton
+                  onClick={() => onOpen(task)}
+                  aria-label={`Ver el detalle de ${task.name}`}
+                >
+                  <Text size="sm" fw={500} td="underline">
+                    {task.name}
+                  </Text>
+                </UnstyledButton>
                 {task.description && (
                   <Text size="xs" c="dimmed" lineClamp={2}>
                     {task.description}
@@ -79,10 +93,13 @@ export function TasksTable({
                 )}
               </Table.Td>
               <Table.Td>
-                <Text size="sm">{formatDate(task.actual_start_date)}</Text>
+                <TaskDateText date={taskStart(task)} />
               </Table.Td>
               <Table.Td>
-                <Text size="sm">{formatDate(task.actual_end_date)}</Text>
+                <TaskDateText date={taskEnd(task)} />
+              </Table.Td>
+              <Table.Td>
+                <SlackBadge task={task} />
               </Table.Td>
               {showsCost && (
                 <Table.Td ta="right">

@@ -410,3 +410,31 @@ Cómo quedó resuelto lo que la historia dejaba abierto:
 De paso se unificó el redondeo de lo que se presiona: los enlaces del panel lateral y la etiqueta de estado usan el mismo que los botones, definido una sola vez en `frontend/src/theme.ts`.
 
 **Falta para cerrar HU-13:** la revisión visual de los criterios y de 375px sobre lo mergeado en `dev`.
+
+**2026-10-09 (noche).** **HU-14 implementada, backend y frontend** (`feat/hu14-dependencies`): la tabla `project_task_dependency`, el bloqueo al iniciar, y las fechas previstas, el fin de obra, la holgura y el camino crítico calculados al leer. **Holgura y camino crítico entran**: no hizo falta recortarlos.
+
+El cálculo vive en `backend/app/services/schedule.py`, funciones puras sin base (ADR-009 §11), con sus tests en `test_schedule.py`. Al implementar se afinó ADR-009 §3 y §4: fin inclusivo, fines de semana, qué sucesoras cuentan hacia atrás y cómo se editan las dependencias.
+
+**Contrato nuevo**, sobre las mismas rutas de HU-13:
+
+| Dónde | Qué cambia |
+|---|---|
+| `POST /tasks`, `PUT /tasks/{id}` | Aceptan `predecessor_ids: [...]`: la lista completa, que reemplaza a la anterior. Vacía o ausente, sin predecesoras. Un ciclo, una tarea de otra obra o dada de baja, o la tarea misma responden **409** |
+| `POST /tasks/{id}/transitions` | `start` responde **409** si alguna predecesora no está finalizada, nombrando cuáles |
+| Cada tarea (`GET /tasks` y lo que devuelve cada escritura) | Suma `planned_start_date`, `planned_end_date`, `slack_days`, `is_critical`, `predecessors` y `successors` (`{id, name, status}`) |
+| `GET /tasks` | Suma `project_start_date` y `planned_end_date` (fin de obra). Las tareas llegan ordenadas por inicio previsto |
+
+Las fechas las ve también el `client`; los costos, no.
+
+Cómo quedó resuelto en pantalla:
+
+- **Predecesoras en el formulario de la tarea**, un desplegable múltiple que no ofrece las tareas que ya dependen de ella (cerrarían un ciclo).
+- **"La tarea" es un modal de detalle**: se abre desde el nombre, en tabla y tarjeta, y lo ve todo el que ve la planificación. Muestra fechas previstas y reales, holgura, y predecesoras y sucesoras con su estado; elegir una abre la suya. HU-15 puede reusarlo.
+- **"Inicio" y "Fin" en una columna cada uno**: la fecha prevista, que es la real una vez que pasó. Real en negro, prevista en gris. Columna nueva "Holgura"; las críticas, con una etiqueta roja (en mobile, la tarjeta con borde rojo).
+- **"Iniciar" aparece deshabilitado** en el menú de estado mientras falte alguna predecesora, diciendo cuál.
+- **Reabrir con sucesoras ya iniciadas** pide confirmación y las nombra. **Dar de baja** nombra las sucesoras que dejan de esperarla.
+- **Sin fecha de inicio**, un aviso arriba del listado; quien puede editar la obra tiene un botón que abre su formulario.
+
+**Falta para cerrar HU-14:** el PR a `dev` y la revisión en Azure.
+
+**Queda liberada:** HU-15 (vista en el tiempo) y HU-16 (avance), en paralelo.

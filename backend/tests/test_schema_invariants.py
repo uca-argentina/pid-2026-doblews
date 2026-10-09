@@ -514,6 +514,53 @@ def test_editing_a_task_moves_its_updated_at(db: Connection, world, add_task) ->
     assert touched is True
 
 
+# --- planning: what waits for what --------------------------------------------
+#
+# project_task_dependency, ADR-009 section 1. The schema holds that a task does
+# not wait for itself, that a dependency is not repeated, and that both ends are
+# tasks of the same work. No cycles is a rule over many rows: the service's.
+
+INSERT_DEPENDENCY = (
+    "INSERT INTO project_task_dependency (predecessor_id, successor_id, project_id)"
+    " VALUES (:predecessor, :successor, :project)"
+)
+
+
+def test_a_task_cannot_depend_on_itself(db: Connection, world, add_task) -> None:
+    task = add_task(world.project_a, world.firm_a)
+
+    with pytest.raises(IntegrityError, match="ck_project_task_dependency_not_self"):
+        db.execute(
+            text(INSERT_DEPENDENCY),
+            {"predecessor": task, "successor": task, "project": world.project_a},
+        )
+
+
+def test_a_dependency_cannot_be_repeated(db: Connection, world, add_task) -> None:
+    first = add_task(world.project_a, world.firm_a, "Cimientos")
+    second = add_task(world.project_a, world.firm_a, "Mampostería")
+    row = {"predecessor": first, "successor": second, "project": world.project_a}
+    db.execute(text(INSERT_DEPENDENCY), row)
+
+    with pytest.raises(IntegrityError, match="pk_project_task_dependency"):
+        db.execute(text(INSERT_DEPENDENCY), row)
+
+
+def test_a_dependency_cannot_join_tasks_of_two_works(
+    db: Connection, world, add_task, new_project
+) -> None:
+    """Same firm, different work: whichever project_id is claimed, one end fails."""
+    other = new_project(world.firm_a, world.account_a, "Casa Este")
+    here = add_task(world.project_a, world.firm_a)
+    there = add_task(other, world.firm_a)
+
+    with pytest.raises(IntegrityError, match="fk_project_task_dependency_successor_id"):
+        db.execute(
+            text(INSERT_DEPENDENCY),
+            {"predecessor": here, "successor": there, "project": world.project_a},
+        )
+
+
 # --- saved budget versions --------------------------------------------------
 #
 # ADR-007's three tables. What is checked here is what the schema promises on its

@@ -1,8 +1,10 @@
-"""A work's planning over HTTP (HU-13): its tasks, their status and their take-off lines.
-Where the task permissions guard each endpoint, a work or task out of reach becomes
-a 404, and the cost is hidden from whoever may not see it.
+"""A work's planning over HTTP (HU-13, HU-14): its tasks, their status, their take-off
+lines, what waits for what and when each falls. Where the task permissions guard each
+endpoint, a work or task out of reach becomes a 404, and the cost is hidden from
+whoever may not see it.
 """
 
+from collections import defaultdict
 from collections.abc import Iterator
 from contextlib import contextmanager
 from decimal import Decimal
@@ -30,10 +32,12 @@ from app.schemas.task import (
     TaskActualDates,
     TaskLines,
     TaskOut,
+    TaskRefOut,
     TaskTransition,
     TaskWrite,
 )
 from app.services.authz import VIEW_ALL
+from app.services.schedule import Schedule
 from app.services.tasks import (
     TASK_MANAGE,
     TaskError,
@@ -41,6 +45,7 @@ from app.services.tasks import (
     correct_actual_dates,
     create_task,
     list_assignees,
+    plan_work,
     remove_task,
     transition,
     update_task,
@@ -119,7 +124,15 @@ def _sees_cost(on_project: frozenset[str], granted: frozenset[str]) -> bool:
     return COST_VIEW in on_project or VIEW_ALL in granted
 
 
-def _to_out(entry: TaskEntry, costs: dict[int | None, Decimal], sees_cost: bool) -> TaskOut:
+def _to_out(
+    entry: TaskEntry,
+    costs: dict[int | None, Decimal],
+    sees_cost: bool,
+    schedule: Schedule | None,
+    predecessors: list[TaskRefOut],
+    successors: list[TaskRefOut],
+) -> TaskOut:
+    dates = None if schedule is None else schedule.tasks[entry.id]
     return TaskOut(
         id=entry.id,
         name=entry.name,
@@ -136,26 +149,66 @@ def _to_out(entry: TaskEntry, costs: dict[int | None, Decimal], sees_cost: bool)
         actual_end_date=entry.actual_end_date,
         # A task with no lines is absent from the costs: it costs zero.
         cost=costs.get(entry.id, _ZERO) if sees_cost else None,
+        planned_start_date=None if dates is None else dates.planned_start,
+        planned_end_date=None if dates is None else dates.planned_end,
+        slack_days=None if dates is None else dates.slack_days,
+        is_critical=False if dates is None else dates.is_critical,
+        predecessors=predecessors,
+        successors=successors,
     )
+
+
+def _planning(
+    db: Session, membership: CurrentMembership, project: Project, sees_cost: bool
+) -> tuple[list[TaskOut], Schedule | None, dict[int | None, Decimal]]:
+    """Every task of the work as the screen shows it, in planned order.
+
+    The schedule is the whole work's or nothing: a task's dates depend on every
+    task before it, so even answering for one task computes them all. A work
+    holds tens or a few hundred tasks, which is why ADR-009 section 2 chose to
+    recompute on read over storing dates that go stale every midnight.
+    """
+    tasks = _tasks(db, membership)
+    entries = tasks.tasks(project.id)
+    edges = tasks.edges(project.id)
+    costs = ProjectRecipeRepository(db, firm_id=membership.firm_id).cost_by_task(project.id)
+    schedule = plan_work(project, entries, edges)
+
+    refs = {
+        entry.id: TaskRefOut(id=entry.id, name=entry.name, status=entry.status) for entry in entries
+    }
+    predecessors: dict[int, list[TaskRefOut]] = defaultdict(list)
+    successors: dict[int, list[TaskRefOut]] = defaultdict(list)
+    for predecessor, successor in edges:
+        predecessors[successor].append(refs[predecessor])
+        successors[predecessor].append(refs[successor])
+
+    out = [
+        _to_out(entry, costs, sees_cost, schedule, predecessors[entry.id], successors[entry.id])
+        for entry in entries
+    ]
+    if schedule is not None:
+        out.sort(key=lambda task: (task.planned_start_date, task.planned_end_date, task.id))
+    return out, schedule, costs
 
 
 def _read_back(
     db: Session,
     membership: CurrentMembership,
-    project_id: int,
+    project: Project,
     task_id: int,
     sees_cost: bool,
 ) -> TaskOut:
-    """The task as stored, with its assignee's name and its cost, to answer a write.
+    """The task as stored, with its cost, dates and dependencies, to answer a write.
 
     Raises rather than 404s: finding nothing right after a successful write is a
     bug, not a task the caller may not see.
     """
-    entry = _tasks(db, membership).entry(project_id, task_id)
-    if entry is None:
-        raise RuntimeError(f"task {task_id} vanished right after being written")
-    costs = ProjectRecipeRepository(db, firm_id=membership.firm_id).cost_by_task(project_id)
-    return _to_out(entry, costs, sees_cost)
+    tasks, _, _ = _planning(db, membership, project, sees_cost)
+    for task in tasks:
+        if task.id == task_id:
+            return task
+    raise RuntimeError(f"task {task_id} vanished right after being written")
 
 
 @router.get(
@@ -186,19 +239,19 @@ def read_planning(
 
     What the client does not see is what it costs (ADR-009 section 9). Without
     project.cost.view or project.view_all the three cost fields are null, while
-    the tasks stay.
+    the tasks stay, and so do their dates: when the work is planned to happen
+    is no secret from whoever it is for.
     """
-    _load_project(db, membership, account.id, granted, project_id)
-
-    entries = _tasks(db, membership).tasks(project_id)
-    costs = ProjectRecipeRepository(db, firm_id=membership.firm_id).cost_by_task(project_id)
+    project = _load_project(db, membership, account.id, granted, project_id)
     sees_cost = _sees_cost(on_project, granted)
 
-    tasks = [_to_out(entry, costs, sees_cost) for entry in entries]
+    tasks, schedule, costs = _planning(db, membership, project, sees_cost)
     unassigned = costs.get(None, _ZERO)
 
     return PlanningOut(
         tasks=tasks,
+        project_start_date=project.estimated_start_date,
+        planned_end_date=None if schedule is None else schedule.project_end,
         unassigned_cost=unassigned if sees_cost else None,
         # sum() of the amounts as shown, each already rounded, so the screen adds
         # up to exactly this.
@@ -256,7 +309,7 @@ def create(
         task = create_task(db, project, **payload.model_dump())
     db.commit()
 
-    return _read_back(db, membership, project_id, task.id, _sees_cost(on_project, granted))
+    return _read_back(db, membership, project, task.id, _sees_cost(on_project, granted))
 
 
 @router.put("/{task_id}", response_model=TaskOut, dependencies=[Depends(MANAGE)])
@@ -278,7 +331,7 @@ def replace(
         update_task(db, project, task, **payload.model_dump())
     db.commit()
 
-    return _read_back(db, membership, project_id, task_id, _sees_cost(on_project, granted))
+    return _read_back(db, membership, project, task_id, _sees_cost(on_project, granted))
 
 
 @router.delete(
@@ -325,14 +378,14 @@ def change_status(
     "start" is refused, where a second "status: in_progress" would be accepted
     and would overwrite the date.
     """
-    _load_project(db, membership, account.id, granted, project_id)
+    project = _load_project(db, membership, account.id, granted, project_id)
     task = _load_task(db, membership, project_id, task_id)
 
     with _task_rules():
         transition(db, task, payload.action, on_date=payload.on_date)
     db.commit()
 
-    return _read_back(db, membership, project_id, task_id, _sees_cost(on_project, granted))
+    return _read_back(db, membership, project, task_id, _sees_cost(on_project, granted))
 
 
 @router.put("/{task_id}/actual-dates", response_model=TaskOut, dependencies=[Depends(MANAGE)])
@@ -347,7 +400,7 @@ def replace_actual_dates(
     db: DbSession,
 ) -> TaskOut:
     """Correct the dates a transition recorded, without changing the status."""
-    _load_project(db, membership, account.id, granted, project_id)
+    project = _load_project(db, membership, account.id, granted, project_id)
     task = _load_task(db, membership, project_id, task_id)
 
     with _task_rules():
@@ -359,7 +412,7 @@ def replace_actual_dates(
         )
     db.commit()
 
-    return _read_back(db, membership, project_id, task_id, _sees_cost(on_project, granted))
+    return _read_back(db, membership, project, task_id, _sees_cost(on_project, granted))
 
 
 @router.put("/{task_id}/lines", response_model=TaskOut, dependencies=[Depends(MANAGE)])
@@ -378,11 +431,11 @@ def replace_lines(
     Answers with the task, whose cost is what just changed. The lines themselves
     are read from the take-off, where each one says which task it is in.
     """
-    _load_project(db, membership, account.id, granted, project_id)
+    project = _load_project(db, membership, account.id, granted, project_id)
     task = _load_task(db, membership, project_id, task_id)
 
     with _task_rules():
         assign_lines(db, task, payload.line_ids)
     db.commit()
 
-    return _read_back(db, membership, project_id, task_id, _sees_cost(on_project, granted))
+    return _read_back(db, membership, project, task_id, _sees_cost(on_project, granted))
