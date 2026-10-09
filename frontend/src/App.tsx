@@ -12,6 +12,7 @@ import { ProjectBudgetPage } from "./pages/ProjectBudgetPage";
 import { ProjectBudgetVersionPage } from "./pages/ProjectBudgetVersionPage";
 import { ProjectBudgetVersionsPage } from "./pages/ProjectBudgetVersionsPage";
 import { ProjectDetailPage } from "./pages/ProjectDetailPage";
+import { ProjectPlanningPage } from "./pages/ProjectPlanningPage";
 import { ProjectTakeoffPage } from "./pages/ProjectTakeoffPage";
 import { ProjectTeamPage } from "./pages/ProjectTeamPage";
 import { NoFirmPage } from "./pages/NoFirmPage";
@@ -106,6 +107,7 @@ function App() {
           <Route path="projects/:projectId" element={<ProjectLayout />}>
             <Route index element={<ProjectDetailPage />} />
             <Route path="takeoff" element={<ProjectTakeoffPage />} />
+            <Route path="planning" element={<ProjectPlanningPage />} />
             <Route path="budget" element={<ProjectBudgetPage />} />
             {/* Under "budget" and not beside it, so the Presupuesto tab stays
                 selected while reading a version: the tab matches on the first

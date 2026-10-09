@@ -211,6 +211,17 @@ function ProjectTabs({ basePath, project, firmCan }: ProjectTabsProps) {
         firmCan("project.view_all"),
     },
     {
+      value: "planning",
+      path: "planning",
+      label: "Planificación",
+      // The same two heights as the take-off: every project role holds
+      // project.task.view, the client included, and the owner reaches it
+      // through project.view_all (ADR-009 section 9).
+      visible:
+        project.permissions.includes("project.task.view") ||
+        firmCan("project.view_all"),
+    },
+    {
       value: "budget",
       path: "budget",
       label: "Presupuesto",
