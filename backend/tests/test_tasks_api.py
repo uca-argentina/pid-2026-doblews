@@ -4,6 +4,8 @@ is the permissions of ADR-009 section 9, the 404s that keep other works invisibl
 that each rule reaches the caller as a 409 carrying its own sentence.
 """
 
+from datetime import date
+
 import pytest
 from sqlalchemy import text
 
@@ -13,7 +15,10 @@ from app.services.tasks import (
     END_BEFORE_START,
     LINE_NOT_AVAILABLE,
     NAME_TAKEN,
+    PREDECESSOR_NOT_AVAILABLE,
     TASK_NOT_AVAILABLE,
+    blocked_start,
+    dependency_cycle,
     invalid_transition,
 )
 
@@ -113,8 +118,17 @@ class TestRead:
                     "actual_end_date": None,
                     # Decimals travel as strings, so the frontend never sees a float.
                     "cost": WALL_120,
+                    # The work has no start date, so nothing is planned yet.
+                    "planned_start_date": None,
+                    "planned_end_date": None,
+                    "slack_days": None,
+                    "is_critical": False,
+                    "predecessors": [],
+                    "successors": [],
                 }
             ],
+            "project_start_date": None,
+            "planned_end_date": None,
             "unassigned_cost": WALL_120,
             "total_cost": "7755600.00",
             "currency": "ARS",
@@ -618,3 +632,132 @@ class TestLineTaskFromTheTakeoff:
         )
 
         assert response.status_code == 403
+
+
+class TestDependenciesAndDates:
+    """HU-14 at the border: dependencies sent with the form, the start blocked over
+    HTTP too, and the computed dates in every answer. The rules themselves are
+    pinned in test_task_dependencies.py and the arithmetic in test_schedule.py.
+
+    October 2026: the 5th is a Monday. Today is frozen on it.
+    """
+
+    START = "2026-10-05"
+
+    @pytest.fixture(autouse=True)
+    def frozen_today(self, monkeypatch) -> None:
+        monkeypatch.setattr("app.services.tasks.today", lambda: date(2026, 10, 5))
+
+    @pytest.fixture
+    def started_work(self, db, world) -> None:
+        db.execute(
+            text("UPDATE project SET estimated_start_date = :d WHERE id = :p"),
+            {"d": self.START, "p": world.project_a},
+        )
+
+    def create(self, client, world, lead, name: str, days: int, after: list[int] = ()) -> int:
+        response = client.post(
+            tasks_url(world),
+            json=body(name=name, estimated_duration_days=days, predecessor_ids=list(after)),
+            headers=lead,
+        )
+        assert response.status_code == 201, response.json()
+        return response.json()["id"]
+
+    def test_the_planning_carries_dates_slack_and_dependencies(
+        self, client, world, team, lead, started_work
+    ):
+        late = self.create(client, world, lead, "Pintura", 1)
+        first = self.create(client, world, lead, "Cimientos", 3)
+        second = self.create(client, world, lead, "Mampostería", 2, after=[first])
+
+        planning = client.get(tasks_url(world), headers=lead).json()
+
+        assert planning["project_start_date"] == self.START
+        assert planning["planned_end_date"] == "2026-10-09"
+        by_id = {task["id"]: task for task in planning["tasks"]}
+        assert (by_id[first]["planned_start_date"], by_id[first]["planned_end_date"]) == (
+            "2026-10-05",
+            "2026-10-07",
+        )
+        assert by_id[second]["planned_start_date"] == "2026-10-08"
+        assert by_id[second]["predecessors"] == [
+            {"id": first, "name": "Cimientos", "status": "pending"}
+        ]
+        assert by_id[first]["successors"] == [
+            {"id": second, "name": "Mampostería", "status": "pending"}
+        ]
+        assert by_id[first]["is_critical"] and by_id[second]["is_critical"]
+        assert (by_id[late]["slack_days"], by_id[late]["is_critical"]) == (4, False)
+        # In planned order, and by id where the start ties.
+        assert [task["id"] for task in planning["tasks"]] == [late, first, second]
+
+    def test_a_write_answers_with_the_dates_too(self, client, world, team, lead, started_work):
+        first = self.create(client, world, lead, "Cimientos", 3)
+
+        response = client.post(
+            tasks_url(world),
+            json=body(name="Mampostería", estimated_duration_days=2, predecessor_ids=[first]),
+            headers=lead,
+        )
+
+        assert response.json()["planned_start_date"] == "2026-10-08"
+
+    def test_starting_a_blocked_task_is_a_409_naming_what_is_missing(
+        self, client, world, team, lead, started_work
+    ):
+        first = self.create(client, world, lead, "Cimientos", 3)
+        second = self.create(client, world, lead, "Mampostería", 2, after=[first])
+
+        response = client.post(
+            f"{tasks_url(world, task_id=second)}/transitions",
+            json={"action": "start"},
+            headers=lead,
+        )
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == blocked_start("Mampostería", ["Cimientos"])
+
+    def test_a_cycle_is_a_409(self, client, world, team, lead):
+        first = self.create(client, world, lead, "Cimientos", 3)
+        second = self.create(client, world, lead, "Mampostería", 2, after=[first])
+
+        response = client.put(
+            tasks_url(world, task_id=first),
+            json=body(name="Cimientos", estimated_duration_days=3, predecessor_ids=[second]),
+            headers=lead,
+        )
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == dependency_cycle(
+            ["Cimientos", "Mampostería", "Cimientos"]
+        )
+
+    def test_a_predecessor_of_another_firm_is_a_409_and_not_a_500(
+        self, client, world, team, lead, add_task
+    ):
+        theirs = add_task(world.project_b, world.firm_b)
+
+        response = client.post(tasks_url(world), json=body(predecessor_ids=[theirs]), headers=lead)
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == PREDECESSOR_NOT_AVAILABLE
+
+    def test_without_a_start_date_nothing_is_planned(self, client, world, team, lead):
+        self.create(client, world, lead, "Cimientos", 3)
+
+        planning = client.get(tasks_url(world), headers=lead).json()
+
+        assert planning["planned_end_date"] is None
+        assert planning["tasks"][0]["planned_start_date"] is None
+
+    def test_the_client_sees_the_dates_but_not_the_cost(
+        self, client, world, team, lead, started_work, auth_header
+    ):
+        self.create(client, world, lead, "Cimientos", 3)
+
+        planning = client.get(tasks_url(world), headers=auth_header(team["client"])).json()
+
+        assert planning["planned_end_date"] == "2026-10-07"
+        assert planning["tasks"][0]["planned_start_date"] == self.START
+        assert planning["tasks"][0]["cost"] is None

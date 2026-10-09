@@ -21,9 +21,15 @@ from sqlalchemy.orm import Session
 from app.core.clock import today
 from app.models import Account, Project, ProjectRecipe, ProjectTask, ProjectTaskDependency
 from app.repositories.project_recipe import ProjectRecipeRepository
-from app.repositories.project_task import AssigneeLabel, ProjectTaskRepository
+from app.repositories.project_task import AssigneeLabel, ProjectTaskRepository, TaskEntry
 from app.services.authz import project_accounts_granted, project_permissions
-from app.services.schedule import cycle_with_predecessors
+from app.services.schedule import (
+    Edge,
+    Schedule,
+    TaskInput,
+    compute_schedule,
+    cycle_with_predecessors,
+)
 
 # The permission that makes someone eligible to answer for a task. The same one
 # every write of the planning demands, so whoever is assigned a task can always
@@ -158,6 +164,32 @@ def list_assignees(db: Session, project: Project) -> list[AssigneeLabel]:
         .order_by(Account.name, Account.id)
     ).all()
     return [AssigneeLabel(account_id=row.id, name=row.name) for row in rows]
+
+
+def plan_work(project: Project, entries: list[TaskEntry], edges: list[Edge]) -> Schedule | None:
+    """When each task of this work falls, today. None while the work has no start.
+
+    The start date is optional on a work, which may exist without being planned
+    (ADR-009, Consecuencias): without it there is nothing to count from, and
+    the planning asks for it instead of guessing.
+
+    Here and not in the route so "today" is the one of core/clock.py, the same
+    day the transitions record, and so tests freeze both in one place.
+    """
+    if project.estimated_start_date is None:
+        return None
+    tasks = [
+        TaskInput(
+            id=entry.id,
+            duration=entry.estimated_duration_days,
+            status=entry.status,
+            not_before=entry.not_before_date,
+            actual_start=entry.actual_start_date,
+            actual_end=entry.actual_end_date,
+        )
+        for entry in entries
+    ]
+    return compute_schedule(project.estimated_start_date, tasks, edges, today())
 
 
 def _check_name(db: Session, project: Project, name: str, *, exclude_id: int | None = None) -> None:

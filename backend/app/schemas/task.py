@@ -1,4 +1,5 @@
-"""What the API says about a work's planning, and what it accepts to change it (HU-13).
+"""What the API says about a work's planning, and what it accepts to change it
+(HU-13, HU-14).
 The shapes the planning screen reads and its forms send; the cost fields are
 nullable because a caller without project.cost.view gets them empty.
 """
@@ -38,6 +39,9 @@ class TaskWrite(BaseModel):
     not_before_date: date | None = None
     # An account id: the picker is fed by GET .../tasks/assignees.
     assignee_account_id: int | None = None
+    # The tasks this one waits for, all of them: the list replaces the ones it
+    # had, and an empty one clears them (HU-14).
+    predecessor_ids: list[int] = Field(default_factory=list)
 
     @field_validator("description")
     @classmethod
@@ -83,11 +87,25 @@ class AssigneeOut(BaseModel):
     name: str
 
 
+class TaskRefOut(BaseModel):
+    """Another task, as a dependency names it: enough to say whether it is done."""
+
+    id: int
+    name: str
+    status: str
+
+
 class TaskOut(BaseModel):
     """One task, as the planning lists it and a write answers with.
 
     cost is null when the caller may not see costs. The field stays, so the
     frontend reads one shape and only asks whether the value is there.
+
+    The planned dates, the slack and is_critical are computed on every read
+    (ADR-009 section 2) and are null, or false, while the work has no start
+    date to plan from. Once a task started, its planned start is its actual
+    one, and once it finished so is its end: what happened replaces what was
+    planned.
     """
 
     id: int
@@ -101,6 +119,16 @@ class TaskOut(BaseModel):
     actual_end_date: date | None
     # The take-off lines assigned to it, at today's prices. "0.00" with none.
     cost: Decimal | None
+    planned_start_date: date | None
+    planned_end_date: date | None
+    # Working days it may slip without moving the end of the work. Null once
+    # finished: it can no longer be late.
+    slack_days: int | None
+    # Slack zero: a delay here is a delay of the work.
+    is_critical: bool
+    # What it waits for and what waits for it, each with its status.
+    predecessors: list[TaskRefOut]
+    successors: list[TaskRefOut]
 
 
 class PlanningOut(BaseModel):
@@ -110,7 +138,13 @@ class PlanningOut(BaseModel):
     same moment.
     """
 
+    # In planned order: by planned start, and by id where that ties or there
+    # is no schedule yet.
     tasks: list[TaskOut]
+    # What the dates are computed from. Null means the section asks for it.
+    project_start_date: date | None
+    # The latest planned end among the tasks: when the work is planned to end.
+    planned_end_date: date | None
     # What the take-off lines assigned to no task cost.
     unassigned_cost: Decimal | None
     # The sum of the tasks' costs and the unassigned amount, as shown, so the

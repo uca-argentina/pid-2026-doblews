@@ -247,9 +247,7 @@ class TestStarting:
 
         assert b.status == "in_progress"
 
-    def test_reopening_a_predecessor_whose_successor_started_is_allowed(
-        self, db_session, project
-    ):
+    def test_reopening_a_predecessor_whose_successor_started_is_allowed(self, db_session, project):
         a = new_task(db_session, project, "Cimientos")
         b = new_task(db_session, project, "Mampostería", predecessor_ids=[a.id])
         transition(db_session, a, "start")
