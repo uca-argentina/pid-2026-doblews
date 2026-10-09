@@ -57,7 +57,7 @@ export interface TaskOut {
 }
 
 /** GET .../projects/{projectId}/tasks: the tasks and what they add up to, in
- * one answer so the list and the totals never disagree on screen. */
+ * one answer so the list and the unassigned amount never disagree on screen. */
 export interface PlanningOut {
   /** In planned order: by planned start, then in the order they were loaded. */
   tasks: TaskOut[];
@@ -68,10 +68,9 @@ export interface PlanningOut {
   planned_end_date: string | null;
   /** What the take-off lines assigned to no task cost. */
   unassigned_cost: string | null;
-  /** The tasks' costs plus the unassigned amount, as shown. null when the
-   * caller may not see costs — which is what the screen asks before rendering
-   * any cost at all. It may differ by cents from the budget's total, which
-   * rounds per resource (ADR-009 section 8). */
+  /** The tasks' costs plus the unassigned amount. Not shown: the work's total
+   * is the take-off's to show. What the screen reads from it is whether it is
+   * null, which is how the backend says the caller may not see costs. */
   total_cost: string | null;
   currency: string;
 }

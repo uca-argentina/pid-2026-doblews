@@ -15,7 +15,6 @@ import { notifications } from "@mantine/notifications";
 import { PageHeader } from "../components/PageHeader";
 import { useCurrentFirm } from "../features/firms/firmContext";
 import { ActualDatesModal } from "../features/planning/ActualDatesModal";
-import { PlanningTotals } from "../features/planning/PlanningTotals";
 import { RemoveTaskModal } from "../features/planning/RemoveTaskModal";
 import { ReopenTaskModal } from "../features/planning/ReopenTaskModal";
 import { TaskActionsMenu } from "../features/planning/TaskActionsMenu";
@@ -26,6 +25,7 @@ import { TaskFormModal } from "../features/planning/TaskFormModal";
 import { TaskLinesModal } from "../features/planning/TaskLinesModal";
 import { TaskStatusMenu } from "../features/planning/TaskStatusMenu";
 import { TasksTable } from "../features/planning/TasksTable";
+import { UnassignedCost } from "../features/planning/UnassignedCost";
 import {
   ACTION_LABELS,
   STATUS_LABELS,
@@ -316,7 +316,7 @@ function PlanningView({
           {/* Under the empty state too: a work with a take-off and no tasks
               has all of it waiting to be planned, and that amount is the
               reason to create the first one. */}
-          <PlanningTotals planning={planning} />
+          <UnassignedCost planning={planning} />
         </>
       )}
     </Stack>

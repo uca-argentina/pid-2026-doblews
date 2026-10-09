@@ -53,9 +53,9 @@ export interface TakeoffMaterialOut {
 export interface TakeoffOut {
   lines: TakeoffLineOut[];
   materials: TakeoffMaterialOut[];
-  /** The sum of the materials' costs as shown. "0.00" for an empty take-off,
-   * null when the caller may not see costs — which is what the screen asks
-   * before rendering any cost at all. */
+  /** The sum of the materials' costs. "0.00" for an empty take-off, null when
+   * the caller may not see costs. Not shown: the screen takes its total, and
+   * every other price, from the budget. */
   total_cost: string | null;
   currency: string;
   /** An instant: the oldest price the costs are built from, for "precios de
