@@ -1,9 +1,24 @@
-import { Alert, Box, Card, Center, Loader, Stack, Text } from "@mantine/core";
+import { useState } from "react";
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  Center,
+  Loader,
+  Stack,
+  Text,
+} from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
 import { PageHeader } from "../components/PageHeader";
 import { useCurrentFirm } from "../features/firms/firmContext";
 import { PlanningTotals } from "../features/planning/PlanningTotals";
+import { RemoveTaskModal } from "../features/planning/RemoveTaskModal";
+import { TaskActionsMenu } from "../features/planning/TaskActionsMenu";
 import { TaskCard } from "../features/planning/TaskCard";
+import { TaskFormModal } from "../features/planning/TaskFormModal";
 import { TasksTable } from "../features/planning/TasksTable";
+import type { TaskOut } from "../features/planning/types";
 import { usePlanning } from "../features/planning/usePlanning";
 import { usePlanningAccess } from "../features/planning/usePlanningAccess";
 import { useCurrentProject } from "../features/projects/projectContext";
@@ -50,6 +65,25 @@ function PlanningView({
   canManage: boolean;
 }) {
   const { data: planning, isLoading, isError } = usePlanning(firmId, projectId);
+  const [adding, add] = useDisclosure(false);
+  // The task each modal is open for; null means that modal is closed. Kept
+  // here and not inside each row, so there is one modal of each kind on the
+  // screen rather than one per task.
+  const [editing, setEditing] = useState<TaskOut | null>(null);
+  const [removing, setRemoving] = useState<TaskOut | null>(null);
+
+  // What a task offers to do, the same for the table row and the card. Only
+  // for those who may manage the planning: a button that fails is worse than
+  // none.
+  const renderActions = canManage
+    ? (task: TaskOut) => (
+        <TaskActionsMenu
+          task={task}
+          onEdit={setEditing}
+          onRemove={setRemoving}
+        />
+      )
+    : undefined;
 
   return (
     <Stack gap="md">
@@ -57,7 +91,38 @@ function PlanningView({
         order={4}
         title="Planificación"
         description="Las tareas de la obra: quién hace cada una, cuánto lleva y en qué estado está."
+        action={
+          canManage ? (
+            <Button onClick={add.open}>Nueva tarea</Button>
+          ) : undefined
+        }
       />
+
+      {/* Outside the loading and empty branches on purpose, as in the
+          take-off: creating the first task flips the screen from empty to
+          full while the modal is still closing, and a modal rendered inside
+          either branch would be torn down mid-way. One form modal serves both
+          creating and editing. */}
+      {canManage && (
+        <>
+          <TaskFormModal
+            opened={adding || editing !== null}
+            task={editing}
+            firmId={firmId}
+            projectId={projectId}
+            onClose={() => {
+              add.close();
+              setEditing(null);
+            }}
+          />
+          <RemoveTaskModal
+            task={removing}
+            firmId={firmId}
+            projectId={projectId}
+            onClose={() => setRemoving(null)}
+          />
+        </>
+      )}
 
       {isLoading && (
         <Center>
@@ -74,7 +139,7 @@ function PlanningView({
       {planning && (
         <>
           {planning.tasks.length === 0 ? (
-            <EmptyPlanning canManage={canManage} />
+            <EmptyPlanning canManage={canManage} onAdd={add.open} />
           ) : (
             <>
               {/* One list, two shapes. Both are rendered and one is hidden by
@@ -85,6 +150,7 @@ function PlanningView({
                   tasks={planning.tasks}
                   currency={planning.currency}
                   showsCost={planning.total_cost !== null}
+                  renderActions={renderActions}
                 />
               </Box>
               <Stack gap="sm" hiddenFrom="sm">
@@ -93,6 +159,7 @@ function PlanningView({
                     key={task.id}
                     task={task}
                     currency={planning.currency}
+                    actions={renderActions?.(task)}
                   />
                 ))}
               </Stack>
@@ -111,7 +178,13 @@ function PlanningView({
 
 /** A planning with no tasks. An empty table with its headings would read as
  * something failing to load (same as the take-off). */
-function EmptyPlanning({ canManage }: { canManage: boolean }) {
+function EmptyPlanning({
+  canManage,
+  onAdd,
+}: {
+  canManage: boolean;
+  onAdd: () => void;
+}) {
   return (
     <Card withBorder padding="xl" radius="md">
       <Stack gap={4} align="center">
@@ -121,6 +194,11 @@ function EmptyPlanning({ canManage }: { canManage: boolean }) {
             ? "Dividí la obra en tareas, poneles responsable y duración, y asignales las líneas del cómputo que le corresponden a cada una."
             : "Vas a ver acá las tareas de la obra cuando se cargue su planificación."}
         </Text>
+        {canManage && (
+          <Button mt="sm" onClick={onAdd}>
+            Crear la primera tarea
+          </Button>
+        )}
       </Stack>
     </Card>
   );
