@@ -10,7 +10,7 @@ El modelo de usuarios, roles y permisos está definido en [ADR-002](../adr/0002-
 
 - La plataforma es **multi-estudio**: varios estudios de arquitectura la usan en paralelo y ninguno ve datos de otro.
 - Una persona tiene **una sola cuenta** y puede pertenecer a varios estudios, con un rol distinto en cada uno.
-- Hay roles en **tres ámbitos**: `support` (plataforma), `owner` / `architect` / `client` (estudio) y `lead` / `collaborator` / `viewer` / `client` (obra).
+- Hay roles en **tres ámbitos**: `support` (plataforma), `owner` / `architect` / `client` (estudio) y `lead` / `collaborator` / `client` (obra). *(Hasta el 2026-10-10 existió también `viewer`; ver [ADR-002 §7](../adr/0002-authorization-model.md).)*
 - El **cliente** de una obra es un miembro del estudio con rol `client`, asignado a esa obra. No es una columna de `project`.
 - Los estudios los da de alta el **soporte**; no hay auto-registro público.
 - Cada persona ve únicamente **las obras de las que es miembro**, dentro del estudio en el que está actuando.
@@ -185,7 +185,7 @@ Tarea de equipo, no historia de usuario. Timebox: 30 minutos. Bloquea el repo, F
 
 - Dentro del detalle de la obra hay una sección "Equipo" con los miembros: nombre, rol en la obra y fecha de alta.
 - Agrego personas eligiendo del **padrón de mi estudio**. El desplegable nunca muestra usuarios de otros estudios ni de la tabla global de usuarios.
-- Roles asignables: `lead`, `collaborator`, `viewer`, `client`.
+- Roles asignables: `lead`, `collaborator`, `client`.
 - Un miembro con rol de estudio `client` **solo** puede recibir el rol `client`: el desplegable ni siquiera le ofrece los otros.
 - Hay a lo sumo un `lead` y a lo sumo un `client` por obra.
 - Asignar `lead` a otra persona **transfiere** el rol en una sola transacción: el anterior queda como `collaborator`, la obra nunca se queda sin responsable ni con dos.

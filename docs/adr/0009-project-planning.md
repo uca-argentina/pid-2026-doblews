@@ -177,7 +177,7 @@ stateDiagram-v2
 
 Un integrante del equipo de la obra **que pueda gestionar sus tareas**, opcional. Se guarda contra **`firm_member`** y no contra `project_member`, porque `project_member` se borra de verdad: una FK ahí impediría sacar del equipo a quien terminó tareas, o perdería quién las hizo.
 
-- Al **asignar**, el servicio exige que la persona tenga `project.task.manage` en la obra: hoy, `lead` y `collaborator` (§9). La regla es un permiso y no una lista de roles (ADR-002), y garantiza que el responsable pueda cambiar el estado de su propia tarea. Quedan afuera el `viewer` y el `client`.
+- Al **asignar**, el servicio exige que la persona tenga `project.task.manage` en la obra: hoy, `lead` y `collaborator` (§9). La regla es un permiso y no una lista de roles (ADR-002), y garantiza que el responsable pueda cambiar el estado de su propia tarea. Queda afuera el `client`.
 - La regla se chequea **al asignar y no después**: a quien le cambian el rol dentro de la obra conserva las tareas que ya tenía.
 - Al **salir del equipo**, sus tareas no finalizadas quedan sin responsable; las finalizadas lo conservan.
 
@@ -202,7 +202,7 @@ Las líneas sin asignar siguen contando en el presupuesto de la obra. En la plan
 
 | Ámbito | Código | Roles |
 |---|---|---|
-| `project` | `project.task.view` | `lead`, `collaborator`, `viewer`, `client` |
+| `project` | `project.task.view` | `lead`, `collaborator`, `client` |
 | `project` | `project.task.manage` | `lead`, `collaborator` |
 
 Es el mismo reparto que `project.recipe.view` / `project.recipe.manage` (ADR-003 §8). El `owner` lee por `project.view_all`. El costo de las tareas exige además `project.cost.view`, así que **el `client` ve la planificación sin importes**.
@@ -276,7 +276,7 @@ Es también la costura para la extensión de §Consecuencias: el resto de la apl
 
 **Responsable con FK a `project_member`.** Dejaría en el esquema que el responsable integra la obra. Descartada porque `project_member` se borra: habría que elegir entre no poder sacar a alguien del equipo o perder quién hizo cada tarea.
 
-**Cualquier integrante de la obra como responsable.** Lectura literal de "integrantes del equipo". Descartada porque incluía al `client` y al `viewer`, que no pueden cambiar el estado de la tarea de la que serían responsables. Limitarlo al rol de estudio `architect` tampoco servía: deja afuera al `owner` que es `lead` de su obra.
+**Cualquier integrante de la obra como responsable.** Lectura literal de "integrantes del equipo". Descartada porque incluía al `client`, que no puede cambiar el estado de la tarea de la que sería responsable. Limitarlo al rol de estudio `architect` tampoco servía: deja afuera al `owner` que es `lead` de su obra.
 
 **Reasignar por coincidencia al cargar una versión.** Cada línea cargada heredaría la tarea de la línea anterior con la misma receta, cantidad y nota. Descartada porque es una adivinanza: cuando la versión difiere del borrador no coincide, y falla sin decir en cuál.
 

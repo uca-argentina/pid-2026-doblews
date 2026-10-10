@@ -95,7 +95,7 @@ No son decisiones de este sprint: son lo que los Sprints 1 y 2 dejaron fijado, y
 - Cargar una versión del presupuesto (HU-12) deja las líneas cargadas **sin asignar**, y la confirmación lo avisa.
 - El nombre es único entre las tareas activas de la obra.
 - **Baja lógica**, en cualquier estado, con confirmación. Sus líneas de cómputo vuelven a quedar sin asignar; no se dan de baja.
-- Escribir exige `project.task.manage` (`lead`, `collaborator`). Ver exige `project.task.view` (también `viewer` y `client`) o `project.view_all`.
+- Escribir exige `project.task.manage` (`lead`, `collaborator`). Ver exige `project.task.view` (también `client`) o `project.view_all`.
 - El `client` ve las tareas **sin costos** (`project.cost.view`).
 - Si la obra no tiene tareas, estado vacío con un llamado a crear la primera.
 - Se usa bien a 375px.
@@ -469,4 +469,18 @@ Se ajustaron HU-3 en [sprint-1.md](sprint-1.md), HU-12 en [sprint-2.md](sprint-2
 
 **Quedó anotado para después**, sobre `fix/sprint-2-and-3-polish`: alinear las columnas de los tres grupos del desglose del cómputo; la etiqueta de estado que se corta en la tabla de planificación; darle a los nombres alguna señal de que se tocan en mobile, donde no hay hover; igualar los enlaces a predecesoras y sucesoras del detalle de una tarea; y mostrar "Cómputo actual" también en el detalle de una versión.
 
-**Falta:** mergear `refactor/budget-tabs` a `fix/sprint-2-and-3-polish`.
+**2026-10-10.** **Se quitó el rol de obra `viewer`** (`refactor/remove-viewer-role`, sobre `fix/sprint-2-and-3-polish`). Salió de revisar los ocho roles uno por uno preguntando a qué persona representa cada uno: el `viewer` era el único sin una. El razonamiento completo está en [ADR-002 §7](../adr/0002-authorization-model.md); en corto, quien mira sin costos ya es `client`, y quien miraría con costos es alguien de afuera que no puede tener ese rol.
+
+- **Backend:** `viewer` sale de los roles asignables, así que el formulario de Equipo ofrece tres y la API responde 422 si se lo piden. La migración `c4d8b1e63f07` pasa a `collaborator` a quien lo tuviera y borra el rol; sus permisos caen por la cascada. No cambia el esquema.
+- **Quedan con `project.cost.view` y `project.member.view`** solo `lead` y `collaborator`: todo el que ve costos en una obra también puede editarla. El `owner` los sigue viendo por `project.view_all`.
+- **Tests:** donde el `viewer` hacía de "ve y no edita", ese papel lo hace el `client`; donde era un rol cualquiera, `collaborator`.
+
+De esa misma revisión quedaron **anotados y sin hacer**:
+
+- El `owner` no puede gestionar el equipo de una obra que no integra, y el padrón no deja dar de baja a un `lead`: si el responsable no está, nadie puede transferir la obra.
+- La regla "cliente del estudio ⇒ solo cliente de obra" vale en un solo sentido: un `architect` puede quedar como cliente de una obra.
+- `firm.edit` (estudio y plataforma) y `account.create`, `account.view`, `account.edit`, `account.deactivate` están sembrados y ningún endpoint los exige. Se dejan: son de funciones que se van a hacer.
+
+**Pendiente aparte:** en la suite del backend apareció un test intermitente, distinto en cada corrida (catálogo, obras, tareas, padrón) y que pasa al repetirlo. No viene de este cambio y no se encontró la causa.
+
+**Falta:** mergear `refactor/remove-viewer-role` a `fix/sprint-2-and-3-polish`.
