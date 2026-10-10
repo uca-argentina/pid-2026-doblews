@@ -280,6 +280,16 @@ function PlanningView({
         task={detail}
         currency={planning?.currency ?? "ARS"}
         onSelect={setDetailId}
+        // One modal at a time: the detail gives way to the form, which is
+        // the same one the ⋯ menu opens.
+        onEdit={
+          canManage
+            ? (task) => {
+                setDetailId(null);
+                setEditing(task);
+              }
+            : undefined
+        }
         onClose={() => setDetailId(null)}
       />
 
@@ -329,6 +339,7 @@ function PlanningView({
                     tasks={planning.tasks}
                     projectStartDate={planning.project_start_date}
                     plannedEndDate={planning.planned_end_date}
+                    onOpen={(task) => setDetailId(task.id)}
                   />
                 )}
               </Box>

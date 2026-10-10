@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Box, Stack, Text } from "@mantine/core";
+import { Box, Stack, Text, Tooltip, UnstyledButton } from "@mantine/core";
 import { useElementSize, useMergedRef } from "@mantine/hooks";
+import { formatDate } from "../projects/projectFields";
 import {
   atLeast,
   DAY_WIDTH,
@@ -16,7 +17,7 @@ import {
   type GanttScale,
 } from "./ganttScale";
 import { GanttToolbar } from "./GanttToolbar";
-import { STATUS_COLORS } from "./taskStatus";
+import { STATUS_COLORS, STATUS_LABELS } from "./taskStatus";
 import type { TaskOut } from "./types";
 
 interface GanttChartProps {
@@ -26,6 +27,8 @@ interface GanttChartProps {
   projectStartDate: string | null;
   /** When the work is planned to end. */
   plannedEndDate: string | null;
+  /** Opens the task's detail, from its name or from its bar. */
+  onOpen: (task: TaskOut) => void;
 }
 
 const NAMES_WIDTH = 220;
@@ -41,7 +44,8 @@ const MARK_COLOR = "var(--mantine-color-text)";
  * start to its end over an axis of days.
  *
  * Read only, and it draws no dependencies: those are read in each task's
- * detail (ADR-009 section 12).
+ * detail, which a name or a bar opens, and which is also where a task is
+ * edited from (ADR-009 section 12).
  *
  * Two columns side by side and not one wide table: the names stay put and
  * only the axis scrolls sideways. Both stack rows of the same height, which
@@ -53,6 +57,7 @@ export function GanttChart({
   tasks,
   projectStartDate,
   plannedEndDate,
+  onOpen,
 }: GanttChartProps) {
   const [scale, setScale] = useState<GanttScale>("week");
   const dayWidth = DAY_WIDTH[scale];
@@ -137,9 +142,17 @@ export function GanttChart({
               px="sm"
               style={{ display: "flex", alignItems: "center" }}
             >
-              <Text size="sm" fw={500} truncate title={task.name}>
-                {task.name}
-              </Text>
+              <UnstyledButton
+                className="name-link"
+                onClick={() => onOpen(task)}
+                aria-label={`Ver el detalle de ${task.name}`}
+                title={task.name}
+                maw="100%"
+              >
+                <Text size="sm" fw={500} c="inherit" truncate>
+                  {task.name}
+                </Text>
+              </UnstyledButton>
             </Box>
           ))}
         </Box>
@@ -194,6 +207,7 @@ export function GanttChart({
                     range={range}
                     dayWidth={dayWidth}
                     today={today}
+                    onOpen={onOpen}
                   />
                 </Box>
               ))}
@@ -213,17 +227,23 @@ export function GanttChart({
  * The colour is its status, the same as its badge in the list. What is
  * already behind it is solid and what is still expected is pale: the same
  * difference the list makes between a date in black and one in grey. A
- * critical task swaps its border for a red one, as its card does on a phone. */
+ * critical task swaps its border for a red one, as its card does on a phone.
+ *
+ * It is a button: pressing it opens the task's detail. Hovering says what
+ * the bar alone cannot — the exact dates, which the axis only approximates
+ * at the wider scales. */
 function Bar({
   task,
   range,
   dayWidth,
   today,
+  onOpen,
 }: {
   task: TaskOut;
   range: GanttRange;
   dayWidth: number;
   today: number;
+  onOpen: (task: TaskOut) => void;
 }) {
   const bar = ganttBar(task, range);
   // No start date on the work: the row stays, with nothing to draw in it.
@@ -231,27 +251,48 @@ function Bar({
 
   const color = STATUS_COLORS[task.status];
   return (
-    <Box
-      pos="absolute"
-      top={(ROW_HEIGHT - BAR_HEIGHT) / 2}
-      h={BAR_HEIGHT}
-      left={bar.offset * dayWidth}
-      w={bar.days * dayWidth}
-      bg={`var(--mantine-color-${color}-light)`}
-      style={{
-        border: task.is_critical
-          ? "2px solid var(--mantine-color-red-filled)"
-          : `1px solid var(--mantine-color-${color}-filled)`,
-        borderRadius: "var(--mantine-radius-default)",
-        overflow: "hidden",
-      }}
+    <Tooltip
+      withArrow
+      label={
+        <>
+          <Text size="xs" fw={600}>
+            {task.name}
+          </Text>
+          <Text size="xs">
+            {formatDate(task.planned_start_date)} →{" "}
+            {formatDate(task.planned_end_date)}
+          </Text>
+          <Text size="xs">
+            {STATUS_LABELS[task.status]}
+            {task.is_critical && " · Crítica"}
+          </Text>
+        </>
+      }
     >
-      <Box
-        h="100%"
-        w={elapsedDays(task, bar, range, today) * dayWidth}
-        bg={`var(--mantine-color-${color}-filled)`}
-      />
-    </Box>
+      <UnstyledButton
+        onClick={() => onOpen(task)}
+        aria-label={`Ver el detalle de ${task.name}`}
+        pos="absolute"
+        top={(ROW_HEIGHT - BAR_HEIGHT) / 2}
+        h={BAR_HEIGHT}
+        left={bar.offset * dayWidth}
+        w={bar.days * dayWidth}
+        bg={`var(--mantine-color-${color}-light)`}
+        style={{
+          border: task.is_critical
+            ? "2px solid var(--mantine-color-red-filled)"
+            : `1px solid var(--mantine-color-${color}-filled)`,
+          borderRadius: "var(--mantine-radius-default)",
+          overflow: "hidden",
+        }}
+      >
+        <Box
+          h="100%"
+          w={elapsedDays(task, bar, range, today) * dayWidth}
+          bg={`var(--mantine-color-${color}-filled)`}
+        />
+      </UnstyledButton>
+    </Tooltip>
   );
 }
 
