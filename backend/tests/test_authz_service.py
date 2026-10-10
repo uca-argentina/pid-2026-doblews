@@ -86,8 +86,8 @@ class TestProjectScope:
 
         assert {"project.view", "project.edit", "project.member.manage"} <= granted
 
-    def test_viewer_reads_without_editing(self, db_session, world, add_project_member):
-        add_project_member(world.project_a, world.account_a2, world.firm_a, "viewer")
+    def test_client_reads_without_editing(self, db_session, world, add_project_member):
+        add_project_member(world.project_a, world.account_a2, world.firm_a, "client")
 
         granted = project_permissions(
             db_session,

@@ -47,6 +47,10 @@ class BudgetVersionSummary(BaseModel):
     currency: str
     created_at: datetime
     created_by_name: str
+    # True when this version's lines are exactly the take-off of today, so the
+    # listing can say which saved budget the work is standing on. Computed on
+    # every read, never stored: see BudgetVersionRepository.matching_takeoff.
+    matches_takeoff: bool
 
 
 class BudgetVersionItemOut(BaseModel):

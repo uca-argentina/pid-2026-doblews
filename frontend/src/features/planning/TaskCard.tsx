@@ -47,10 +47,11 @@ export function TaskCard({
       <Stack gap={6}>
         <Group justify="space-between" wrap="nowrap" align="flex-start">
           <UnstyledButton
+            className="name-link"
             onClick={() => onOpen(task)}
             aria-label={`Ver el detalle de ${task.name}`}
           >
-            <Text fw={600} td="underline">
+            <Text fw={600} c="inherit">
               {task.name}
             </Text>
           </UnstyledButton>

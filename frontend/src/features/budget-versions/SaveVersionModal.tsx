@@ -1,5 +1,13 @@
 import { useState } from "react";
-import { Alert, Button, Group, Modal, Stack, Text, TextInput } from "@mantine/core";
+import {
+  Alert,
+  Button,
+  Group,
+  Modal,
+  Stack,
+  Text,
+  TextInput,
+} from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { apiErrorMessage } from "../../lib/apiError";
 import { useCurrentFirm } from "../firms/firmContext";
@@ -12,7 +20,8 @@ interface SaveVersionModalProps {
   onSaved: (versionNumber: number) => void;
 }
 
-/** "Guardar versión": freezes the budget on screen under an optional label.
+/** "Guardar versión": freezes the live budget, the one on the take-off where
+ * the button is, under an optional label.
  *
  * One field, because one field is all HU-12 asks for — and because everything
  * else about a version is computed by the server. A form that let someone type
@@ -48,9 +57,7 @@ export function SaveVersionModal({
     } catch (error) {
       // The 409 to expect: the take-off's last line was removed while this
       // modal was open, and there is nothing left to freeze.
-      setSubmitError(
-        apiErrorMessage(error, "No pudimos guardar la versión."),
-      );
+      setSubmitError(apiErrorMessage(error, "No pudimos guardar la versión."));
     }
   };
 

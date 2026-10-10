@@ -25,8 +25,8 @@ export async function fetchTeam(
   return data;
 }
 
-/** The four project roles, read from the API so the labels are the seeded ones
- * ("Responsable", "Colaborador", "Lector", "Cliente") and this app keeps no
+/** The three project roles, read from the API so the labels are the seeded
+ * ones ("Responsable", "Colaborador", "Cliente") and this app keeps no
  * dictionary of its own. */
 export async function fetchTeamRoles(
   firmId: number,

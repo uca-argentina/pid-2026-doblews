@@ -245,7 +245,6 @@ Dos consecuencias que aparecieron al implementar HU-3:
 | `firm` | `client` | `firm.view` |
 | `project` | `lead` | `project.view`, `project.edit`, `project.archive`, `project.member.view`, `project.member.manage` |
 | `project` | `collaborator` | `project.view`, `project.edit`, `project.member.view` |
-| `project` | `viewer` | `project.view`, `project.member.view` |
 | `project` | `client` | `project.view` |
 
 Cuatro cosas que la tabla dice y conviene leer explícitamente:
@@ -256,7 +255,13 @@ Cuatro cosas que la tabla dice y conviene leer explícitamente:
 
 **El permiso de *crear* vive siempre en el ámbito del padre.** `project.create` es de ámbito estudio, no de obra: todavía no hay obra a la cual referirlo. Es la misma lógica de IAM y es lo que evita el bug clásico de "creé algo y ahora no lo puedo ver".
 
-**`client` de obra hoy tiene lo mismo que `viewer`.** Existen separados porque la diferencia aparece cuando entren presupuestos: `viewer` va a tener `budget.view_costs` y `client` no. Un cliente no es "ve menos": **ve otra cosa**. Tenerlos separados desde ahora hace que ese día sea una fila y no una migración.
+**El rol de obra `viewer` existió y se quitó el 2026-10-10.** Esta tabla lo traía con `project.view` y `project.member.view`, separado de `client` con este argumento: *"la diferencia aparece cuando entren presupuestos: `viewer` va a tener `budget.view_costs` y `client` no. Un cliente no es 've menos': **ve otra cosa**."* La apuesta se cumplió —ADR-003 §8 le dio `project.cost.view` al `viewer` y no al `client`— pero el rol quedó sin nadie que lo pudiera usar:
+
+- Quien necesita mirar una obra **sin** costos es el comitente, y ya es `client`.
+- Quien necesitaría mirarla **con** costos sin tocarla es alguien de afuera (un inversor, un socio del desarrollo). Esa persona entra al estudio como `client`, y §11.2 dice que un cliente del estudio solo puede ser cliente de obra: no puede ser `viewer`.
+- Lo que queda es un `architect` del propio estudio en modo lectura sobre la obra de un colega, y el `owner` ya ve todas las obras enteras con `project.view_all`.
+
+Un rol que solo puede tener quien no lo necesita es vocabulario de más en un catálogo cerrado. Lo saca la migración `c4d8b1e63f07`, que pasa a `collaborator` a quien lo tuviera —nadie pierde una obra, y por construcción es gente del estudio— y es reversible salvo en eso: al bajarla el rol vuelve con sus permisos, las asignaciones no. La frase "el cliente no ve menos, ve otra cosa" sigue valiendo; lo que la sostiene ahora es la diferencia entre `client` y `collaborator`.
 
 Y dos notas sobre lo que la tabla **no** dice, que aparecieron al implementar HU-3.
 
@@ -500,7 +505,7 @@ Si algún día aparece un requisito que esto no expresa —compartir un componen
 
 **Permisos negativos** (columna `otorga/deniega` en `role_permission`). Permite expresar "hace todo menos borrar" con menos filas. Descartada porque convierte cada chequeo en una resolución de precedencias entre roles: la pregunta "¿qué puede hacer esta persona?" deja de ser un `SELECT`, y el equipo pierde la capacidad de explicar por qué un botón está deshabilitado.
 
-**Jerarquía de roles / RBAC1** (`lead` hereda de `collaborator`, que hereda de `viewer`). Ahorra filas en el seed. Descartada por ahora porque hace que los permisos efectivos de un rol se calculen en vez de consultarse, y porque cambian solos cuando alguien toca un rol padre. Se puede agregar después sin migración destructiva.
+**Jerarquía de roles / RBAC1** (`lead` hereda de `collaborator`, que heredaba de `viewer` cuando ese rol existía). Ahorra filas en el seed. Descartada por ahora porque hace que los permisos efectivos de un rol se calculen en vez de consultarse, y porque cambian solos cuando alguien toca un rol padre. Se puede agregar después sin migración destructiva.
 
 **Dar `project.view_all` al `support`.** Cómodo para diagnóstico. Descartada porque cualquier bug en la resolución de permisos dejaría de ser un bug y pasaría a ser una fuga de datos entre estudios competidores. El caso legítimo se cubre con impersonación registrada.
 

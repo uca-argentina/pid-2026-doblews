@@ -73,17 +73,6 @@ EXPECTED: dict[tuple[str, str], set[str]] = {
         "project.task.view",
         "project.task.manage",
     },
-    # No project.budget.manage: the viewer reads the budget and its versions
-    # through project.cost.view, and never freezes or replaces the draft
-    # (ADR-007 section 4). No project.task.manage either: they read the planning
-    # and never change it (ADR-009 section 9).
-    ("viewer", "project"): {
-        "project.view",
-        "project.member.view",
-        "project.recipe.view",
-        "project.cost.view",
-        "project.task.view",
-    },
     # No project.cost.view: the client sees how much material their work takes,
     # never what it costs the studio (ADR-003 section 8). The same goes for the
     # planning: project.task.view shows them the tasks, not what each one costs
@@ -138,11 +127,7 @@ def test_support_has_no_content_permissions(db: Connection) -> None:
 
 
 def test_the_project_client_does_not_see_costs(db: Connection) -> None:
-    """ADR-003 section 8, and the reason viewer and client exist as two roles.
-
-    Back in ADR-002 they granted the same thing, and were seeded apart anyway on
-    the bet that the difference would show up once money entered the model. This
-    is that bet paying off: the client sees how much material their work takes
+    """ADR-003 section 8: the client sees how much material their work takes
     and never what it costs the studio. "Un cliente no es 've menos': ve otra
     cosa."
 
@@ -153,4 +138,4 @@ def test_the_project_client_does_not_see_costs(db: Connection) -> None:
 
     assert "project.recipe.view" in granted[("client", "project")]
     assert "project.cost.view" not in granted[("client", "project")]
-    assert "project.cost.view" in granted[("viewer", "project")]
+    assert "project.cost.view" in granted[("collaborator", "project")]

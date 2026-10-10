@@ -26,7 +26,7 @@ class ProjectMemberOut(BaseModel):
     name: str
     email: str
     # The role on the work, not in the firm. Someone can be an architect of the
-    # studio and a viewer of this particular work.
+    # studio and a collaborator on this particular work.
     role: RoleOut
     # The state of their roster row, not of the assignment. False means they left
     # the firm: the seat is still theirs and comes back with them, and until then

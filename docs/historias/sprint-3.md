@@ -91,11 +91,11 @@ No son decisiones de este sprint: son lo que los Sprints 1 y 2 dejaron fijado, y
 - Iniciar registra la **fecha real de inicio** y finalizar la **fecha real de fin**; por defecto hoy, y se pueden corregir. El fin no puede ser anterior al inicio.
 - El **costo** de una tarea no se escribe: es la suma de las **líneas de cómputo** asignadas a ella, a precio vigente. Desde la tarea se asignan y desasignan líneas del cómputo de la obra; una línea está en una sola tarea o en ninguna.
 - En el cómputo (HU-5), cada línea muestra a qué tarea está asignada y se puede cambiar desde ahí.
-- La planificación muestra el costo de cada tarea, el total, y aparte el importe del cómputo **sin asignar a ninguna tarea**.
+- La planificación muestra el costo de cada tarea y, aparte, el importe del cómputo **sin asignar a ninguna tarea**. El total de la obra no se repite acá: está en el cómputo.
 - Cargar una versión del presupuesto (HU-12) deja las líneas cargadas **sin asignar**, y la confirmación lo avisa.
 - El nombre es único entre las tareas activas de la obra.
 - **Baja lógica**, en cualquier estado, con confirmación. Sus líneas de cómputo vuelven a quedar sin asignar; no se dan de baja.
-- Escribir exige `project.task.manage` (`lead`, `collaborator`). Ver exige `project.task.view` (también `viewer` y `client`) o `project.view_all`.
+- Escribir exige `project.task.manage` (`lead`, `collaborator`). Ver exige `project.task.view` (también `client`) o `project.view_all`.
 - El `client` ve las tareas **sin costos** (`project.cost.view`).
 - Si la obra no tiene tareas, estado vacío con un llamado a crear la primera.
 - Se usa bien a 375px.
@@ -438,3 +438,49 @@ Cómo quedó resuelto en pantalla:
 **Falta para cerrar HU-14:** el PR a `dev` y la revisión en Azure.
 
 **Queda liberada:** HU-15 (vista en el tiempo) y HU-16 (avance), en paralelo.
+
+**2026-10-09 (reordenamiento de las secciones de la obra).** **Cada sección pasa a mostrar una sola cosa** (`refactor/budget-tabs`, sobre `fix/sprint-2-and-3-polish`). El total de la obra aparecía en "Cómputo", "Presupuesto" y "Planificación", y las dos primeras mostraban casi la misma tabla: el presupuesto es el cómputo con precios. Se separó **lo vivo** de **lo guardado**:
+
+| Sección | Qué muestra | Qué dejó de mostrar |
+|---|---|---|
+| **Cómputo** | Todo lo que se calcula hoy: el total estimado, las recetas cargadas y el desglose por recurso con precio unitario y subtotales. Acá está "Guardar versión" | La tabla "Qué necesita la obra" con una columna de costo, que era el presupuesto sin precios unitarios |
+| **Presupuestos** (antes "Presupuesto") | El listado de versiones guardadas; cada una abre su detalle de solo lectura | El presupuesto vivo, que se mudó a Cómputo |
+| **Planificación** | El costo de cada tarea y el importe sin asignar | El "Total estimado" y la nota sobre la diferencia de centavos con Presupuesto |
+
+Cómo quedó resuelto:
+
+- **Es solo frontend.** Ningún endpoint, permiso ni cálculo cambió. `/takeoff` y `/tasks` siguen mandando su `total_cost`; el front ya no lo pinta y lo usa solo para saber si quien mira ve costos.
+- **Cómputo pide dos respuestas**: `/takeoff` para las recetas y `/budget` para los precios y el total. La segunda solo a quien tiene `project.cost.view` o `project.view_all`, porque al `client` ese endpoint le responde 403.
+- **El `client` ve lo mismo que antes**: las recetas y "Qué necesita la obra" con cantidades, sin importes. No ve "Presupuestos".
+- **Orden de Cómputo: total, recetas, desglose.** El total es la respuesta que se viene a buscar, las recetas son lo que se edita, y el desglose es lo más largo y lo que menos se consulta.
+- **Las rutas no cambiaron de nombre.** `budget` muestra el listado y `budget/versions` redirige ahí; `budget/versions/:id` sigue siendo el detalle.
+
+Se ajustaron los criterios de HU-11 y HU-12 en [sprint-2.md](sprint-2.md), el de HU-13 acá arriba, y el redondeo de ADR-009 §8. HU-5 no cambia: el cómputo sigue mostrando la cantidad de cada recurso y su costo.
+
+**2026-10-09 (correcciones sobre las mismas secciones).** En la misma rama, después del reordenamiento:
+
+- **El presupuesto guardado que coincide con el cómputo queda marcado.** Al cargar una versión no quedaba ningún rastro de cuál era: "Cargar" copia las líneas y no guarda de dónde vinieron. Ahora `GET .../budget/versions` trae `matches_takeoff` por fila, calculado al leer; el listado lo muestra como la etiqueta "Cómputo actual" y deshabilita el "Cargar" de esa fila, y el cómputo dice "Igual a la v3" o "Tiene cambios sin guardar". Se descartó guardar "la última versión cargada" en la obra; el porqué está en ADR-007, alternativas descartadas. Es el único cambio de backend de la rama, sin migración.
+- **"Editar" y "Dar de baja" de la obra pasaron a la sección "Datos".** Estaban en el encabezado compartido, a la vista sobre el cómputo y la planificación como si actuaran sobre ellos. "Datos" ganó un título propio para alinearlos como el botón principal de las otras secciones.
+- **Menos texto fijo en pantalla.** Se quitaron la descripción bajo el título de Cómputo, Planificación, Presupuestos y Equipo, y la leyenda de Planificación que explicaba las fechas en gris y en negro. La distinción sigue: real en negro, prevista en gris.
+- **Nombres que abren su fila, sin subrayado.** El de una tarea y el de un presupuesto guardado se leen como el texto de la fila y toman el verde del tema al pasar el mouse (clase `.name-link` en `frontend/src/index.css`).
+- **Una sola esquina para etiquetas y botones.** Todo `Badge` usa la de los botones, definida en `frontend/src/theme.ts`; antes solo la tenía la etiqueta de estado de una tarea y el resto eran píldoras.
+
+Se ajustaron HU-3 en [sprint-1.md](sprint-1.md), HU-12 en [sprint-2.md](sprint-2.md) y ADR-007 §6.
+
+**Quedó anotado para después**, sobre `fix/sprint-2-and-3-polish`: alinear las columnas de los tres grupos del desglose del cómputo; la etiqueta de estado que se corta en la tabla de planificación; darle a los nombres alguna señal de que se tocan en mobile, donde no hay hover; igualar los enlaces a predecesoras y sucesoras del detalle de una tarea; y mostrar "Cómputo actual" también en el detalle de una versión.
+
+**2026-10-10.** **Se quitó el rol de obra `viewer`** (`refactor/remove-viewer-role`, sobre `fix/sprint-2-and-3-polish`). Salió de revisar los ocho roles uno por uno preguntando a qué persona representa cada uno: el `viewer` era el único sin una. El razonamiento completo está en [ADR-002 §7](../adr/0002-authorization-model.md); en corto, quien mira sin costos ya es `client`, y quien miraría con costos es alguien de afuera que no puede tener ese rol.
+
+- **Backend:** `viewer` sale de los roles asignables, así que el formulario de Equipo ofrece tres y la API responde 422 si se lo piden. La migración `c4d8b1e63f07` pasa a `collaborator` a quien lo tuviera y borra el rol; sus permisos caen por la cascada. No cambia el esquema.
+- **Quedan con `project.cost.view` y `project.member.view`** solo `lead` y `collaborator`: todo el que ve costos en una obra también puede editarla. El `owner` los sigue viendo por `project.view_all`.
+- **Tests:** donde el `viewer` hacía de "ve y no edita", ese papel lo hace el `client`; donde era un rol cualquiera, `collaborator`.
+
+De esa misma revisión quedaron **anotados y sin hacer**:
+
+- El `owner` no puede gestionar el equipo de una obra que no integra, y el padrón no deja dar de baja a un `lead`: si el responsable no está, nadie puede transferir la obra.
+- La regla "cliente del estudio ⇒ solo cliente de obra" vale en un solo sentido: un `architect` puede quedar como cliente de una obra.
+- `firm.edit` (estudio y plataforma) y `account.create`, `account.view`, `account.edit`, `account.deactivate` están sembrados y ningún endpoint los exige. Se dejan: son de funciones que se van a hacer.
+
+**Pendiente aparte:** en la suite del backend apareció un test intermitente, distinto en cada corrida (catálogo, obras, tareas, padrón) y que pasa al repetirlo. No viene de este cambio y no se encontró la causa.
+
+**Falta:** mergear `refactor/remove-viewer-role` a `fix/sprint-2-and-3-polish`.

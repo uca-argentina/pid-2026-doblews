@@ -209,11 +209,11 @@ Este es el primer módulo que agrega capacidades después de ADR-002, y es la co
 | Ámbito | Código | Roles que lo reciben |
 |---|---|---|
 | `firm` | `catalog.view` | `owner`, `architect`, `client` |
-| `project` | `project.recipe.view` | `lead`, `collaborator`, `viewer`, `client` |
+| `project` | `project.recipe.view` | `lead`, `collaborator`, `client` |
 | `project` | `project.recipe.manage` | `lead`, `collaborator` |
-| `project` | `project.cost.view` | `lead`, `collaborator`, `viewer` |
+| `project` | `project.cost.view` | `lead`, `collaborator` |
 
-**`project.cost.view` no lo tiene `client`**, y esa ausencia es la concreción del requisito R5 de ADR-002: *"el cliente entra al sistema, ve su obra y no ve los costos internos del estudio"*. Es también el primer ejemplo concreto del argumento de ADR-002 §7 de que `client` y `viewer` existen separados porque **el cliente no ve menos, ve otra cosa**: ve el listado de materiales que su obra necesita, no lo que le cuestan al estudio.
+**`project.cost.view` no lo tiene `client`**, y esa ausencia es la concreción del requisito R5 de ADR-002: *"el cliente entra al sistema, ve su obra y no ve los costos internos del estudio"*. Es también el primer ejemplo concreto del argumento de ADR-002 §7 de que **el cliente no ve menos, ve otra cosa** (se escribió para separar `client` de `viewer`, un rol de obra que se quitó el 2026-10-10; ver esa sección): ve el listado de materiales que su obra necesita, no lo que le cuestan al estudio.
 
 Ninguna de estas cuatro filas requiere tocar código de autorización: entran en la migración de seed del catálogo.
 

@@ -139,7 +139,7 @@ class TestNonClientProjectRoles:
 
         assert repo(db_session, world.firm_a).has_non_client_project_roles(alba) is False
 
-    @pytest.mark.parametrize("code", ["lead", "collaborator", "viewer"])
+    @pytest.mark.parametrize("code", ["lead", "collaborator"])
     def test_any_other_project_role_is(self, db_session, world, alba, add_project_member, code):
         add_project_member(world.project_a, alba, world.firm_a, code)
 

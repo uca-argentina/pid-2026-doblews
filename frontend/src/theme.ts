@@ -1,5 +1,7 @@
 import {
+  Badge,
   createTheme,
+  Modal,
   NavLink,
   type CSSVariablesResolver,
   type MantineColorsTuple,
@@ -46,12 +48,27 @@ const stone: MantineColorsTuple = [
 export const theme = createTheme({
   primaryColor: "obra",
   colors: { obra, gray: stone },
-  // One corner for everything that is pressed. Spelled out although "sm" is
-  // already Mantine's default, because it is the value the overrides below and
-  // the status menu of the planning are matched to: changing it here is what
-  // changes all of them together.
+  // One corner for everything that is pressed or reads as a label. Spelled
+  // out although "sm" is already Mantine's default, because it is the value
+  // the overrides below are matched to: changing it here is what changes all
+  // of them together.
   defaultRadius: "sm",
   components: {
+    // Mantine draws a Badge as a pill. The status of a task is a Badge that is
+    // pressed, so it had the buttons' corner, and next to it every other label
+    // — "Activo", "Crítica", "Solo lectura" — was a different shape for no
+    // reason a reader could name.
+    Badge: Badge.extend({
+      defaultProps: { radius: "var(--mantine-radius-default)" },
+    }),
+    // An open modal still stops the page behind it from scrolling, but no
+    // longer hides the page's scrollbar to do it. Hiding it makes Mantine pad
+    // the page by the scrollbar's width to make up for it, and index.css
+    // already keeps that room reserved (scrollbar-gutter): with both, opening
+    // a modal over a long screen pushed the whole page sideways.
+    Modal: Modal.extend({
+      defaultProps: { removeScrollProps: { removeScrollBar: false } },
+    }),
     // The sidebar links. NavLink is the one pressable component Mantine draws
     // with square corners and no radius prop, so next to a Button its
     // highlighted row read as a different kind of thing.

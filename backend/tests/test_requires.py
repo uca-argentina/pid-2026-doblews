@@ -27,7 +27,7 @@ def guarded_client(db: Connection) -> Iterator[TestClient]:
     """An app with one route per scope, each demanding a permission.
 
     member.add is held by owner and not by architect; project.edit by lead and
-    not by viewer. Both pairs come straight from the table in ADR-002 section 7.
+    not by client. Both pairs come straight from the table in ADR-002 section 7.
 
     The third route is the OR: the same shape HU-3's project detail has, where a
     project permission and a firm one each open it on their own.
@@ -137,8 +137,8 @@ class TestProjectScope:
 
         assert response.status_code == 200
 
-    def test_a_viewer_may_not(self, guarded_client, world, add_project_member, auth_header):
-        add_project_member(world.project_a, world.account_a2, world.firm_a, "viewer")
+    def test_a_client_may_not(self, guarded_client, world, add_project_member, auth_header):
+        add_project_member(world.project_a, world.account_a2, world.firm_a, "client")
 
         response = guarded_client.get(
             f"/firms/{world.firm_a}/projects/{world.project_a}",
@@ -199,8 +199,8 @@ class TestEitherScope:
     def test_the_project_permission_alone_opens_it(
         self, guarded_client, world, add_project_member, auth_header
     ):
-        """Alba is on the project as a viewer, and holds no firm-wide grant."""
-        add_project_member(world.project_a, world.account_a2, world.firm_a, "viewer")
+        """Alba is on the project as its client, and holds no firm-wide grant."""
+        add_project_member(world.project_a, world.account_a2, world.firm_a, "client")
 
         response = guarded_client.get(
             f"/firms/{world.firm_a}/projects/{world.project_a}/detail",

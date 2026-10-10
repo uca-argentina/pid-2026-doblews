@@ -128,13 +128,9 @@ class TestAssignee:
             world.account_a2,
         ]
 
-    @pytest.mark.parametrize("project_role", ["viewer", "client"])
-    def test_someone_who_cannot_manage_the_planning_is_refused(
-        self, db_session, project, on_team, project_role
-    ):
-        # A firm client is the only one who may be a project client (ADR-002 11.2).
-        firm_role = "client" if project_role == "client" else "architect"
-        account = on_team("vera@test.com", project_role, firm_role=firm_role)
+    def test_someone_who_cannot_manage_the_planning_is_refused(self, db_session, project, on_team):
+        """The work's client: on the team, and without project.task.manage."""
+        account = on_team("vera@test.com", "client", firm_role="client")
 
         with pytest.raises(TaskError) as refused:
             new_task(db_session, project, assignee_account_id=account)
@@ -176,7 +172,6 @@ class TestListAssignees:
     def test_offers_whoever_may_manage_the_planning_by_name(
         self, db_session, project, world, on_team
     ):
-        on_team("vera@test.com", "viewer")
         on_team("carla@test.com", "client", firm_role="client")
 
         offered = list_assignees(db_session, project)
@@ -230,7 +225,7 @@ class TestUpdate:
 
     def test_a_new_assignee_is_checked(self, db_session, project, on_team):
         task = new_task(db_session, project)
-        viewer = on_team("vera@test.com", "viewer")
+        client = on_team("vera@test.com", "client", firm_role="client")
 
         with pytest.raises(TaskError) as refused:
             update_task(
@@ -239,7 +234,7 @@ class TestUpdate:
                 task,
                 name=task.name,
                 estimated_duration_days=10,
-                assignee_account_id=viewer,
+                assignee_account_id=client,
             )
 
         assert refused.value.detail == ASSIGNEE_NOT_ALLOWED
@@ -255,7 +250,7 @@ class TestUpdate:
             project,
             actor_id=world.account_a,
             account_id=world.account_a2,
-            role_code="viewer",
+            role_code="client",
         )
 
         update_task(
@@ -492,7 +487,7 @@ class TestLeavingTheTeam:
             project,
             actor_id=world.account_a,
             account_id=world.account_a2,
-            role_code="viewer",
+            role_code="client",
         )
 
         assert assignee_of(db_session, alba_tasks["pending"]) == world.account_a2

@@ -43,9 +43,6 @@ export function TaskStatusMenu({
           type="button"
           variant="light"
           color={STATUS_COLORS[task.status]}
-          // A Badge is a pill by default, which suits a label. This one is
-          // pressed, so it takes the corner every button has (theme.ts).
-          radius="var(--mantine-radius-default)"
           rightSection={
             pending ? (
               <Loader size={10} color={STATUS_COLORS[task.status]} />
