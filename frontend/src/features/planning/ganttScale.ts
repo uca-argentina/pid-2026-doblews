@@ -65,6 +65,12 @@ function partsOf(day: number) {
   };
 }
 
+/** Saturday or Sunday: the days no task is planned on (ADR-009 section 4). */
+export function isWeekend(day: number): boolean {
+  const { weekday } = partsOf(day);
+  return weekday === 0 || weekday === 6;
+}
+
 function mondayOf(day: number): number {
   return day - ((partsOf(day).weekday + 6) % 7);
 }
@@ -128,6 +134,24 @@ export function ganttBar(task: TaskOut, range: GanttRange): GanttSpan | null {
   const start = toDay(task.planned_start_date);
   const end = toDay(task.planned_end_date);
   return { offset: start - range.start, days: end - start + 1 };
+}
+
+/** How many days of a task's bar are behind it, counted from its left edge:
+ * the part drawn solid, where the rest is what is still expected.
+ *
+ * A finished task is all behind and a pending one all ahead. One that is
+ * running is cut at today — at noon, where the line of today is drawn, so
+ * the solid part ends on that line. */
+export function elapsedDays(
+  task: TaskOut,
+  bar: GanttSpan,
+  range: GanttRange,
+  today: number,
+): number {
+  if (task.status === "finished") return bar.days;
+  if (task.status === "pending") return 0;
+  const elapsed = today + 0.5 - (range.start + bar.offset);
+  return Math.min(Math.max(elapsed, 0), bar.days);
 }
 
 /** One cell of the header: a day, a week, a month or a year. */

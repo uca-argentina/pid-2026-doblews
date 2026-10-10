@@ -313,13 +313,7 @@ function PlanningView({
                   re-render on resize. The wide one is the table or the Gantt,
                   whichever was picked. */}
               <Box visibleFrom="sm">
-                {view === "gantt" ? (
-                  <GanttChart
-                    tasks={planning.tasks}
-                    projectStartDate={planning.project_start_date}
-                    plannedEndDate={planning.planned_end_date}
-                  />
-                ) : (
+                {view !== "gantt" ? (
                   <TasksTable
                     tasks={planning.tasks}
                     currency={planning.currency}
@@ -327,6 +321,14 @@ function PlanningView({
                     onOpen={(task) => setDetailId(task.id)}
                     renderStatus={renderStatus}
                     renderActions={renderActions}
+                  />
+                ) : planning.project_start_date === null ? (
+                  <UnscheduledGantt />
+                ) : (
+                  <GanttChart
+                    tasks={planning.tasks}
+                    projectStartDate={planning.project_start_date}
+                    plannedEndDate={planning.planned_end_date}
                   />
                 )}
               </Box>
@@ -407,6 +409,23 @@ function PlanningDates({
         <Text fw={700}>{formatDate(endDate)}</Text>
       </div>
     </Group>
+  );
+}
+
+/** The Gantt of a work with no start date (HU-15). The tasks exist, but none
+ * has dates, so there is nothing to place in time: an axis with empty rows
+ * would read as broken. The notice above already asks for the date. */
+function UnscheduledGantt() {
+  return (
+    <Card withBorder padding="xl" radius="md">
+      <Stack gap={4} align="center">
+        <Text fw={500}>Todavía no hay nada que ubicar en el tiempo</Text>
+        <Text size="sm" c="dimmed" ta="center">
+          El Gantt se dibuja con las fechas previstas de las tareas, que se
+          calculan desde la fecha de inicio de la obra.
+        </Text>
+      </Stack>
+    </Card>
   );
 }
 
