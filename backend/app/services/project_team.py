@@ -40,18 +40,17 @@ from app.services.tasks import unassign_open_tasks
 # A Literal rather than a list so the request schemas can use it as a field type:
 # a role that is not one of these — a firm-scope code like "architect", say — is
 # then a 422 from Pydantic before any code in this module runs.
-AssignableProjectRole = Literal["lead", "collaborator", "viewer", "client"]
+AssignableProjectRole = Literal["lead", "collaborator", "client"]
 
-# Where the outgoing lead lands on a transfer. Not viewer: the person who was
-# running the work keeps being able to work on it, they only stop answering for
-# it. HU-6 names this role specifically.
+# Where the outgoing lead lands on a transfer: the person who was running the
+# work keeps being able to work on it, they only stop answering for it. HU-6
+# names this role specifically.
 DEMOTED_LEAD = "collaborator"
 
 # What the lead reads when a rule says no. Spanish, because they are rendered as
 # they are, and constants so the tests assert against these very strings.
 NOT_ON_ROSTER = (
-    "Esa persona no es miembro activo del estudio. "
-    "Sumala al padrón antes de asignarla a la obra."
+    "Esa persona no es miembro activo del estudio. Sumala al padrón antes de asignarla a la obra."
 )
 ALREADY_ON_TEAM = "Esa persona ya está en el equipo de esta obra"
 FIRM_CLIENT_ONLY_AS_CLIENT = (
@@ -97,7 +96,7 @@ def list_assignable_roles(db: Session) -> list[Role]:
     filter: the catalogue is the same for every firm (ADR-002 section 4).
 
     Every role is offered to every candidate; it is the *candidate* that narrows
-    the list, not the work. HU-6 asks the picker not to offer the other three to
+    the list, not the work. HU-6 asks the picker not to offer the other two to
     a firm client, and the frontend can tell because the roster it feeds from
     carries each person's firm role. The same rule is enforced here regardless,
     in _check_candidate, for requests that do not come from that form.

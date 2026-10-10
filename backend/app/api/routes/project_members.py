@@ -124,8 +124,8 @@ def list_team(
 ) -> list[ProjectMemberOut]:
     """Everyone on this work's team, the people who left the firm included.
 
-    project.member.view and not manage, so a collaborator and a viewer get a 200
-    here: HU-6 asks them to see the team and not to be able to change it. The
+    project.member.view and not manage, so a collaborator gets a 200 here: HU-6
+    asks them to see the team and not to be able to change it. The
     firm's client does not hold it at all (ADR-002 section 7) and gets a 403 —
     who else works on the studio's side is not part of what a client is shown.
 

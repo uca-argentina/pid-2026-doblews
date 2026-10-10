@@ -27,7 +27,7 @@ WALL = "Pared de ladrillo común 15cm"
 WALL_120 = "3877800.00"
 
 WRITERS = ["lead", "collaborator"]
-NOT_WRITERS = ["viewer", "client", "owner"]
+NOT_WRITERS = ["client", "owner"]
 
 
 def tasks_url(world, project_id: int | None = None, task_id: int | None = None) -> str:
@@ -57,19 +57,16 @@ def team(world, new_member, add_project_member):
     work: she reaches the planning only through project.view_all.
     """
     collaborator = new_member(world.firm_a, "carlos@test.com", "architect")
-    viewer = new_member(world.firm_a, "vera@test.com", "architect")
     client = new_member(world.firm_a, "clara@test.com", "client")
     bystander = new_member(world.firm_a, "otto@test.com", "architect")
 
     add_project_member(world.project_a, world.account_a2, world.firm_a, "lead")
     add_project_member(world.project_a, collaborator, world.firm_a, "collaborator")
-    add_project_member(world.project_a, viewer, world.firm_a, "viewer")
     add_project_member(world.project_a, client, world.firm_a, "client")
 
     return {
         "lead": world.account_a2,
         "collaborator": collaborator,
-        "viewer": viewer,
         "client": client,
         "owner": world.account_a,
         "bystander": bystander,
@@ -156,9 +153,9 @@ class TestRead:
 
         assert listed["assignee"] == {"account_id": team["collaborator"], "name": "carlos"}
 
-    @pytest.mark.parametrize("role", ["collaborator", "viewer", "owner"])
+    @pytest.mark.parametrize("role", ["collaborator", "owner"])
     def test_these_roles_see_the_costs(self, client, world, team, task, wall, auth_header, role):
-        """viewer holds project.cost.view; the owner sees them through project.view_all."""
+        """The owner is on no work and sees them through project.view_all."""
         planning = client.get(tasks_url(world), headers=auth_header(team[role])).json()
 
         assert planning["total_cost"] == WALL_120
@@ -259,7 +256,7 @@ class TestCreate:
 
     def test_an_assignee_who_cannot_manage_the_planning_is_a_409(self, client, world, team, lead):
         response = client.post(
-            tasks_url(world), json=body(assignee_account_id=team["viewer"]), headers=lead
+            tasks_url(world), json=body(assignee_account_id=team["client"]), headers=lead
         )
 
         assert response.status_code == 409

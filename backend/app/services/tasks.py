@@ -203,8 +203,8 @@ def _check_assignee(db: Session, project: Project, account_id: int) -> None:
     """May this person be made responsible for a task of this work?
 
     Rule 4 of ADR-009 section 10: they hold project.task.manage on it, today.
-    Someone from another firm, someone not on this team, a viewer, the client
-    and someone who left the roster all get the same refusal: for the person at
+    Someone from another firm, someone not on this team, the client and
+    someone who left the roster all get the same refusal: for the person at
     the form they are one situation, a picker that offered who it should not.
 
     Without this, an id from another firm would not be refused by a rule but by

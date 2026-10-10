@@ -109,7 +109,7 @@ class TestArchived:
 
 class TestGetVisible:
     def test_returns_a_project_the_caller_may_see(self, db_session, world, add_project_member):
-        add_project_member(world.project_a, world.account_a, world.firm_a, "viewer")
+        add_project_member(world.project_a, world.account_a, world.firm_a, "collaborator")
 
         found = repo(db_session, world.firm_a).get_visible(
             world.project_a, world.account_a, MEMBER_ONLY

@@ -85,7 +85,7 @@ class TestListTeam:
         """Their seat is still theirs and comes back with them (ADR-002 section
         11.3); until then the section says so rather than hiding it."""
         gone = new_member(world.firm_a, "carla@test.com", "architect")
-        add_project_member(world.project_a, gone, world.firm_a, "viewer")
+        add_project_member(world.project_a, gone, world.firm_a, "collaborator")
         db.execute(
             text("UPDATE firm_member SET is_active = false WHERE account_id = :a"), {"a": gone}
         )
@@ -179,7 +179,7 @@ class TestAddMember:
 
         response = client.post(
             team_url(world.firm_a, world.project_a),
-            json={"account_id": carla, "role_code": "viewer"},
+            json={"account_id": carla, "role_code": "collaborator"},
             headers=auth_header(world.account_a2),
         )
 
@@ -191,7 +191,7 @@ class TestAddMember:
         """HU-6: the picker never offers them, and the endpoint refuses them too."""
         response = client.post(
             team_url(world.firm_a, world.project_a),
-            json={"account_id": world.account_b, "role_code": "viewer"},
+            json={"account_id": world.account_b, "role_code": "collaborator"},
             headers=auth_header(world.account_a),
         )
 
@@ -231,7 +231,7 @@ class TestAddMember:
     def test_someone_already_on_the_team_is_refused(
         self, client, world, auth_header, led_by_ana, add_project_member
     ):
-        add_project_member(world.project_a, world.account_a2, world.firm_a, "viewer")
+        add_project_member(world.project_a, world.account_a2, world.firm_a, "collaborator")
 
         response = client.post(
             team_url(world.firm_a, world.project_a),
@@ -283,12 +283,12 @@ class TestChangeRole:
 
         response = client.patch(
             f"{team_url(world.firm_a, world.project_a)}/{world.account_a2}",
-            json={"role_code": "viewer"},
+            json={"role_code": "client"},
             headers=auth_header(world.account_a),
         )
 
         assert response.status_code == 200
-        assert response.json()["role"] == {"code": "viewer", "name": "Lector"}
+        assert response.json()["role"] == {"code": "client", "name": "Cliente"}
 
     def test_the_lead_cannot_be_moved_off_the_lead_role(
         self, client, world, auth_header, led_by_ana
@@ -305,7 +305,7 @@ class TestChangeRole:
     def test_somebody_not_on_the_team_is_a_404(self, client, world, auth_header, led_by_ana):
         response = client.patch(
             f"{team_url(world.firm_a, world.project_a)}/{world.account_a2}",
-            json={"role_code": "viewer"},
+            json={"role_code": "collaborator"},
             headers=auth_header(world.account_a),
         )
 
@@ -317,11 +317,11 @@ class TestChangeRole:
     ):
         add_project_member(world.project_a, world.account_a2, world.firm_a, "collaborator")
         carla = new_member(world.firm_a, "carla@test.com", "architect")
-        add_project_member(world.project_a, carla, world.firm_a, "viewer")
+        add_project_member(world.project_a, carla, world.firm_a, "collaborator")
 
         response = client.patch(
             f"{team_url(world.firm_a, world.project_a)}/{carla}",
-            json={"role_code": "collaborator"},
+            json={"role_code": "client"},
             headers=auth_header(world.account_a2),
         )
 
@@ -377,7 +377,7 @@ class TestRemoveMember:
 
 
 class TestListRoles:
-    def test_the_lead_gets_the_four_roles_with_their_labels(
+    def test_the_lead_gets_the_three_roles_with_their_labels(
         self, client, world, auth_header, led_by_ana
     ):
         response = client.get(
@@ -390,7 +390,6 @@ class TestListRoles:
             {"code": "client", "name": "Cliente"},
             {"code": "collaborator", "name": "Colaborador"},
             {"code": "lead", "name": "Responsable"},
-            {"code": "viewer", "name": "Lector"},
         ]
 
     def test_a_collaborator_may_not_read_them(

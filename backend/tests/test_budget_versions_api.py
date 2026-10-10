@@ -32,19 +32,16 @@ def team(world, new_member, add_project_member):
     """The same cast as HU-5's and HU-11's tests, so the three are compared on
     the same people: what changes between them is the guard, not the roster."""
     collaborator = new_member(world.firm_a, "carlos@test.com", "architect")
-    viewer = new_member(world.firm_a, "vera@test.com", "architect")
     client = new_member(world.firm_a, "clara@test.com", "client")
     bystander = new_member(world.firm_a, "otto@test.com", "architect")
 
     add_project_member(world.project_a, world.account_a2, world.firm_a, "lead")
     add_project_member(world.project_a, collaborator, world.firm_a, "collaborator")
-    add_project_member(world.project_a, viewer, world.firm_a, "viewer")
     add_project_member(world.project_a, client, world.firm_a, "client")
 
     return {
         "lead": world.account_a2,
         "collaborator": collaborator,
-        "viewer": viewer,
         "client": client,
         "owner": world.account_a,
         "bystander": bystander,
@@ -82,7 +79,7 @@ class TestSave:
         assert response.status_code == 201
         assert response.json()["version_number"] == 1
 
-    @pytest.mark.parametrize("role", ["viewer", "client", "owner"])
+    @pytest.mark.parametrize("role", ["client", "owner"])
     def test_these_roles_cannot_save(self, client, world, team, wall, auth_header, role):
         """The owner is the interesting one: project.view_all opens the reading
         and never the writing — auditing a work is not deciding what gets
@@ -128,7 +125,7 @@ class TestSave:
 
 
 class TestRead:
-    @pytest.mark.parametrize("role", ["lead", "collaborator", "viewer", "owner"])
+    @pytest.mark.parametrize("role", ["lead", "collaborator", "owner"])
     def test_these_roles_read_the_versions(self, client, world, team, version, auth_header, role):
         """The same four who may see the cost: reading a version adds no
         permission of its own (ADR-007 section 4)."""
@@ -286,7 +283,7 @@ class TestLoad:
         assert response.status_code == 200
         assert response.json() == {"loaded": 1, "skipped": []}
 
-    @pytest.mark.parametrize("role", ["viewer", "client", "owner"])
+    @pytest.mark.parametrize("role", ["client", "owner"])
     def test_these_roles_cannot_load(self, client, world, team, version, auth_header, role):
         """Same permission as saving: replacing the draft is writing it."""
         response = client.post(self.load_url(world, version["id"]), headers=auth_header(team[role]))
