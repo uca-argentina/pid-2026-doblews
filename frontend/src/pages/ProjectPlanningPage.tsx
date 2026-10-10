@@ -7,14 +7,17 @@ import {
   Center,
   Group,
   Loader,
+  SegmentedControl,
   Stack,
   Text,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
+import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { useCurrentFirm } from "../features/firms/firmContext";
 import { ActualDatesModal } from "../features/planning/ActualDatesModal";
+import { GanttChart } from "../features/planning/GanttChart";
 import { RemoveTaskModal } from "../features/planning/RemoveTaskModal";
 import { ReopenTaskModal } from "../features/planning/ReopenTaskModal";
 import { TaskActionsMenu } from "../features/planning/TaskActionsMenu";
@@ -110,6 +113,11 @@ function PlanningView({
   // itself moves on to a predecessor or a successor.
   const [detailId, setDetailId] = useState<number | null>(null);
   const detail = planning?.tasks.find((task) => task.id === detailId) ?? null;
+  // Which of the two shapes of the planning is on screen: the list or the
+  // Gantt (HU-15). Kept in the URL, so reloading or sharing the address keeps
+  // it; anything other than "gantt" is the list.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const view = searchParams.get("view") === "gantt" ? "gantt" : "list";
 
   const transitionTask = useTransitionTask(firmId, projectId);
   // Which task and action a one-click transition is in flight for, so only
@@ -190,9 +198,25 @@ function PlanningView({
         order={4}
         title="Planificación"
         action={
-          canManage ? (
-            <Button onClick={add.open}>Nueva tarea</Button>
-          ) : undefined
+          <Group gap="sm">
+            {/* Not offered on a phone, which always gets the cards below: the
+                Gantt at 375px is left for later (ADR-009 section 12). */}
+            <SegmentedControl
+              visibleFrom="sm"
+              aria-label="Vista de la planificación"
+              value={view}
+              onChange={(value) =>
+                setSearchParams(value === "gantt" ? { view: "gantt" } : {}, {
+                  replace: true,
+                })
+              }
+              data={[
+                { value: "list", label: "Lista" },
+                { value: "gantt", label: "Gantt" },
+              ]}
+            />
+            {canManage && <Button onClick={add.open}>Nueva tarea</Button>}
+          </Group>
         }
       />
 
@@ -286,16 +310,25 @@ function PlanningView({
             <>
               {/* One list, two shapes. Both are rendered and one is hidden by
                   CSS, like the team: no window measurement, and nothing to
-                  re-render on resize. */}
+                  re-render on resize. The wide one is the table or the Gantt,
+                  whichever was picked. */}
               <Box visibleFrom="sm">
-                <TasksTable
-                  tasks={planning.tasks}
-                  currency={planning.currency}
-                  showsCost={planning.total_cost !== null}
-                  onOpen={(task) => setDetailId(task.id)}
-                  renderStatus={renderStatus}
-                  renderActions={renderActions}
-                />
+                {view === "gantt" ? (
+                  <GanttChart
+                    tasks={planning.tasks}
+                    projectStartDate={planning.project_start_date}
+                    plannedEndDate={planning.planned_end_date}
+                  />
+                ) : (
+                  <TasksTable
+                    tasks={planning.tasks}
+                    currency={planning.currency}
+                    showsCost={planning.total_cost !== null}
+                    onOpen={(task) => setDetailId(task.id)}
+                    renderStatus={renderStatus}
+                    renderActions={renderActions}
+                  />
+                )}
               </Box>
               <Stack gap="sm" hiddenFrom="sm">
                 {planning.tasks.map((task) => (
