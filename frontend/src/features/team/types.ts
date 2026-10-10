@@ -10,8 +10,7 @@ import type { RoleOut } from "../auth/types";
  * unlike the firm roster, where owner is withheld, the work's own responsible
  * is one of these and handing it over is what a transfer is. The API answers
  * 422 to anything else, so this type only catches it before sending. */
-export type AssignableProjectRole =
-  "lead" | "collaborator" | "viewer" | "client";
+export type AssignableProjectRole = "lead" | "collaborator" | "client";
 
 /** The project role whose holder answers for the work. Assigning it to someone
  * else transfers it, which is why the UI warns before doing so. */
@@ -26,7 +25,7 @@ export interface ProjectMemberOut {
   name: string;
   email: string;
   /** The role on this work, not in the firm: someone can be an architect of
-   * the studio and a viewer of this particular work. */
+   * the studio and a collaborator on this particular work. */
   role: RoleOut;
   /** The state of their roster row, not of the assignment. False means they
    * left the firm: the seat is still theirs and comes back with them, and
