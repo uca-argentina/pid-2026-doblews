@@ -225,6 +225,21 @@ Un módulo propio, de funciones puras sobre tareas y aristas ya leídas de la ba
 
 Es también la costura para la extensión de §Consecuencias: el resto de la aplicación le pide "las fechas de esta obra" y no sabe cómo se obtienen.
 
+### 12. La vista en el tiempo
+
+Decidido el 2026-10-10, al arrancar HU-15. No agrega modelo ni endpoints: la vista dibuja lo que `GET /tasks` ya devuelve.
+
+| Pregunta | Decisión | Por qué |
+|---|---|---|
+| Calendario o Gantt | **Gantt**: una fila por tarea, la barra de su inicio a su fin | Es donde se leen la duración, la superposición y el camino crítico, que es lo que calcula §4 |
+| Con qué componente | **Propio, con Mantine.** Sin dependencias nuevas | La vista es de lectura, y lo que una librería de Gantt ahorra es el arrastre. Queda aislado en un componente que recibe las tareas, así que se puede reemplazar |
+| Qué se puede hacer | **Es de lectura.** Elegir una tarea abre su detalle, y desde ahí la edita quien tiene `project.task.manage` | Las fechas previstas no se editan (§2): se cambia lo que las produce, y eso ya tiene su formulario. Al guardar, las barras se reacomodan solas |
+| Las dependencias | **No se dibujan.** Se leen en el detalle de la tarea | Verlas de un vistazo es el trabajo de una vista de grafo, que queda como extensión |
+| Escalas | Días, semanas y meses | |
+| 375px | **Diferido.** En pantallas chicas la planificación muestra el listado en tarjetas y no ofrece el Gantt | Alcance del sprint. Un Gantt es horizontal por naturaleza y resolverlo bien en un celular es un trabajo aparte |
+
+La barra usa el color del estado de la tarea, el mismo del listado, y distingue lo que ya pasó de lo previsto. Las críticas van destacadas, y están marcados el día de hoy y el fin previsto de la obra.
+
 ---
 
 ## Consecuencias
@@ -249,7 +264,6 @@ Es también la costura para la extensión de §Consecuencias: el resto de la apl
 | **Rubros.** Fuera por ahora: el pedido los menciona una sola vez y se consulta con la cátedra. Si entran, es una tabla y una FK nullable en `project_task` | Respuesta de la cátedra |
 | **Línea base.** Acordado en principio y **revisable**: un botón "Fijar planificación" copia las fechas previstas de cada tarea (dos columnas `DATE` en `project_task` y una fecha en `project`); la comparación planificado/real es contra esa copia; volver a fijar reemplaza la anterior | HU-16 |
 | Avance: cómo se calcula el planificado, cómo se agrega a la obra, relación con el estado, historial | HU-16 |
-| Calendario o Gantt, y con qué componente | HU-15 |
 | **Versiones del presupuesto y asignación a tareas.** Cargar una versión (HU-12) da de baja las líneas del cómputo y crea otras nuevas, así que hoy **las líneas cargadas quedan sin asignar** y la pantalla lo avisa. Previsto: que `budget_version_line` guarde `task_id` y la carga lo restaure si la tarea sigue activa | HU-19 (D-17) |
 
 **Extensiones previstas, no descartadas:**
@@ -261,6 +275,9 @@ Es también la costura para la extensión de §Consecuencias: el resto de la apl
 | Días hábiles configurables por obra, y feriados | Una obra trabaje sábados, o las fechas calculadas fallen por feriados |
 | Simulación de atrasos ("qué pasa si") | Después del Gantt |
 | Historial de líneas base | Haga falta ver cómo cambió el plan |
+| **Vista de grafo de las dependencias.** La red de tareas dibujada como nodos y aristas. Es donde las dependencias se ven de un vistazo, y por eso el Gantt no las dibuja (§12) | Después del Gantt |
+| El Gantt a 375px | Después de HU-15, en su propia rama |
+| Arrastrar tareas en el Gantt. Mover una barra escribiría el "no antes de" y estirarla la duración; el resto de los movimientos no tiene qué escribir | La edición desde el detalle resulte incómoda |
 
 ---
 
@@ -287,6 +304,14 @@ Es también la costura para la extensión de §Consecuencias: el resto de la apl
 **Bloquear la reapertura de una tarea con sucesoras iniciadas.** Mantendría siempre que "si arrancó, sus predecesoras terminaron". Descartada porque registrar un retrabajo obligaría a borrar fechas reales de trabajo ya hecho.
 
 **Días corridos.** Sin calendario que mantener. Descartada porque con fechas calculadas da resultados que nadie espera: una tarea "de 5 días" terminaría contando el fin de semana.
+
+**Calendario mensual en vez de Gantt.** El pedido admite cualquiera de los dos, y un calendario se adapta mejor a un celular. Descartado porque parte en franjas una tarea de varias semanas, se desborda con tareas en paralelo y casi no deja ver el camino crítico.
+
+**Una librería de Gantt** (`@svar-ui/react-gantt`, `frappe-gantt`). Traen hechas las escalas, las flechas y el arrastre. Descartada porque de eso la vista solo usa las escalas: lo demás hay que apagarlo, y a cambio hay que adaptar un estilo ajeno al de la aplicación. `frappe-gantt` además no es un componente de React.
+
+**Arrastrar las tareas en el Gantt.** Descartado para HU-15 porque las fechas previstas se calculan: cada gesto habría que traducirlo a un dato de entrada, mover una tarea hacia atrás no tiene traducción, y como el cronograma se recalcula la barra no siempre queda donde se soltó. Queda como extensión.
+
+**Flechas de dependencia sobre el Gantt.** Es lo habitual. Descartadas porque con muchas tareas se enmarañan y son la parte más cara del componente; las dependencias ya se leen en el detalle de cada tarea, y la vista pensada para mostrarlas es el grafo.
 
 ---
 

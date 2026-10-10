@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import {
   Badge,
+  Button,
   Group,
   Modal,
   SimpleGrid,
@@ -21,6 +22,9 @@ interface TaskDetailModalProps {
   /** Opens another task's detail in place of this one: a predecessor or a
    * successor, so the chain can be walked without closing anything. */
   onSelect: (taskId: number) => void;
+  /** Opens this task's form, for those who may manage the planning. Omitted
+   * for everyone else, and then the detail offers nothing to do. */
+  onEdit?: (task: TaskOut) => void;
   onClose: () => void;
 }
 
@@ -31,12 +35,13 @@ interface TaskDetailModalProps {
  * which the listing has no room for. Editing stays in the ⋯ menu's form. The
  * cost is shown only when the response carries it.
  *
- * HU-15's "elegir una tarea en la vista abre su detalle" is meant to open
- * this same modal. */
+ * HU-15's Gantt opens this same modal from a bar, and it is read only, so
+ * the way from a bar to changing its task is the "Editar" at the bottom. */
 export function TaskDetailModal({
   task,
   currency,
   onSelect,
+  onEdit,
   onClose,
 }: TaskDetailModalProps) {
   return (
@@ -48,7 +53,12 @@ export function TaskDetailModal({
       size="lg"
     >
       {task && (
-        <TaskDetail task={task} currency={currency} onSelect={onSelect} />
+        <TaskDetail
+          task={task}
+          currency={currency}
+          onSelect={onSelect}
+          onEdit={onEdit}
+        />
       )}
     </Modal>
   );
@@ -58,10 +68,12 @@ function TaskDetail({
   task,
   currency,
   onSelect,
+  onEdit,
 }: {
   task: TaskOut;
   currency: string;
   onSelect: (taskId: number) => void;
+  onEdit?: (task: TaskOut) => void;
 }) {
   return (
     <Stack gap="md">
@@ -118,6 +130,14 @@ function TaskDetail({
         tasks={task.successors}
         onSelect={onSelect}
       />
+
+      {onEdit && (
+        <Group justify="flex-end">
+          <Button variant="default" onClick={() => onEdit(task)}>
+            Editar
+          </Button>
+        </Group>
+      )}
     </Stack>
   );
 }

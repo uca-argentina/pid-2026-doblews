@@ -4,7 +4,7 @@
 **Duración del sprint:** 2 semanas
 **Equipo:** 3 personas (fullstack)
 
-> **Estado de este documento:** HU-13 y HU-14 están firmes, las define [ADR-009](../adr/0009-project-planning.md); HU-17 y HU-18 también, por [ADR-010](../adr/0010-suppliers-price-lists.md). HU-15, HU-16 y HU-19 todavía tienen puntos sin decidir, marcados **[D-n]** y listados en [Preguntas de diseño abiertas](#preguntas-de-diseño-abiertas) con la historia que los destraba: se cierran al arrancar cada una, no antes.
+> **Estado de este documento:** HU-13 y HU-14 están firmes, las define [ADR-009](../adr/0009-project-planning.md); HU-17 y HU-18 también, por [ADR-010](../adr/0010-suppliers-price-lists.md); HU-15 quedó firme al arrancarla, por ADR-009 §12. HU-16 y HU-19 todavía tienen puntos sin decidir, marcados **[D-n]** y listados en [Preguntas de diseño abiertas](#preguntas-de-diseño-abiertas) con la historia que los destraba: se cierran al arrancar cada una, no antes.
 
 ## Requerimientos de la cátedra
 
@@ -151,21 +151,22 @@ No son decisiones de este sprint: son lo que los Sprints 1 y 2 dejaron fijado, y
 
 **Criterios de aceptación**
 
-- La sección "Planificación" tiene una vista temporal de las tareas: **calendario o Gantt**. El pedido admite cualquiera de las dos; alcanza con una. **[D-9]**
+- La sección "Planificación" tiene, además del listado, una vista **Gantt** de las tareas: una fila por tarea y un eje de tiempo. El pedido admite calendario o Gantt; alcanza con una.
 - Cada tarea se dibuja desde su inicio hasta su fin, con su nombre: con las fechas **reales** donde las hay y las **previstas** donde no.
-- Las tareas se distinguen por **estado**, y las **críticas** están destacadas.
+- Las tareas se distinguen por **estado**, con los colores del listado, y las **críticas** están destacadas.
 - El día de hoy y la fecha prevista de fin de la obra están marcados.
-- Se puede mover la ventana de tiempo hacia adelante y hacia atrás, y cambiar la escala. **[D-9]**
+- Se puede mover la ventana de tiempo hacia adelante y hacia atrás, y cambiar la escala entre **días, semanas y meses**.
 - Elegir una tarea en la vista abre su detalle.
-- Las dependencias de HU-14 son visibles desde la vista. **[D-9]**
-- Es una vista de lectura: las tareas se editan desde su formulario.
+- Las dependencias de HU-14 se leen en ese detalle, que lista predecesoras y sucesoras. **La vista no las dibuja.**
+- Es una vista de lectura: nada se arrastra. Desde el detalle, quien tiene `project.task.manage` abre el formulario de la tarea, y al guardar la vista se actualiza sola.
 - Si la obra no tiene tareas o no tiene fecha de inicio, estado vacío que dice qué falta.
 - La ve quien puede ver las tareas (`project.task.view`).
-- Se usa bien a 375px. **[D-9]**
+- **A 375px no se ofrece el Gantt**: la planificación muestra el listado en tarjetas, como hasta ahora. El Gantt en pantallas chicas queda para después.
 
-**Fuera de alcance:** arrastrar una tarea para cambiarle la duración o las dependencias; exportar a PDF o a imagen; vista de varias obras a la vez; carga de trabajo por persona.
+**Fuera de alcance:** arrastrar una tarea para cambiarle la duración o las dependencias; dibujar las dependencias sobre el Gantt (queda para una vista de grafo); el Gantt a 375px; exportar a PDF o a imagen; vista de varias obras a la vez; carga de trabajo por persona.
 **Depende de:** HU-14.
 **Estimación:** 3 días (preliminar).
+**Definida por:** [ADR-009](../adr/0009-project-planning.md) §12.
 
 ---
 
@@ -302,7 +303,6 @@ Lo que queda sin decidir. Cada pregunta se cierra **al arrancar la historia que 
 
 | | Pregunta | Destraba |
 |---|---|---|
-| **D-9** | **Calendario o Gantt.** ¿Cuál, con qué librería o componente propio, qué escalas de tiempo, cómo se muestran las dependencias y cómo se resuelve a 375px? | HU-15 |
 | **D-10** | **Cómo se calcula el avance planificado.** ¿Qué porcentaje "debería" tener una tarea a una fecha dada? | HU-16 |
 | **D-11** | **Cómo se agrega el avance.** Para pasar de tareas a obra, ¿cada tarea pesa por su costo, por su duración, o todas igual? | HU-16 |
 | **D-12** | **Avance y estado.** ¿Finalizar una tarea la lleva al 100%? ¿Llegar al 100% la finaliza? ¿Una tarea pendiente puede tener avance? | HU-16 |
@@ -318,6 +318,7 @@ Lo que queda sin decidir. Cada pregunta se cierra **al arrancar la historia que 
 **Cerradas**
 
 - D-1 a D-8, en [ADR-009](../adr/0009-project-planning.md): las tareas cuelgan directo de la obra; el costo sale del cómputo; el responsable es un integrante de la obra que puede gestionar sus tareas; las fechas se calculan en días hábiles; las transiciones de estado son las de HU-13; toda dependencia es obligatoria y de tipo fin → inicio; reabrir una predecesora se permite; las dependencias viven en Postgres.
+- D-9, en [ADR-009](../adr/0009-project-planning.md) §12: la vista es un Gantt, hecho con un componente propio y de lectura; elegir una tarea abre su detalle, desde donde se edita; las dependencias no se dibujan; a 375px se ve el listado.
 - D-14 y D-15, en [ADR-010](../adr/0010-suppliers-price-lists.md): los proveedores son del estudio; el envío es un importe fijo por material.
 
 ---
@@ -354,7 +355,7 @@ flowchart LR
 **Qué se recorta si el sprint se aprieta**, en este orden:
 
 1. **Holgura y camino crítico** de HU-14. Las fechas previstas y el fin de la obra se quedan; lo que sale es el recorrido hacia atrás. No lo pide el texto.
-2. **Las dependencias dibujadas en la vista** de HU-15: se ven en el detalle de la tarea.
+2. **Las dependencias dibujadas en la vista** de HU-15: se ven en el detalle de la tarea. *Aplicado al arrancar HU-15 (ADR-009 §12), no por tiempo: se prefirió dejarlas para una vista de grafo.*
 3. **La vista de compras por obra** de HU-18: queda la comparación por material, que es lo que pide el texto.
 
 Lo que no se recorta: el bloqueo al iniciar, una vista temporal, el avance planificado contra real, el proveedor más económico por material y los tres bloques del dashboard. Es el pedido.
@@ -484,3 +485,29 @@ De esa misma revisión quedaron **anotados y sin hacer**:
 **Pendiente aparte:** en la suite del backend apareció un test intermitente, distinto en cada corrida (catálogo, obras, tareas, padrón) y que pasa al repetirlo. No viene de este cambio y no se encontró la causa.
 
 **Falta:** mergear `refactor/remove-viewer-role` a `fix/sprint-2-and-3-polish`.
+
+**2026-10-10 (HU-15).** **HU-15 implementada, solo frontend** (`feat/hu15-gantt`): la vista Gantt de la planificación. Ningún endpoint, permiso ni tabla cambió: dibuja lo que `GET /tasks` ya devolvía desde HU-14. **D-9 quedó cerrada** en [ADR-009 §12](../adr/0009-project-planning.md).
+
+Cómo quedó resuelto en pantalla:
+
+- **"Planificación" tiene dos vistas, Lista y Gantt**, con un selector al lado de "Nueva tarea". La elegida va en la dirección (`?view=gantt`), así que recargar la conserva. Comparten la consulta y todos los modales.
+- **Una fila por tarea y un eje de días.** Los nombres quedan fijos a la izquierda y solo el eje se desplaza. El eje cubre la obra entera, de la semana anterior a su primera fecha a la siguiente a la última, y se alarga hasta llenar la pantalla cuando la obra es corta.
+- **La barra lleva el color del estado**, el mismo de la etiqueta del listado. Lo que ya pasó va en color pleno y lo previsto en claro: una finalizada entera, una pendiente nada, una en curso o pausada hasta hoy. Es la distinción "real en negro, prevista en gris" del listado.
+- **Las críticas, con borde rojo.**
+- **Hoy y el fin previsto de la obra están marcados**: una línea llena y una punteada, con su rótulo.
+- **Tres escalas: días, semanas y meses.** Arranca en semanas. En días, los fines de semana están sombreados.
+- **La ventana se mueve** con los botones ‹ y ›, y "Hoy" vuelve a centrarla. Al abrir y al cambiar de escala queda centrada en hoy.
+- **Tocar una barra o un nombre abre el detalle** de HU-14. Pasar el mouse por la barra dice sus fechas exactas.
+- **El detalle sumó un botón "Editar"** para quien tiene `project.task.manage`, que abre el formulario de la tarea. Aparece también al abrir el detalle desde la Lista. Al guardar, las barras se reacomodan solas.
+- **Sin fecha de inicio**, el Gantt dice que no hay nada que ubicar en el tiempo; el aviso que pide cargarla sigue arriba.
+- **A 375px no se ofrece**: el selector no aparece y se ven las tarjetas de siempre.
+
+El cálculo del eje vive en `frontend/src/features/planning/ganttScale.ts`, funciones puras sin componentes. Cuenta las fechas como números de día y no con `dayjs`: lo que el eje necesita es restarlas, y así un día mide siempre lo mismo.
+
+**Quedó para después**, y está anotado como extensión en ADR-009: el Gantt a 375px, en su propia rama; una vista de grafo que muestre las dependencias, que el Gantt no dibuja; y arrastrar las tareas.
+
+**Sin resolver:** si la obra termina cerca de hoy, los rótulos "Hoy" y "Fin previsto" se pueden pisar.
+
+**Falta para cerrar HU-15:** el PR a `dev` y la revisión visual de los criterios.
+
+**Queda liberada:** HU-16 (avance), que ya lo estaba.
