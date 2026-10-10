@@ -485,3 +485,29 @@ De esa misma revisión quedaron **anotados y sin hacer**:
 **Pendiente aparte:** en la suite del backend apareció un test intermitente, distinto en cada corrida (catálogo, obras, tareas, padrón) y que pasa al repetirlo. No viene de este cambio y no se encontró la causa.
 
 **Falta:** mergear `refactor/remove-viewer-role` a `fix/sprint-2-and-3-polish`.
+
+**2026-10-10 (HU-15).** **HU-15 implementada, solo frontend** (`feat/hu15-gantt`): la vista Gantt de la planificación. Ningún endpoint, permiso ni tabla cambió: dibuja lo que `GET /tasks` ya devolvía desde HU-14. **D-9 quedó cerrada** en [ADR-009 §12](../adr/0009-project-planning.md).
+
+Cómo quedó resuelto en pantalla:
+
+- **"Planificación" tiene dos vistas, Lista y Gantt**, con un selector al lado de "Nueva tarea". La elegida va en la dirección (`?view=gantt`), así que recargar la conserva. Comparten la consulta y todos los modales.
+- **Una fila por tarea y un eje de días.** Los nombres quedan fijos a la izquierda y solo el eje se desplaza. El eje cubre la obra entera, de la semana anterior a su primera fecha a la siguiente a la última, y se alarga hasta llenar la pantalla cuando la obra es corta.
+- **La barra lleva el color del estado**, el mismo de la etiqueta del listado. Lo que ya pasó va en color pleno y lo previsto en claro: una finalizada entera, una pendiente nada, una en curso o pausada hasta hoy. Es la distinción "real en negro, prevista en gris" del listado.
+- **Las críticas, con borde rojo.**
+- **Hoy y el fin previsto de la obra están marcados**: una línea llena y una punteada, con su rótulo.
+- **Tres escalas: días, semanas y meses.** Arranca en semanas. En días, los fines de semana están sombreados.
+- **La ventana se mueve** con los botones ‹ y ›, y "Hoy" vuelve a centrarla. Al abrir y al cambiar de escala queda centrada en hoy.
+- **Tocar una barra o un nombre abre el detalle** de HU-14. Pasar el mouse por la barra dice sus fechas exactas.
+- **El detalle sumó un botón "Editar"** para quien tiene `project.task.manage`, que abre el formulario de la tarea. Aparece también al abrir el detalle desde la Lista. Al guardar, las barras se reacomodan solas.
+- **Sin fecha de inicio**, el Gantt dice que no hay nada que ubicar en el tiempo; el aviso que pide cargarla sigue arriba.
+- **A 375px no se ofrece**: el selector no aparece y se ven las tarjetas de siempre.
+
+El cálculo del eje vive en `frontend/src/features/planning/ganttScale.ts`, funciones puras sin componentes. Cuenta las fechas como números de día y no con `dayjs`: lo que el eje necesita es restarlas, y así un día mide siempre lo mismo.
+
+**Quedó para después**, y está anotado como extensión en ADR-009: el Gantt a 375px, en su propia rama; una vista de grafo que muestre las dependencias, que el Gantt no dibuja; y arrastrar las tareas.
+
+**Sin resolver:** si la obra termina cerca de hoy, los rótulos "Hoy" y "Fin previsto" se pueden pisar.
+
+**Falta para cerrar HU-15:** el PR a `dev` y la revisión visual de los criterios.
+
+**Queda liberada:** HU-16 (avance), que ya lo estaba.
