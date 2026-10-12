@@ -11,6 +11,8 @@ from sqlalchemy import text
 
 from app.services.tasks import (
     ASSIGNEE_NOT_ALLOWED,
+    BASELINE_NEEDS_START,
+    BASELINE_NEEDS_TASKS,
     DATE_NOT_EXPECTED,
     END_BEFORE_START,
     LINE_NOT_AVAILABLE,
@@ -116,6 +118,12 @@ class TestRead:
                     "actual_start_date": None,
                     "actual_end_date": None,
                     "progress_percent": 0,
+                    # Nothing was fixed, so there is nothing to compare against.
+                    "baseline_start_date": None,
+                    "baseline_end_date": None,
+                    "planned_progress_percent": None,
+                    "progress_gap": None,
+                    "progress_standing": None,
                     # Decimals travel as strings, so the frontend never sees a float.
                     "cost": WALL_120,
                     # The work has no start date, so nothing is planned yet.
@@ -129,6 +137,9 @@ class TestRead:
             ],
             "project_start_date": None,
             "planned_end_date": None,
+            "baseline_set_on": None,
+            "baseline_end_date": None,
+            "progress": None,
             "unassigned_cost": WALL_120,
             "total_cost": "7755600.00",
             "currency": "ARS",
@@ -620,6 +631,112 @@ class TestProgress:
         response = client.put(
             self.url(world, elsewhere), json={"progress_percent": 40}, headers=lead
         )
+
+        assert response.status_code == 404
+
+
+class TestBaseline:
+    """HU-16 at the border: who fixes the planning, and that the comparison
+    reaches every reader. October 2026: the 5th is a Monday."""
+
+    @pytest.fixture
+    def on(self, monkeypatch):
+        def _on(day: date) -> None:
+            monkeypatch.setattr("app.services.tasks.today", lambda: day)
+
+        _on(date(2026, 10, 5))
+        return _on
+
+    @pytest.fixture
+    def started_work(self, db, world, on) -> None:
+        db.execute(
+            text("UPDATE project SET estimated_start_date = '2026-10-05' WHERE id = :p"),
+            {"p": world.project_a},
+        )
+
+    def url(self, world) -> str:
+        return f"{tasks_url(world)}/baseline"
+
+    @pytest.mark.parametrize("role", WRITERS)
+    def test_these_roles_fix_it_and_get_the_whole_planning_back(
+        self, client, world, team, started_work, task, auth_header, role
+    ):
+        response = client.post(self.url(world), headers=auth_header(team[role]))
+
+        assert response.status_code == 200
+        planning = response.json()
+        # Ten working days from Monday the 5th.
+        assert (planning["baseline_set_on"], planning["baseline_end_date"]) == (
+            "2026-10-05",
+            "2026-10-16",
+        )
+        assert planning["progress"] == {
+            "actual_percent": 0,
+            "planned_percent": 10,
+            "gap": -10,
+            "standing": "behind",
+        }
+        fixed = planning["tasks"][0]
+        assert (fixed["baseline_start_date"], fixed["baseline_end_date"]) == (
+            "2026-10-05",
+            "2026-10-16",
+        )
+        assert (
+            fixed["planned_progress_percent"],
+            fixed["progress_gap"],
+            fixed["progress_standing"],
+        ) == (10, -10, "behind")
+
+    def test_the_client_reads_the_comparison(
+        self, client, world, team, lead, started_work, task, auth_header, on
+    ):
+        client.post(self.url(world), headers=lead)
+
+        on(date(2026, 10, 9))
+        planning = client.get(tasks_url(world), headers=auth_header(team["client"])).json()
+
+        # Not a cost: how the work is going is no secret from whoever it is for.
+        assert planning["progress"]["planned_percent"] == 50
+        assert planning["tasks"][0]["progress_standing"] == "behind"
+        assert planning["total_cost"] is None
+
+    def test_a_task_loaded_afterwards_has_no_comparison(
+        self, client, world, team, lead, started_work, task
+    ):
+        client.post(self.url(world), headers=lead)
+
+        late = client.post(tasks_url(world), json=body(name="Pintura"), headers=lead).json()
+
+        assert late["baseline_start_date"] is None
+        assert late["planned_progress_percent"] is None
+        assert late["progress_standing"] is None
+
+    def test_a_work_with_no_start_date_is_a_409(self, client, world, team, lead, task):
+        response = client.post(self.url(world), headers=lead)
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == BASELINE_NEEDS_START
+
+    def test_a_work_with_no_tasks_is_a_409(self, client, world, team, lead, started_work):
+        response = client.post(self.url(world), headers=lead)
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == BASELINE_NEEDS_TASKS
+
+    @pytest.mark.parametrize("role", NOT_WRITERS)
+    def test_the_others_get_403_and_nothing_is_fixed(
+        self, db, client, world, team, started_work, task, auth_header, role
+    ):
+        response = client.post(self.url(world), headers=auth_header(team[role]))
+
+        assert response.status_code == 403
+        fixed = db.execute(
+            text("SELECT baseline_set_on FROM project WHERE id = :p"), {"p": world.project_a}
+        ).scalar_one()
+        assert fixed is None
+
+    def test_another_firms_work_is_a_404(self, client, world, team, lead):
+        response = client.post(f"{tasks_url(world, world.project_b)}/baseline", headers=lead)
 
         assert response.status_code == 404
 

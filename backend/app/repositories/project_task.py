@@ -40,6 +40,9 @@ class TaskEntry:
     actual_start_date: date | None
     actual_end_date: date | None
     progress_percent: int
+    # The planned dates as last fixed (HU-16). None on a task loaded since.
+    baseline_start_date: date | None
+    baseline_end_date: date | None
 
 
 @dataclass(frozen=True)
@@ -68,6 +71,8 @@ def _to_entry(row: Row) -> TaskEntry:
         actual_start_date=task.actual_start_date,
         actual_end_date=task.actual_end_date,
         progress_percent=task.progress_percent,
+        baseline_start_date=task.baseline_start_date,
+        baseline_end_date=task.baseline_end_date,
     )
 
 

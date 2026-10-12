@@ -36,8 +36,10 @@ from app.schemas.task import (
     TaskRefOut,
     TaskTransition,
     TaskWrite,
+    WorkProgressOut,
 )
 from app.services.authz import VIEW_ALL
+from app.services.progress import Comparison
 from app.services.schedule import Schedule
 from app.services.tasks import (
     TASK_MANAGE,
@@ -45,7 +47,9 @@ from app.services.tasks import (
     assign_lines,
     correct_actual_dates,
     create_task,
+    fix_baseline,
     list_assignees,
+    measure_progress,
     plan_work,
     remove_task,
     set_progress,
@@ -131,6 +135,7 @@ def _to_out(
     costs: dict[int | None, Decimal],
     sees_cost: bool,
     schedule: Schedule | None,
+    compared: Comparison | None,
     predecessors: list[TaskRefOut],
     successors: list[TaskRefOut],
 ) -> TaskOut:
@@ -150,6 +155,11 @@ def _to_out(
         actual_start_date=entry.actual_start_date,
         actual_end_date=entry.actual_end_date,
         progress_percent=entry.progress_percent,
+        baseline_start_date=entry.baseline_start_date,
+        baseline_end_date=entry.baseline_end_date,
+        planned_progress_percent=None if compared is None else compared.planned_percent,
+        progress_gap=None if compared is None else compared.gap,
+        progress_standing=None if compared is None else compared.standing,
         # A task with no lines is absent from the costs: it costs zero.
         cost=costs.get(entry.id, _ZERO) if sees_cost else None,
         planned_start_date=None if dates is None else dates.planned_start,
@@ -163,8 +173,9 @@ def _to_out(
 
 def _planning(
     db: Session, membership: CurrentMembership, project: Project, sees_cost: bool
-) -> tuple[list[TaskOut], Schedule | None, dict[int | None, Decimal]]:
-    """Every task of the work as the screen shows it, in planned order.
+) -> tuple[list[TaskOut], Schedule | None, dict[int | None, Decimal], Comparison | None]:
+    """Every task of the work as the screen shows it, in planned order, and how
+    the work as a whole is doing against its fixed planning.
 
     The schedule is the whole work's or nothing: a task's dates depend on every
     task before it, so even answering for one task computes them all. A work
@@ -176,6 +187,7 @@ def _planning(
     edges = tasks.edges(project.id)
     costs = ProjectRecipeRepository(db, firm_id=membership.firm_id).cost_by_task(project.id)
     schedule = plan_work(project, entries, edges)
+    progress = measure_progress(entries)
 
     refs = {
         entry.id: TaskRefOut(id=entry.id, name=entry.name, status=entry.status) for entry in entries
@@ -187,12 +199,20 @@ def _planning(
         successors[predecessor].append(refs[successor])
 
     out = [
-        _to_out(entry, costs, sees_cost, schedule, predecessors[entry.id], successors[entry.id])
+        _to_out(
+            entry,
+            costs,
+            sees_cost,
+            schedule,
+            progress.tasks.get(entry.id),
+            predecessors[entry.id],
+            successors[entry.id],
+        )
         for entry in entries
     ]
     if schedule is not None:
         out.sort(key=lambda task: (task.planned_start_date, task.planned_end_date, task.id))
-    return out, schedule, costs
+    return out, schedule, costs, progress.work
 
 
 def _read_back(
@@ -207,11 +227,43 @@ def _read_back(
     Raises rather than 404s: finding nothing right after a successful write is a
     bug, not a task the caller may not see.
     """
-    tasks, _, _ = _planning(db, membership, project, sees_cost)
+    tasks, _, _, _ = _planning(db, membership, project, sees_cost)
     for task in tasks:
         if task.id == task_id:
             return task
     raise RuntimeError(f"task {task_id} vanished right after being written")
+
+
+def _planning_out(
+    db: Session, membership: CurrentMembership, project: Project, sees_cost: bool
+) -> PlanningOut:
+    """The whole planning in one answer: what the read returns, and what fixing
+    the planning answers with, since that changes every task at once."""
+    tasks, schedule, costs, progress = _planning(db, membership, project, sees_cost)
+    unassigned = costs.get(None, _ZERO)
+
+    return PlanningOut(
+        tasks=tasks,
+        project_start_date=project.estimated_start_date,
+        planned_end_date=None if schedule is None else schedule.project_end,
+        baseline_set_on=project.baseline_set_on,
+        baseline_end_date=project.baseline_end_date,
+        progress=(
+            None
+            if progress is None
+            else WorkProgressOut(
+                actual_percent=progress.actual_percent,
+                planned_percent=progress.planned_percent,
+                gap=progress.gap,
+                standing=progress.standing,
+            )
+        ),
+        unassigned_cost=unassigned if sees_cost else None,
+        # sum() of the amounts as shown, each already rounded, so the screen adds
+        # up to exactly this.
+        total_cost=(sum((task.cost for task in tasks), start=unassigned) if sees_cost else None),
+        currency=CURRENCY,
+    )
 
 
 @router.get(
@@ -248,19 +300,7 @@ def read_planning(
     project = _load_project(db, membership, account.id, granted, project_id)
     sees_cost = _sees_cost(on_project, granted)
 
-    tasks, schedule, costs = _planning(db, membership, project, sees_cost)
-    unassigned = costs.get(None, _ZERO)
-
-    return PlanningOut(
-        tasks=tasks,
-        project_start_date=project.estimated_start_date,
-        planned_end_date=None if schedule is None else schedule.project_end,
-        unassigned_cost=unassigned if sees_cost else None,
-        # sum() of the amounts as shown, each already rounded, so the screen adds
-        # up to exactly this.
-        total_cost=(sum((task.cost for task in tasks), start=unassigned) if sees_cost else None),
-        currency=CURRENCY,
-    )
+    return _planning_out(db, membership, project, sees_cost)
 
 
 @router.get("/assignees", response_model=list[AssigneeOut], dependencies=[Depends(MANAGE)])
@@ -283,6 +323,33 @@ def read_assignees(
         AssigneeOut(account_id=person.account_id, name=person.name)
         for person in list_assignees(db, project)
     ]
+
+
+@router.post("/baseline", response_model=PlanningOut, dependencies=[Depends(MANAGE)])
+def fix_planning(
+    project_id: int,
+    account: CurrentAccount,
+    membership: CurrentMembership,
+    granted: FirmPermissions,
+    on_project: ProjectPermissions,
+    db: DbSession,
+) -> PlanningOut:
+    """Fix the planning: keep today's planned dates as the reference (HU-16).
+
+    A POST with no body: there is nothing to choose, the dates are the ones the
+    schedule gives today. Fixing again replaces the previous one. Answers with
+    the whole planning and not one task, because every task changed.
+
+    Behind project.task.manage like the rest of the writes here: it is part of
+    planning the work, not of editing it.
+    """
+    project = _load_project(db, membership, account.id, granted, project_id)
+
+    with _task_rules():
+        fix_baseline(db, project)
+    db.commit()
+
+    return _planning_out(db, membership, project, _sees_cost(on_project, granted))
 
 
 @router.post(
