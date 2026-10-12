@@ -1,5 +1,5 @@
-"""The rules for loading, editing and removing the tasks of a work, and for what
-waits for what (HU-13, HU-14, ADR-009).
+"""The rules for loading, editing and removing the tasks of a work, for what
+waits for what, and for how much of each is done (HU-13, HU-14, HU-16, ADR-009).
 
 Plain functions over the session, like the rest of the services: they return
 data and never raise HTTPException. A broken rule is a TaskError, and turning it
@@ -101,6 +101,8 @@ PENDING_HAS_NO_DATES = (
 START_REQUIRED = "Una tarea que ya empezó necesita su fecha real de inicio."
 END_ONLY_WHEN_FINISHED = "Solo una tarea finalizada tiene fecha real de fin."
 END_REQUIRED = "Una tarea finalizada necesita su fecha real de fin."
+PROGRESS_NEEDS_START = "Una tarea pendiente está en 0%. Iniciala para registrar su avance."
+PROGRESS_OF_FINISHED = "Una tarea finalizada está al 100%. Reabrila para corregir su avance."
 SELF_DEPENDENCY = "Una tarea no puede ser predecesora de sí misma."
 PREDECESSOR_NOT_AVAILABLE = (
     "Alguna de las predecesoras elegidas ya no está en la planificación de esta obra. "
@@ -485,6 +487,11 @@ def transition(
     Reopening forgets the end and undoing the start forgets the start, which is
     what keeps the row inside the CHECKs that tie the dates to the status.
 
+    The progress follows for the same reason (ADR-009 section 13): finishing
+    takes it to a hundred and undoing the start back to zero. Reopening leaves
+    it where it was — how much of the work has to be redone is something only
+    the person knows, and they correct it by hand.
+
     Starting is also refused while any live predecessor is unfinished (rule 2,
     HU-14), naming the ones missing. It is checked here and only here: the
     block is about the moment of starting, not a lasting invariant, so
@@ -513,10 +520,12 @@ def transition(
         finished = on_date or today()
         _check_actual_dates(task.actual_start_date, finished)
         task.actual_end_date = finished
+        task.progress_percent = 100
     elif action == "reopen":
         task.actual_end_date = None
     elif action == "undo_start":
         task.actual_start_date = None
+        task.progress_percent = 0
 
     task.status = target
     db.flush()
@@ -554,5 +563,29 @@ def correct_actual_dates(
 
     task.actual_start_date = actual_start_date
     task.actual_end_date = actual_end_date
+    db.flush()
+    return task
+
+
+def set_progress(db: Session, task: ProjectTask, percent: int) -> ProjectTask:
+    """Record how much of a task is done, from 0 to 100 (HU-16).
+
+    Only a task in progress or paused takes one. The status rules the progress
+    (ADR-009 section 13): a pending task is at zero and a finished one at a
+    hundred, which the schema also holds, but as a CHECK violation the person
+    would read as a 500. Each refusal says what to do instead.
+
+    Reaching a hundred does not finish the task. Finishing records the actual
+    end and asks for it; a number typed here must not do that on the side.
+
+    The planned dates do not move with it: they depend on durations,
+    dependencies and actual dates alone (ADR-009 section 4).
+    """
+    if task.status == PENDING:
+        raise TaskError(PROGRESS_NEEDS_START)
+    if task.status == FINISHED:
+        raise TaskError(PROGRESS_OF_FINISHED)
+
+    task.progress_percent = percent
     db.flush()
     return task

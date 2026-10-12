@@ -1,7 +1,7 @@
-"""A work's planning over HTTP (HU-13, HU-14): its tasks, their status, their take-off
-lines, what waits for what and when each falls. Where the task permissions guard each
-endpoint, a work or task out of reach becomes a 404, and the cost is hidden from
-whoever may not see it.
+"""A work's planning over HTTP (HU-13, HU-14, HU-16): its tasks, their status, their
+take-off lines, what waits for what, when each falls and how much of it is done.
+Where the task permissions guard each endpoint, a work or task out of reach
+becomes a 404, and the cost is hidden from whoever may not see it.
 """
 
 from collections import defaultdict
@@ -32,6 +32,7 @@ from app.schemas.task import (
     TaskActualDates,
     TaskLines,
     TaskOut,
+    TaskProgress,
     TaskRefOut,
     TaskTransition,
     TaskWrite,
@@ -47,6 +48,7 @@ from app.services.tasks import (
     list_assignees,
     plan_work,
     remove_task,
+    set_progress,
     transition,
     update_task,
 )
@@ -147,6 +149,7 @@ def _to_out(
         ),
         actual_start_date=entry.actual_start_date,
         actual_end_date=entry.actual_end_date,
+        progress_percent=entry.progress_percent,
         # A task with no lines is absent from the costs: it costs zero.
         cost=costs.get(entry.id, _ZERO) if sees_cost else None,
         planned_start_date=None if dates is None else dates.planned_start,
@@ -410,6 +413,32 @@ def replace_actual_dates(
             actual_start_date=payload.actual_start_date,
             actual_end_date=payload.actual_end_date,
         )
+    db.commit()
+
+    return _read_back(db, membership, project, task_id, _sees_cost(on_project, granted))
+
+
+@router.put("/{task_id}/progress", response_model=TaskOut, dependencies=[Depends(MANAGE)])
+def replace_progress(
+    project_id: int,
+    task_id: int,
+    payload: TaskProgress,
+    account: CurrentAccount,
+    membership: CurrentMembership,
+    granted: FirmPermissions,
+    on_project: ProjectPermissions,
+    db: DbSession,
+) -> TaskOut:
+    """Record how much of a task is done (HU-16).
+
+    A PUT of the value and not an action: there is no history of it (ADR-009
+    section 13), so recording the same number twice changes nothing.
+    """
+    project = _load_project(db, membership, account.id, granted, project_id)
+    task = _load_task(db, membership, project_id, task_id)
+
+    with _task_rules():
+        set_progress(db, task, payload.progress_percent)
     db.commit()
 
     return _read_back(db, membership, project, task_id, _sees_cost(on_project, granted))

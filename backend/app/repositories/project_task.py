@@ -39,6 +39,7 @@ class TaskEntry:
     assignee: AssigneeLabel | None
     actual_start_date: date | None
     actual_end_date: date | None
+    progress_percent: int
 
 
 @dataclass(frozen=True)
@@ -66,6 +67,7 @@ def _to_entry(row: Row) -> TaskEntry:
         ),
         actual_start_date=task.actual_start_date,
         actual_end_date=task.actual_end_date,
+        progress_percent=task.progress_percent,
     )
 
 

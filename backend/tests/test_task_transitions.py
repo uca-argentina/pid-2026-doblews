@@ -107,6 +107,42 @@ class TestTheTable:
         )
 
 
+class TestTheProgressATransitionLeaves:
+    """ADR-009 section 13: the status rules the progress."""
+
+    def test_finishing_takes_it_to_a_hundred(self, db_session, task_in):
+        task = task_in("in_progress")
+        task.progress_percent = 40
+
+        transition(db_session, task, "finish")
+
+        assert task.progress_percent == 100
+
+    def test_undoing_the_start_takes_it_back_to_zero(self, db_session, task_in):
+        task = task_in("in_progress")
+        task.progress_percent = 40
+
+        transition(db_session, task, "undo_start")
+
+        assert task.progress_percent == 0
+
+    def test_reopening_keeps_it(self, db_session, task_in):
+        task = task_in("finished")
+
+        transition(db_session, task, "reopen")
+
+        assert task.progress_percent == 100
+
+    @pytest.mark.parametrize(("status", "action"), [("in_progress", "pause"), ("paused", "resume")])
+    def test_pausing_and_resuming_do_not_touch_it(self, db_session, task_in, status, action):
+        task = task_in(status)
+        task.progress_percent = 40
+
+        transition(db_session, task, action)
+
+        assert task.progress_percent == 40
+
+
 class TestTheDatesATransitionRecords:
     def test_starting_records_today_by_default(self, db_session, task_in):
         task = task_in("pending")
