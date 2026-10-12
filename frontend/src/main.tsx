@@ -4,6 +4,7 @@ import "@mantine/core/styles.css";
 // Each Mantine package ships its own stylesheet, and a component whose one is
 // missing renders unstyled rather than failing: without this the calendar that
 // drops out of the "inicio estimado" field has no layout at all.
+import "@mantine/charts/styles.css";
 import "@mantine/dates/styles.css";
 import "@mantine/notifications/styles.css";
 import "./index.css";
