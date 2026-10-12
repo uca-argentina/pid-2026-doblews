@@ -17,6 +17,7 @@ import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { useCurrentFirm } from "../features/firms/firmContext";
 import { ActualDatesModal } from "../features/planning/ActualDatesModal";
+import { FixBaselineModal } from "../features/planning/FixBaselineModal";
 import { GanttChart } from "../features/planning/GanttChart";
 import { ProgressModal } from "../features/planning/ProgressModal";
 import { RemoveTaskModal } from "../features/planning/RemoveTaskModal";
@@ -45,6 +46,7 @@ import {
   useTransitionTask,
 } from "../features/planning/usePlanning";
 import { usePlanningAccess } from "../features/planning/usePlanningAccess";
+import { WorkProgress } from "../features/planning/WorkProgress";
 import { useCurrentProject } from "../features/projects/projectContext";
 import { formatDate } from "../features/projects/projectFields";
 import { ProjectFormModal } from "../features/projects/ProjectFormModal";
@@ -99,6 +101,7 @@ function PlanningView({
   const projectId = project.id;
   const { data: planning, isLoading, isError } = usePlanning(firmId, projectId);
   const [adding, add] = useDisclosure(false);
+  const [fixing, fix] = useDisclosure(false);
   // The task each modal is open for; null means that modal is closed. Kept
   // here and not inside each row, so there is one modal of each kind on the
   // screen rather than one per task.
@@ -266,6 +269,14 @@ function PlanningView({
             projectId={projectId}
             onClose={() => setRecordingProgress(null)}
           />
+          <FixBaselineModal
+            opened={fixing}
+            fixedOn={planning?.baseline_set_on ?? null}
+            plannedEndDate={planning?.planned_end_date ?? null}
+            firmId={firmId}
+            projectId={projectId}
+            onClose={fix.close}
+          />
           <TaskLinesModal
             task={assigningLines}
             firmId={firmId}
@@ -321,9 +332,20 @@ function PlanningView({
           <PlanningDates
             startDate={planning.project_start_date}
             endDate={planning.planned_end_date}
+            baselineEndDate={planning.baseline_end_date}
             canEditProject={canEditProject}
             onEditProject={() => setEditingProject(true)}
           />
+
+          {/* Only for a work that can be fixed: before it has a start date
+              and a task, the notices around this ask for those (HU-16). */}
+          {planning.project_start_date !== null &&
+            planning.tasks.length > 0 && (
+              <WorkProgress
+                planning={planning}
+                onFix={canManage ? fix.open : undefined}
+              />
+            )}
 
           {planning.tasks.length === 0 ? (
             <EmptyPlanning canManage={canManage} onAdd={add.open} />
@@ -339,6 +361,7 @@ function PlanningView({
                     tasks={planning.tasks}
                     currency={planning.currency}
                     showsCost={planning.total_cost !== null}
+                    baselineFixed={planning.baseline_set_on !== null}
                     onOpen={(task) => setDetailId(task.id)}
                     renderStatus={renderStatus}
                     renderActions={renderActions}
@@ -360,6 +383,7 @@ function PlanningView({
                     key={task.id}
                     task={task}
                     currency={planning.currency}
+                    baselineFixed={planning.baseline_set_on !== null}
                     onOpen={(task) => setDetailId(task.id)}
                     status={renderStatus?.(task)}
                     actions={renderActions?.(task)}
@@ -379,7 +403,9 @@ function PlanningView({
   );
 }
 
-/** When the work starts and when it is planned to end (HU-14).
+/** When the work starts and when it is planned to end (HU-14), and when it
+ * was planned to end the day the planning was fixed (HU-16): the two ends
+ * side by side are how much the work slid.
  *
  * Without a start date nothing can be planned, so this becomes the request
  * for one: with a button to the work's form for whoever may edit it, and a
@@ -388,11 +414,15 @@ function PlanningView({
 function PlanningDates({
   startDate,
   endDate,
+  baselineEndDate,
   canEditProject,
   onEditProject,
 }: {
   startDate: string | null;
   endDate: string | null;
+  /** When the work was planned to end the day the planning was fixed
+   * (HU-16). null until then, and then it is not shown. */
+  baselineEndDate: string | null;
   canEditProject: boolean;
   onEditProject: () => void;
 }) {
@@ -430,6 +460,14 @@ function PlanningDates({
         </Text>
         <Text fw={700}>{formatDate(endDate)}</Text>
       </div>
+      {baselineEndDate !== null && (
+        <div>
+          <Text size="xs" c="dimmed">
+            Fin planificado
+          </Text>
+          <Text fw={500}>{formatDate(baselineEndDate)}</Text>
+        </div>
+      )}
     </Group>
   );
 }

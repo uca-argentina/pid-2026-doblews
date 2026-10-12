@@ -11,6 +11,8 @@ import type { TaskOut } from "./types";
 interface TaskCardProps {
   task: TaskOut;
   currency: string;
+  /** Whether the work has a planning fixed (HU-16). */
+  baselineFixed: boolean;
   /** Opens the task's detail, from its name. */
   onOpen: (task: TaskOut) => void;
   /** The status as a control that changes it, for those who may manage the
@@ -30,6 +32,7 @@ interface TaskCardProps {
 export function TaskCard({
   task,
   currency,
+  baselineFixed,
   onOpen,
   status,
   actions,
@@ -80,7 +83,7 @@ export function TaskCard({
           </Group>
         )}
 
-        <TaskProgress task={task} />
+        <TaskProgress task={task} baselineFixed={baselineFixed} />
 
         {(task.cost !== null || actions) && (
           <Group justify="space-between" wrap="nowrap" align="center" mt={4}>

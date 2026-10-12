@@ -15,6 +15,9 @@ interface TasksTableProps {
   /** Whether the response carries costs at all. Decided once by the page from
    * total_cost, so the column is there for every row or for none. */
   showsCost: boolean;
+  /** Whether the work has a planning fixed, so a task without a baseline can
+   * say it is out of the comparison (HU-16). */
+  baselineFixed: boolean;
   /** Opens the task's detail, from its name. */
   onOpen: (task: TaskOut) => void;
   /** The status as a control that changes it, for those who may manage the
@@ -38,12 +41,13 @@ export function TasksTable({
   tasks,
   currency,
   showsCost,
+  baselineFixed,
   onOpen,
   renderStatus,
   renderActions,
 }: TasksTableProps) {
   return (
-    <Table.ScrollContainer minWidth={980}>
+    <Table.ScrollContainer minWidth={1040}>
       <Table verticalSpacing="sm" highlightOnHover>
         <Table.Thead>
           <Table.Tr>
@@ -102,7 +106,7 @@ export function TasksTable({
                 <TaskDateText date={taskEnd(task)} />
               </Table.Td>
               <Table.Td>
-                <TaskProgress task={task} />
+                <TaskProgress task={task} baselineFixed={baselineFixed} />
               </Table.Td>
               <Table.Td>
                 <SlackBadge task={task} />

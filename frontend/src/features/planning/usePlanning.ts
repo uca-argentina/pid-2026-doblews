@@ -5,6 +5,7 @@ import {
   createTask,
   fetchPlanning,
   fetchTaskAssignees,
+  fixBaseline,
   removeTask,
   setTaskLines,
   setTaskProgress,
@@ -150,5 +151,13 @@ export function useSetTaskProgress(firmId: number, projectId: number) {
         variables.taskId,
         variables.progressPercent,
       ),
+  );
+}
+
+/** Fixes the planning of the work. Takes nothing: the dates are the ones the
+ * schedule gives today. */
+export function useFixBaseline(firmId: number, projectId: number) {
+  return usePlanningWrite(firmId, projectId, () =>
+    fixBaseline(firmId, projectId),
   );
 }

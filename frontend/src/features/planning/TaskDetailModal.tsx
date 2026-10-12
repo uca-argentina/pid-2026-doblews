@@ -11,6 +11,7 @@ import {
 } from "@mantine/core";
 import { formatMoney } from "../../lib/format";
 import { EMPTY, formatDate } from "../projects/projectFields";
+import { STANDING_LABELS, describeGap } from "./progress";
 import { formatWorkingDays } from "./taskFields";
 import { TaskStatusBadge } from "./TaskStatusBadge";
 import type { TaskOut, TaskRefOut } from "./types";
@@ -101,6 +102,24 @@ function TaskDetail({
         <Field label="Fin previsto">{formatDate(task.planned_end_date)}</Field>
         <Field label="Inicio real">{formatDate(task.actual_start_date)}</Field>
         <Field label="Fin real">{formatDate(task.actual_end_date)}</Field>
+        <Field label="Avance real">{task.progress_percent}%</Field>
+        {/* The comparison of HU-16, only for a task that has a baseline: one
+            loaded after the planning was fixed has nothing to show here. */}
+        {task.progress_standing !== null && task.progress_gap !== null && (
+          <>
+            <Field label="Avance planificado a hoy">
+              {task.planned_progress_percent}%
+            </Field>
+            <Field label="Diferencia">
+              {STANDING_LABELS[task.progress_standing]} ·{" "}
+              {describeGap(task.progress_gap).toLowerCase()}
+            </Field>
+            <Field label="Planificada del">
+              {formatDate(task.baseline_start_date)} al{" "}
+              {formatDate(task.baseline_end_date)}
+            </Field>
+          </>
+        )}
         <Field label="Holgura">
           {task.slack_days === null
             ? EMPTY

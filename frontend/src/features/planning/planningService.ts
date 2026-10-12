@@ -133,3 +133,17 @@ export async function setTaskProgress(
   );
   return data;
 }
+
+/** Fixes the planning: keeps today's planned dates as what the progress is
+ * compared against, replacing any fixed before. Answers with the whole
+ * planning, since every task changes. A 409 means the work has no start date
+ * or no tasks. */
+export async function fixBaseline(
+  firmId: number,
+  projectId: number,
+): Promise<PlanningOut> {
+  const { data } = await api.post<PlanningOut>(
+    `${tasksUrl(firmId, projectId)}/baseline`,
+  );
+  return data;
+}
