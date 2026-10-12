@@ -67,6 +67,20 @@ class BudgetVersionRepository:
         """This firm's versions, and nothing else. No is_active: there is none."""
         return select(BudgetVersion).where(BudgetVersion.firm_id == self.firm_id)
 
+    def first(self, project_id: int) -> BudgetVersion | None:
+        """The work's v1, or None while it has no saved budget.
+
+        What the dashboard calls the original budget (HU-19, D-17): the first
+        one frozen, usually the one presented. Versions are never removed
+        (ADR-007), so the first stays the first.
+        """
+        return self.db.scalars(
+            self.select()
+            .where(BudgetVersion.project_id == project_id)
+            .order_by(BudgetVersion.version_number)
+            .limit(1)
+        ).first()
+
     def summaries(self, project_id: int) -> list[VersionSummary]:
         """The versions of one work, newest first.
 
