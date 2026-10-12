@@ -4,15 +4,12 @@ import { formatMoney } from "../../lib/format";
 import { SlackBadge } from "./SlackBadge";
 import { formatWorkingDays, taskEnd, taskStart } from "./taskFields";
 import { TaskDateText } from "./TaskDateText";
-import { TaskProgress } from "./TaskProgress";
 import { TaskStatusBadge } from "./TaskStatusBadge";
 import type { TaskOut } from "./types";
 
 interface TaskCardProps {
   task: TaskOut;
   currency: string;
-  /** Whether the work has a planning fixed (HU-16). */
-  baselineFixed: boolean;
   /** Opens the task's detail, from its name. */
   onOpen: (task: TaskOut) => void;
   /** The status as a control that changes it, for those who may manage the
@@ -32,7 +29,6 @@ interface TaskCardProps {
 export function TaskCard({
   task,
   currency,
-  baselineFixed,
   onOpen,
   status,
   actions,
@@ -82,8 +78,6 @@ export function TaskCard({
             <SlackBadge task={task} labelled />
           </Group>
         )}
-
-        <TaskProgress task={task} baselineFixed={baselineFixed} />
 
         {(task.cost !== null || actions) && (
           <Group justify="space-between" wrap="nowrap" align="center" mt={4}>
