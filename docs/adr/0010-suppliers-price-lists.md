@@ -124,7 +124,7 @@ Entran en la comparación solo los renglones activos de proveedores activos. Un 
 
 El cómputo, el presupuesto de HU-11 y las versiones de HU-12 siguen calculando con `resource.reference_price`. Los precios de proveedor **solo** alimentan la comparación.
 
-Si el presupuesto "actualizado" del dashboard usa precios de proveedor es una pregunta de HU-19 (D-17), y se decide ahí.
+El presupuesto "actualizado" del dashboard **tampoco** usa precios de proveedor: es el presupuesto vivo, a precio de referencia. Se decidió al arrancar HU-19 (D-17, [ADR-009 §14](0009-project-planning.md)).
 
 ### 6. Permisos
 
@@ -173,7 +173,7 @@ Van en el servicio, cada una con su test:
 
 | Tema | Se revisa cuando |
 |---|---|
-| Presupuestar con precios de proveedor en vez del de referencia | HU-19 (D-17) |
+| Presupuestar con precios de proveedor en vez del de referencia | Se quiera un presupuesto "a precio de compra". HU-19 no lo usó (ADR-009 §14) |
 | Envío por pedido, compartido entre materiales | Se quiera optimizar la compra completa, que hoy está excluida |
 | Historial de precios con vigencias | Haga falta saber cuánto costaba algo en una fecha pasada |
 | Registrar a qué proveedor se compró | Existan órdenes de compra |
