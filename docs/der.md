@@ -105,6 +105,8 @@ erDiagram
         text description "NULL"
         varchar(255) address "NULL"
         date estimated_start_date "NULL"
+        date baseline_set_on "NULL"
+        date baseline_end_date "NULL"
         bigint created_by FK
         boolean is_active
         timestamptz created_at
@@ -143,6 +145,9 @@ erDiagram
         bigint assignee_account_id FK "NULL"
         date actual_start_date "NULL"
         date actual_end_date "NULL"
+        integer progress_percent
+        date baseline_start_date "NULL"
+        date baseline_end_date "NULL"
         boolean is_active
         timestamptz created_at
         timestamptz updated_at
@@ -394,6 +399,8 @@ erDiagram
         text description "NULL"
         varchar(255) address "NULL"
         date estimated_start_date "NULL"
+        date baseline_set_on "NULL"
+        date baseline_end_date "NULL"
         bigint created_by FK
         boolean is_active
         timestamptz created_at
@@ -433,6 +440,7 @@ erDiagram
 
 | Tabla | Regla | Definición |
 |---|---|---|
+| `project` | CHECK | `(baseline_set_on IS NULL) = (baseline_end_date IS NULL)` |
 | `project` | UNIQUE | `(id, firm_id)` |
 | `project_member` | CHECK | `role_scope = 'project'` |
 | `project_member` | FK compuesta | `(firm_id, account_id) → firm_member (firm_id, account_id)` |
@@ -462,6 +470,9 @@ erDiagram
         bigint assignee_account_id FK "NULL"
         date actual_start_date "NULL"
         date actual_end_date "NULL"
+        integer progress_percent
+        date baseline_start_date "NULL"
+        date baseline_end_date "NULL"
         boolean is_active
         timestamptz created_at
         timestamptz updated_at
@@ -480,10 +491,15 @@ erDiagram
 
 | Tabla | Regla | Definición |
 |---|---|---|
+| `project_task` | CHECK | `(baseline_start_date IS NULL) = (baseline_end_date IS NULL)` |
 | `project_task` | CHECK | `(status = 'finished') = (actual_end_date IS NOT NULL)` |
 | `project_task` | CHECK | `actual_end_date >= actual_start_date` |
+| `project_task` | CHECK | `baseline_end_date >= baseline_start_date` |
 | `project_task` | CHECK | `estimated_duration_days > 0` |
+| `project_task` | CHECK | `progress_percent BETWEEN 0 AND 100` |
+| `project_task` | CHECK | `status <> 'finished' OR progress_percent = 100` |
 | `project_task` | CHECK | `status <> 'pending' OR actual_start_date IS NULL` |
+| `project_task` | CHECK | `status <> 'pending' OR progress_percent = 0` |
 | `project_task` | CHECK | `status = 'pending' OR actual_start_date IS NOT NULL` |
 | `project_task` | CHECK | `status IN ('pending', 'in_progress', 'paused', 'finished')` |
 | `project_task` | FK compuesta | `(firm_id, assignee_account_id) → firm_member (firm_id, account_id)` |

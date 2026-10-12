@@ -32,6 +32,11 @@ class Project(Base):
 
     __tablename__ = "project"
     __table_args__ = (
+        # A planning is fixed or it is not: the day and the end go together.
+        CheckConstraint(
+            "(baseline_set_on IS NULL) = (baseline_end_date IS NULL)",
+            name="baseline_dates_together",
+        ),
         # Target of project_member's composite FK: it is what proves a membership
         # row points at a project that really belongs to that firm.
         UniqueConstraint("id", "firm_id"),
@@ -49,6 +54,13 @@ class Project(Base):
     # A calendar date, not an instant: "it starts on October 15th" has no time
     # and no timezone (modelo-datos 3.6).
     estimated_start_date: Mapped[date | None] = mapped_column(Date)
+
+    # The planning as last fixed (HU-16, ADR-009 section 13): the day it was
+    # fixed, and when the work was planned to end that day. Stored rather than
+    # read off the tasks' baselines, whose latest end changes when one of them
+    # is removed. Both NULL until someone fixes it.
+    baseline_set_on: Mapped[date | None] = mapped_column(Date)
+    baseline_end_date: Mapped[date | None] = mapped_column(Date)
 
     created_by: Mapped[int] = mapped_column(BigInteger, ForeignKey("account.id"))
 

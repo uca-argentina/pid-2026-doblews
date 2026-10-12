@@ -4,6 +4,8 @@
 A task stores what a person loads and what a change of status records. Its
 planned dates, its slack and its cost are not here: they are computed on read,
 because they depend on today's date and on the live take-off (ADR-009 section 2).
+The same goes for its planned progress (HU-16): what is stored is the progress
+recorded and the dates it is measured against.
 """
 
 from datetime import date, datetime
@@ -62,6 +64,28 @@ class ProjectTask(Base):
             "actual_end_date >= actual_start_date",
             name="actual_end_not_before_start",
         ),
+        # The status rules the progress, never the other way (ADR-009 section
+        # 13): a pending task has done nothing and a finished one has done it
+        # all. In between, the number is whatever was last recorded.
+        CheckConstraint("progress_percent BETWEEN 0 AND 100", name="progress_percent_range"),
+        CheckConstraint(
+            "status <> 'pending' OR progress_percent = 0",
+            name="pending_has_no_progress",
+        ),
+        CheckConstraint(
+            "status <> 'finished' OR progress_percent = 100",
+            name="finished_is_complete",
+        ),
+        # The baseline is a pair: a task was either there when the planning
+        # was fixed, and has both dates, or it was not, and has neither.
+        CheckConstraint(
+            "(baseline_start_date IS NULL) = (baseline_end_date IS NULL)",
+            name="baseline_dates_together",
+        ),
+        CheckConstraint(
+            "baseline_end_date >= baseline_start_date",
+            name="baseline_end_not_before_start",
+        ),
         # The composite FK of modelo-datos 3.8, as in project_recipe: a task of
         # another firm's work cannot be written, not merely refused.
         ForeignKeyConstraint(
@@ -107,6 +131,16 @@ class ProjectTask(Base):
     # Recorded by starting and finishing the task, and correctable afterwards.
     actual_start_date: Mapped[date | None] = mapped_column(Date)
     actual_end_date: Mapped[date | None] = mapped_column(Date)
+
+    # How much of the task is done, as last recorded (HU-16). Only the current
+    # value: there is no history of it (ADR-009 section 13).
+    progress_percent: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+
+    # The planned dates as they were when the planning was last fixed, which is
+    # what the progress is compared against: the planned dates themselves move
+    # with every delay. NULL on a task loaded after that.
+    baseline_start_date: Mapped[date | None] = mapped_column(Date)
+    baseline_end_date: Mapped[date | None] = mapped_column(Date)
 
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
 
