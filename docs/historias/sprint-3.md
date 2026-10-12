@@ -4,7 +4,7 @@
 **Duración del sprint:** 2 semanas
 **Equipo:** 3 personas (fullstack)
 
-> **Estado de este documento:** HU-13 y HU-14 están firmes, las define [ADR-009](../adr/0009-project-planning.md); HU-17 y HU-18 también, por [ADR-010](../adr/0010-suppliers-price-lists.md); HU-15 quedó firme al arrancarla, por ADR-009 §12. HU-16 y HU-19 todavía tienen puntos sin decidir, marcados **[D-n]** y listados en [Preguntas de diseño abiertas](#preguntas-de-diseño-abiertas) con la historia que los destraba: se cierran al arrancar cada una, no antes.
+> **Estado de este documento:** HU-13 y HU-14 están firmes, las define [ADR-009](../adr/0009-project-planning.md); HU-17 y HU-18 también, por [ADR-010](../adr/0010-suppliers-price-lists.md); HU-15 y HU-16 quedaron firmes al arrancarlas, por ADR-009 §12 y §13. HU-19 todavía tiene puntos sin decidir, marcados **[D-n]** y listados en [Preguntas de diseño abiertas](#preguntas-de-diseño-abiertas): se cierran al arrancarla, no antes.
 
 ## Requerimientos de la cátedra
 
@@ -176,22 +176,26 @@ No son decisiones de este sprint: son lo que los Sprints 1 y 2 dejaron fijado, y
 
 **Criterios de aceptación**
 
-- En cada tarea se registra el **porcentaje de avance real**, de 0 a 100.
-- Un botón **"Fijar planificación"** guarda las fechas previstas de ese momento como **lo planificado**. Como las fechas previstas se corren solas con cada atraso, la comparación es contra esa copia y no contra ellas. Volver a fijar reemplaza la anterior. *(Acordado en principio; se revisa al arrancar la historia.)*
+- En cada tarea **en curso o pausada** se registra el **porcentaje de avance real**, un entero de 0 a 100.
+- **El estado manda sobre el avance:** una tarea pendiente está en 0% y una finalizada en 100%, y en ninguna de las dos se carga. Finalizar la lleva a 100% y deshacer el inicio a 0%; reabrir conserva el valor que tenía.
+- **Llegar al 100% no finaliza la tarea**: finalizar sigue siendo su propia acción, con su fecha.
+- Un botón **"Fijar planificación"** guarda las fechas previstas de ese momento como **lo planificado**. Como las fechas previstas se corren solas con cada atraso, la comparación es contra esa copia y no contra ellas. Volver a fijar reemplaza la anterior, con una confirmación que lo avisa.
+- Fijar necesita que la obra tenga fecha de inicio y al menos una tarea.
 - Sin planificación fijada, la comparación no se muestra y la sección pide fijarla.
 - Una tarea creada después de fijar aparece marcada, y no entra en la comparación hasta que se vuelva a fijar.
-- Cada tarea muestra su **avance planificado** a la fecha de hoy. **[D-10]**
-- Cada tarea muestra la **diferencia** entre los dos, e indica si viene atrasada, en fecha o adelantada.
-- La comparación se ve también para **la obra entera**. **[D-11]**
-- La relación entre el avance y el estado de la tarea es coherente: una tarea finalizada está al 100%. **[D-12]**
-- Si se guarda historial de los avances registrados o solo el valor actual. **[D-13]**
+- Cada tarea muestra su **avance planificado** a la fecha de hoy: crece parejo, en días hábiles, entre su inicio y su fin fijados, con el día de hoy incluido.
+- Cada tarea muestra la **diferencia** entre los dos, e indica si viene **atrasada**, **en fecha** o **adelantada**. Hasta 5 puntos de diferencia es en fecha.
+- La comparación se ve también para **la obra entera**: el avance real y el planificado de sus tareas, pesando cada una por su duración estimada.
+- Se guarda **solo el avance actual** de cada tarea, sin historial.
+- La planificación muestra el **fin fijado de la obra** al lado del previsto.
 - El avance **no mueve las fechas previstas**: esas dependen solo de duraciones, dependencias y fechas reales (ADR-009 §4).
-- Registrar avance y fijar la planificación exigen `project.task.manage`.
+- Registrar avance y fijar la planificación exigen `project.task.manage`. El avance y la comparación los ve quien ve las tareas, también el `client`.
 - Se usa bien a 375px.
 
-**Fuera de alcance:** historial de planificaciones fijadas; certificaciones de obra; fotos o evidencia del avance; avance medido en cantidades físicas (m² ejecutados) en vez de porcentaje; curva S.
+**Fuera de alcance:** historial de avances y de planificaciones fijadas; certificaciones de obra; fotos o evidencia del avance; avance medido en cantidades físicas (m² ejecutados) en vez de porcentaje; curva S; el avance dibujado sobre el Gantt.
 **Depende de:** HU-14.
 **Estimación:** 2,5 días (preliminar).
+**Definida por:** [ADR-009](../adr/0009-project-planning.md) §13.
 
 ---
 
@@ -303,10 +307,6 @@ Lo que queda sin decidir. Cada pregunta se cierra **al arrancar la historia que 
 
 | | Pregunta | Destraba |
 |---|---|---|
-| **D-10** | **Cómo se calcula el avance planificado.** ¿Qué porcentaje "debería" tener una tarea a una fecha dada? | HU-16 |
-| **D-11** | **Cómo se agrega el avance.** Para pasar de tareas a obra, ¿cada tarea pesa por su costo, por su duración, o todas igual? | HU-16 |
-| **D-12** | **Avance y estado.** ¿Finalizar una tarea la lleva al 100%? ¿Llegar al 100% la finaliza? ¿Una tarea pendiente puede tener avance? | HU-16 |
-| **D-13** | **Historial del avance.** ¿Se guarda cada registro con su fecha, o solo el valor actual? | HU-16 |
 | **D-16** | **Permisos del dashboard.** Los de planificación están en ADR-009 §9 y los de proveedores en ADR-010 §6 | HU-19 |
 | **D-17** | **Qué es el presupuesto "original" y qué el "actualizado".** ¿El original es una versión guardada (cuál)? ¿El actualizado es el borrador vivo, o usa precios de proveedor? ¿Las versiones guardan la asignación de líneas a tareas? | HU-19 |
 | **D-18** | **Cómo se proyecta el gasto por mes.** ¿Cómo se reparte el costo de una tarea que dura varios meses, y qué pasa con el costo sin asignar a ninguna tarea? | HU-19 |
@@ -319,6 +319,7 @@ Lo que queda sin decidir. Cada pregunta se cierra **al arrancar la historia que 
 
 - D-1 a D-8, en [ADR-009](../adr/0009-project-planning.md): las tareas cuelgan directo de la obra; el costo sale del cómputo; el responsable es un integrante de la obra que puede gestionar sus tareas; las fechas se calculan en días hábiles; las transiciones de estado son las de HU-13; toda dependencia es obligatoria y de tipo fin → inicio; reabrir una predecesora se permite; las dependencias viven en Postgres.
 - D-9, en [ADR-009](../adr/0009-project-planning.md) §12: la vista es un Gantt, hecho con un componente propio y de lectura; elegir una tarea abre su detalle, desde donde se edita; las dependencias no se dibujan; a 375px se ve el listado.
+- D-10 a D-13, en [ADR-009](../adr/0009-project-planning.md) §13: el avance planificado crece parejo en días hábiles sobre las fechas fijadas con "Fijar planificación"; en la obra cada tarea pesa por su duración; pendiente es 0% y finalizada 100%, y llegar a 100% no finaliza; se guarda solo el valor actual.
 - D-14 y D-15, en [ADR-010](../adr/0010-suppliers-price-lists.md): los proveedores son del estudio; el envío es un importe fijo por material.
 
 ---

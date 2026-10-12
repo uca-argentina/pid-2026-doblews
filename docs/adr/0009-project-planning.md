@@ -240,6 +240,59 @@ Decidido el 2026-10-10, al arrancar HU-15. No agrega modelo ni endpoints: la vis
 
 La barra usa el color del estado de la tarea, el mismo del listado, y distingue lo que ya pasó de lo previsto. Las críticas van destacadas, y están marcados el día de hoy y el fin previsto de la obra.
 
+### 13. Avance y línea base
+
+Decidido el 2026-10-12, al arrancar HU-16. No agrega tablas ni permisos: son columnas en `project_task` y en `project`, y escribirlas exige `project.task.manage` (§9).
+
+**Qué se guarda**
+
+| Tabla | Columna | Regla en el esquema |
+|---|---|---|
+| `project_task` | `progress_percent INTEGER NOT NULL DEFAULT 0` | `CHECK (progress_percent BETWEEN 0 AND 100)` |
+| | | Una pendiente está en cero: `CHECK (status <> 'pending' OR progress_percent = 0)` |
+| | | Una finalizada está al cien: `CHECK (status <> 'finished' OR progress_percent = 100)` |
+| `project_task` | `baseline_start_date`, `baseline_end_date`, `DATE NULL` | Las dos o ninguna; el fin no es anterior al inicio |
+| `project` | `baseline_set_on`, `baseline_end_date`, `DATE NULL` | Las dos o ninguna |
+
+El avance **planificado**, la diferencia y el avance de la obra **se calculan al leer**, como las fechas previstas (§2): dependen del día de hoy.
+
+**La línea base.** Las fechas previstas se corren solas con cada atraso (§4), así que no sirven de referencia: una tarea atrasada siempre "debería terminar hoy". **"Fijar planificación"** copia el inicio y el fin previstos de cada tarea activa a sus dos columnas, y a la obra el día en que se fijó y su fin previsto de ese momento. La comparación es contra esa copia.
+
+- **Volver a fijar reemplaza** la anterior, en todas las tareas. No se guarda historial.
+- Sin fecha de inicio o sin tareas no hay qué fijar, y se rechaza.
+- Una tarea **creada después de fijar** no tiene línea base: aparece marcada y no entra en la comparación hasta que se vuelva a fijar.
+- La obra guarda **su propio fin fijado** en vez de calcularlo como el máximo de sus tareas, que cambiaría al dar de baja una. Es lo que HU-19 compara contra el fin previsto.
+
+**Las decisiones**
+
+| | Pregunta | Decisión | Por qué |
+|---|---|---|---|
+| D-10 | Avance planificado de una tarea a hoy | **Lineal en días hábiles** sobre el tramo fijado: 0% antes del inicio, 100% desde el fin, y en el medio los hábiles transcurridos sobre los del tramo | Supone un ritmo parejo, que es lo único que se puede suponer sin más datos, y usa el calendario de §4 |
+| D-11 | Cuánto pesa cada tarea en el avance de la obra | **Su duración estimada** | Toda tarea tiene una, así que siempre hay número; lo puede ver el `client`, porque no sale de costos; y no se mueve cuando cambian los precios |
+| D-12 | Avance y estado | **El estado manda.** Pendiente es 0 y finalizada es 100; en curso o pausada se carga de 0 a 100 | Los dos CHECK de arriba. Es la incoherencia que la historia pide evitar |
+| D-13 | Historial de los avances | **Solo el valor actual** | Nada del sprint lo consume: HU-16 y HU-19 muestran el avance a hoy |
+
+Cómo se mueve el avance con las transiciones de §5:
+
+| Transición | Avance |
+|---|---|
+| Finalizar | Pasa a 100 |
+| Deshacer inicio | Vuelve a 0 |
+| Reabrir | **Conserva el valor**, y se corrige a mano |
+| Iniciar, pausar, reanudar | No lo tocan |
+
+**Llegar al 100% no finaliza la tarea.** Finalizar registra una fecha real y tiene su confirmación; que ocurra como efecto de escribir un número se la saltearía. Registrar avance en una tarea pendiente o finalizada se rechaza, diciendo qué hacer: iniciarla o reabrirla.
+
+**Precisiones**
+
+- **"A hoy" incluye el día de hoy**, como el fin inclusivo de §4: el día del fin fijado, el planificado ya es 100%.
+- **El denominador es el tramo fijado** y no la duración estimada, que pudo editarse después de fijar.
+- **"En fecha" tiene una tolerancia de 5 puntos.** La diferencia es *real − planificado*: por debajo de −5 la tarea viene atrasada, por encima de +5 adelantada, y en el medio en fecha. Con diferencia exacta casi ninguna estaría en fecha.
+- **El avance de la obra** es el promedio del real y el del planificado, ponderados por duración, **solo sobre las tareas con línea base**. Cada uno se redondea a entero y la diferencia se calcula sobre los dos ya redondeados, para que lo que se ve en pantalla cierre (el criterio de §8).
+- **El avance no entra en el cálculo de fechas** (§4): esas dependen solo de duraciones, dependencias y fechas reales.
+
+El cálculo vive en un módulo propio de funciones puras, al lado del de §11 y sobre su calendario.
+
 ---
 
 ## Consecuencias
@@ -254,7 +307,7 @@ La barra usa el color del estado de la tarea, el mismo del listado, y distingue 
 
 - El sprint incluye **más de lo que pide la cátedra**: fechas calculadas, propagación de atrasos y camino crítico. HU-14 crece.
 - `project.estimated_start_date` pasa a ser necesaria para planificar. No se vuelve `NOT NULL`: una obra puede existir sin planificación.
-- Las fechas previstas **cambian solas con el paso de los días**. Es lo buscado, pero obliga a tener una referencia fija para comparar (línea base, abajo).
+- Las fechas previstas **cambian solas con el paso de los días**. Es lo buscado, pero obliga a tener una referencia fija para comparar: la línea base de §13.
 - `project_recipe` gana una columna y una regla: HU-5 tiene que ofrecer la asignación a una tarea.
 
 **Queda pendiente de decidir, y con qué historia:**
@@ -262,8 +315,6 @@ La barra usa el color del estado de la tarea, el mismo del listado, y distingue 
 | Tema | Se decide al arrancar |
 |---|---|
 | **Rubros.** Fuera por ahora: el pedido los menciona una sola vez y se consulta con la cátedra. Si entran, es una tabla y una FK nullable en `project_task` | Respuesta de la cátedra |
-| **Línea base.** Acordado en principio y **revisable**: un botón "Fijar planificación" copia las fechas previstas de cada tarea (dos columnas `DATE` en `project_task` y una fecha en `project`); la comparación planificado/real es contra esa copia; volver a fijar reemplaza la anterior | HU-16 |
-| Avance: cómo se calcula el planificado, cómo se agrega a la obra, relación con el estado, historial | HU-16 |
 | **Versiones del presupuesto y asignación a tareas.** Cargar una versión (HU-12) da de baja las líneas del cómputo y crea otras nuevas, así que hoy **las líneas cargadas quedan sin asignar** y la pantalla lo avisa. Previsto: que `budget_version_line` guarde `task_id` y la carga lo restaure si la tarea sigue activa | HU-19 (D-17) |
 
 **Extensiones previstas, no descartadas:**
@@ -275,6 +326,8 @@ La barra usa el color del estado de la tarea, el mismo del listado, y distingue 
 | Días hábiles configurables por obra, y feriados | Una obra trabaje sábados, o las fechas calculadas fallen por feriados |
 | Simulación de atrasos ("qué pasa si") | Después del Gantt |
 | Historial de líneas base | Haga falta ver cómo cambió el plan |
+| **Historial de avances y curva S.** Una tabla con cada registro, su fecha y quién lo cargó, de donde sale la curva de avance en el tiempo. `progress_percent` pasaría a ser el último registro | Haga falta ver cómo evolucionó el avance y no solo dónde está |
+| Avance dibujado sobre las barras del Gantt | Después de HU-16 |
 | **Vista de grafo de las dependencias.** La red de tareas dibujada como nodos y aristas. Es donde las dependencias se ven de un vistazo, y por eso el Gantt no las dibuja (§12) | Después del Gantt |
 | El Gantt a 375px | Después de HU-15, en su propia rama |
 | Arrastrar tareas en el Gantt. Mover una barra escribiría el "no antes de" y estirarla la duración; el resto de los movimientos no tiene qué escribir | La edición desde el detalle resulte incómoda |
@@ -312,6 +365,22 @@ La barra usa el color del estado de la tarea, el mismo del listado, y distingue 
 **Arrastrar las tareas en el Gantt.** Descartado para HU-15 porque las fechas previstas se calculan: cada gesto habría que traducirlo a un dato de entrada, mover una tarea hacia atrás no tiene traducción, y como el cronograma se recalcula la barra no siempre queda donde se soltó. Queda como extensión.
 
 **Flechas de dependencia sobre el Gantt.** Es lo habitual. Descartadas porque con muchas tareas se enmarañan y son la parte más cara del componente; las dependencias ya se leen en el detalle de cada tarea, y la vista pensada para mostrarlas es el grafo.
+
+**Comparar el avance contra las fechas previstas, sin línea base.** Ahorra las cuatro columnas y el botón. Descartada porque las previstas se corren a hoy con cada atraso: una tarea en curso y vencida tendría siempre un planificado de 100%, y una pendiente atrasada, de 0%. La comparación mediría contra un plan que se acomoda al atraso.
+
+**Avance planificado "todo al final"** (0% hasta el fin fijado, 100% desde ahí). Trivial y conservador. Descartado porque una tarea larga en curso no aparece atrasada hasta que vence: la comparación calla justo cuando más sirve.
+
+**Avance planificado 50/50** (50% al llegar el inicio fijado, 100% al fin). Es una regla clásica de valor ganado. Descartada porque los saltos se ven arbitrarios en pantalla y no hay cómo explicarlos a quien mira su obra.
+
+**Pesar cada tarea por su costo.** Es el valor ganado de manual. Descartado porque una tarea sin líneas de cómputo pesaría cero y una obra sin líneas asignadas no tendría avance; porque el porcentaje se movería con cada actualización de precios (§8); y porque al `client` habría que mostrarle un número derivado de costos que no puede ver (§9).
+
+**Todas las tareas con el mismo peso.** Lo más fácil de explicar. Descartado porque una tarea de un día pesaría lo mismo que una de cuarenta.
+
+**Que llegar al 100% finalice la tarea.** Un paso menos. Descartado porque sería un cambio de estado como efecto secundario de un número: registraría la fecha real de fin sin preguntarla, salteando la confirmación de §5.
+
+**Avance independiente del estado.** Lo más simple: un número suelto que ninguna transición toca. Descartado porque permite una tarea finalizada al 40% o una pendiente al 60%.
+
+**Guardar el historial de los avances.** Deja lista la curva S. Descartado para este sprint porque es una tabla nueva con su pantalla y nada de lo pedido la consume. Queda como extensión.
 
 ---
 
