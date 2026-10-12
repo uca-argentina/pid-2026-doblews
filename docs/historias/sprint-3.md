@@ -4,7 +4,7 @@
 **Duración del sprint:** 2 semanas
 **Equipo:** 3 personas (fullstack)
 
-> **Estado de este documento:** HU-13 y HU-14 están firmes, las define [ADR-009](../adr/0009-project-planning.md); HU-17 y HU-18 también, por [ADR-010](../adr/0010-suppliers-price-lists.md); HU-15 quedó firme al arrancarla, por ADR-009 §12. HU-16 y HU-19 todavía tienen puntos sin decidir, marcados **[D-n]** y listados en [Preguntas de diseño abiertas](#preguntas-de-diseño-abiertas) con la historia que los destraba: se cierran al arrancar cada una, no antes.
+> **Estado de este documento:** HU-13 y HU-14 están firmes, las define [ADR-009](../adr/0009-project-planning.md); HU-17 y HU-18 también, por [ADR-010](../adr/0010-suppliers-price-lists.md); HU-15 y HU-16 quedaron firmes al arrancarlas, por ADR-009 §12 y §13. HU-19 todavía tiene puntos sin decidir, marcados **[D-n]** y listados en [Preguntas de diseño abiertas](#preguntas-de-diseño-abiertas): se cierran al arrancarla, no antes.
 
 ## Requerimientos de la cátedra
 
@@ -176,22 +176,28 @@ No son decisiones de este sprint: son lo que los Sprints 1 y 2 dejaron fijado, y
 
 **Criterios de aceptación**
 
-- En cada tarea se registra el **porcentaje de avance real**, de 0 a 100.
-- Un botón **"Fijar planificación"** guarda las fechas previstas de ese momento como **lo planificado**. Como las fechas previstas se corren solas con cada atraso, la comparación es contra esa copia y no contra ellas. Volver a fijar reemplaza la anterior. *(Acordado en principio; se revisa al arrancar la historia.)*
+- Dentro de la obra hay una sección **"Avance"**, aparte de "Planificación". Todo lo de esta historia está ahí: en "Planificación" no se ve ni se carga avance.
+- En cada tarea **en curso o pausada** se registra el **porcentaje de avance real**, un entero de 0 a 100.
+- **El estado manda sobre el avance:** una tarea pendiente está en 0% y una finalizada en 100%, y en ninguna de las dos se carga. Finalizar la lleva a 100% y deshacer el inicio a 0%; reabrir conserva el valor que tenía.
+- **Llegar al 100% no finaliza la tarea**: finalizar sigue siendo su propia acción, con su fecha.
+- Un botón **"Fijar planificación"** guarda las fechas previstas de ese momento como **lo planificado**. Como las fechas previstas se corren solas con cada atraso, la comparación es contra esa copia y no contra ellas. Volver a fijar reemplaza la anterior, con una confirmación que lo avisa.
+- Fijar necesita que la obra tenga fecha de inicio y al menos una tarea.
 - Sin planificación fijada, la comparación no se muestra y la sección pide fijarla.
 - Una tarea creada después de fijar aparece marcada, y no entra en la comparación hasta que se vuelva a fijar.
-- Cada tarea muestra su **avance planificado** a la fecha de hoy. **[D-10]**
-- Cada tarea muestra la **diferencia** entre los dos, e indica si viene atrasada, en fecha o adelantada.
-- La comparación se ve también para **la obra entera**. **[D-11]**
-- La relación entre el avance y el estado de la tarea es coherente: una tarea finalizada está al 100%. **[D-12]**
-- Si se guarda historial de los avances registrados o solo el valor actual. **[D-13]**
+- Cada tarea muestra su **avance planificado** a la fecha de hoy: crece parejo, en días hábiles, entre su inicio y su fin fijados, con el día de hoy incluido.
+- Cada tarea muestra **los dos números lado a lado**, el real y el planificado, y su **fin planificado**.
+- Una tarea se marca **atrasada** solo cuando **pasó su fin planificado y no está finalizada**. Llevar menos avance que el planificado, dentro de sus fechas, no la marca.
+- La comparación se ve también para **la obra entera**: el avance real y el planificado de sus tareas, pesando cada una por su duración estimada, y **cuántas tareas están atrasadas**. La obra no lleva una etiqueta propia.
+- Se guarda **solo el avance actual** de cada tarea, sin historial.
+- La sección muestra el **fin planificado de la obra** al lado del previsto.
 - El avance **no mueve las fechas previstas**: esas dependen solo de duraciones, dependencias y fechas reales (ADR-009 §4).
-- Registrar avance y fijar la planificación exigen `project.task.manage`.
+- Registrar avance y fijar la planificación exigen `project.task.manage`. El avance y la comparación los ve quien ve las tareas, también el `client`.
 - Se usa bien a 375px.
 
-**Fuera de alcance:** historial de planificaciones fijadas; certificaciones de obra; fotos o evidencia del avance; avance medido en cantidades físicas (m² ejecutados) en vez de porcentaje; curva S.
+**Fuera de alcance:** historial de avances y de planificaciones fijadas; certificaciones de obra; fotos o evidencia del avance; avance medido en cantidades físicas (m² ejecutados) en vez de porcentaje; curva S; el avance dibujado sobre el Gantt.
 **Depende de:** HU-14.
 **Estimación:** 2,5 días (preliminar).
+**Definida por:** [ADR-009](../adr/0009-project-planning.md) §13.
 
 ---
 
@@ -303,10 +309,6 @@ Lo que queda sin decidir. Cada pregunta se cierra **al arrancar la historia que 
 
 | | Pregunta | Destraba |
 |---|---|---|
-| **D-10** | **Cómo se calcula el avance planificado.** ¿Qué porcentaje "debería" tener una tarea a una fecha dada? | HU-16 |
-| **D-11** | **Cómo se agrega el avance.** Para pasar de tareas a obra, ¿cada tarea pesa por su costo, por su duración, o todas igual? | HU-16 |
-| **D-12** | **Avance y estado.** ¿Finalizar una tarea la lleva al 100%? ¿Llegar al 100% la finaliza? ¿Una tarea pendiente puede tener avance? | HU-16 |
-| **D-13** | **Historial del avance.** ¿Se guarda cada registro con su fecha, o solo el valor actual? | HU-16 |
 | **D-16** | **Permisos del dashboard.** Los de planificación están en ADR-009 §9 y los de proveedores en ADR-010 §6 | HU-19 |
 | **D-17** | **Qué es el presupuesto "original" y qué el "actualizado".** ¿El original es una versión guardada (cuál)? ¿El actualizado es el borrador vivo, o usa precios de proveedor? ¿Las versiones guardan la asignación de líneas a tareas? | HU-19 |
 | **D-18** | **Cómo se proyecta el gasto por mes.** ¿Cómo se reparte el costo de una tarea que dura varios meses, y qué pasa con el costo sin asignar a ninguna tarea? | HU-19 |
@@ -319,6 +321,7 @@ Lo que queda sin decidir. Cada pregunta se cierra **al arrancar la historia que 
 
 - D-1 a D-8, en [ADR-009](../adr/0009-project-planning.md): las tareas cuelgan directo de la obra; el costo sale del cómputo; el responsable es un integrante de la obra que puede gestionar sus tareas; las fechas se calculan en días hábiles; las transiciones de estado son las de HU-13; toda dependencia es obligatoria y de tipo fin → inicio; reabrir una predecesora se permite; las dependencias viven en Postgres.
 - D-9, en [ADR-009](../adr/0009-project-planning.md) §12: la vista es un Gantt, hecho con un componente propio y de lectura; elegir una tarea abre su detalle, desde donde se edita; las dependencias no se dibujan; a 375px se ve el listado.
+- D-10 a D-13, en [ADR-009](../adr/0009-project-planning.md) §13: el avance planificado crece parejo en días hábiles sobre las fechas fijadas con "Fijar planificación"; en la obra cada tarea pesa por su duración; pendiente es 0% y finalizada 100%, y llegar a 100% no finaliza; se guarda solo el valor actual.
 - D-14 y D-15, en [ADR-010](../adr/0010-suppliers-price-lists.md): los proveedores son del estudio; el envío es un importe fijo por material.
 
 ---
@@ -511,3 +514,67 @@ El cálculo del eje vive en `frontend/src/features/planning/ganttScale.ts`, func
 **Falta para cerrar HU-15:** el PR a `dev` y la revisión visual de los criterios.
 
 **Queda liberada:** HU-16 (avance), que ya lo estaba.
+
+**2026-10-12 (HU-16).** **HU-16 implementada, backend y frontend** (`feat/hu16-progress`): el avance real de cada tarea, la planificación fijada y la comparación entre los dos, por tarea y para la obra. **D-10 a D-13 quedaron cerradas** en [ADR-009 §13](../adr/0009-project-planning.md). No hay tablas ni permisos nuevos: son tres columnas en `project_task` y dos en `project` (migración `f5b2d8c41a96`), y escribir exige `project.task.manage`.
+
+El cálculo vive en `backend/app/services/progress.py`, funciones puras sin base como las de `schedule.py` y sobre su calendario, con sus tests en `test_progress.py`.
+
+**Contrato nuevo**, sobre las mismas rutas de HU-13:
+
+| Dónde | Qué cambia |
+|---|---|
+| `PUT /tasks/{id}/progress` | Nueva. `{"progress_percent": 40}`, entero de 0 a 100. **409** si la tarea está pendiente o finalizada, diciendo qué hacer |
+| `POST /tasks/baseline` | Nueva, sin cuerpo: fija la planificación y responde la planificación entera. **409** si la obra no tiene fecha de inicio o no tiene tareas |
+| `POST /tasks/{id}/transitions` | `finish` deja el avance en 100 y `undo_start` en 0. `reopen` lo conserva |
+| Cada tarea (`GET /tasks` y lo que devuelve cada escritura) | Suma `progress_percent`, `baseline_start_date`, `baseline_end_date`, `planned_progress_percent`, `progress_gap` y `progress_standing` (`behind`, `on_track`, `ahead`). Los tres últimos en `null` si la tarea no tiene línea base |
+| `GET /tasks` | Suma `baseline_set_on`, `baseline_end_date` y `progress: {actual_percent, planned_percent, gap, standing}`, en `null` hasta fijar |
+
+El avance y la comparación los ve también el `client`; los costos, no.
+
+Cómo quedó resuelto en pantalla:
+
+- **"Registrar avance" está en el menú ⋯** de la tarea, solo en curso o pausada. Abre un modal con un deslizador y un campo numérico sobre el mismo valor. En 100% avisa que eso no finaliza la tarea.
+- **Columna "Avance"** en la tabla y una línea en la tarjeta: la barra con el color del estado y el número; debajo, el planificado y la etiqueta **Atrasada**, **En fecha** o **Adelantada**.
+- **Bloque "Avance de la obra"** arriba del listado, con el real y el planificado en dos barras y la diferencia. Sin planificación fijada, en su lugar un aviso que pide fijarla.
+- **"Fijar planificación"** pide confirmación y dice qué se guarda. Con una ya fijada el botón es "Volver a fijar" y avisa que la anterior no se conserva.
+- **Una tarea creada después de fijar** muestra "Sin fijar" y no entra en el avance de la obra.
+- **"Fin planificado"** aparece al lado de "Fin previsto": los dos juntos son cuánto se corrió la obra.
+- **El detalle de la tarea** suma el avance real, el planificado a hoy, la diferencia y las fechas fijadas.
+- **Sin fecha de inicio o sin tareas** el bloque no aparece: los avisos que ya había piden eso primero.
+
+**Para HU-19:** el bloque "avance planificado vs. real" sale de `progress`, y "fin previsto contra el planificado" de `planned_end_date` y `baseline_end_date`, todo en `GET /tasks`. No hace falta un endpoint nuevo.
+
+**Para T-09:** el seed tiene que fijar la planificación de "Casa Rodríguez" (`fix_baseline`) y dejar alguna tarea en curso con avance por debajo del planificado, para que la comparación no arranque vacía ni toda "en fecha". Como "hoy" se mueve, conviene fijarla con las fechas reales de las tareas iniciadas en el pasado.
+
+**Quedó para después**, y está anotado como extensión en ADR-009: el avance dibujado sobre las barras del Gantt, y el historial de avances con la curva S.
+
+**Sobre el test intermitente** anotado el 2026-10-10: en las corridas donde falló, la API respondió **401** donde el test esperaba otro código, en tests de catálogo, equipo y tareas. Apunta a la autenticación de los tests y no a un módulo. Sigue sin causa.
+
+**Falta para cerrar HU-16:** la revisión visual de los criterios y de 375px, y el PR a `dev`.
+
+**Queda liberada:** HU-19 (dashboard) y, con HU-17, T-09 (datos de demo).
+
+**2026-10-12 (HU-16, replanteo del front).** **La comparación de avance pasó a una pestaña propia, "Avance"**, en la misma rama. Reemplaza el "cómo quedó resuelto en pantalla" de la entrada anterior. **El backend no cambió**: ni rutas, ni campos, ni cálculo.
+
+La primera versión metía todo dentro de "Planificación": una columna "Avance" en la Lista, un bloque de la obra arriba y etiquetas de atrasada, en fecha o adelantada. En la revisión no convenció, por tres motivos:
+
+- **Cargaba una pantalla que ya estaba cargada.** Planificación es para el día a día, qué se hace y cuándo; "¿cómo venimos?" es otra pregunta.
+- **Marcaba la obra como atrasada sin que ninguna tarea hubiera llegado a su fecha de fin.** Es lo que da comparar contra un planificado lineal con una tolerancia, y se leía como una alarma falsa.
+- **Las etiquetas tenían otro tamaño y otra forma** que las del resto de la tabla.
+
+Cómo quedó:
+
+- **Pestaña "Avance"**, entre Planificación y Presupuestos, en `/projects/:id/progress`. La ve quien ve las tareas, también el `client`. Lee la misma respuesta que Planificación (`GET /tasks`).
+- **Arriba, cuatro datos de la obra**: avance real, planificado a hoy, fin previsto y fin planificado. Debajo, cuándo se fijó la planificación y cuántas tareas están atrasadas, si hay alguna. Sin barras y sin etiqueta para la obra.
+- **Una tabla con una fila por tarea**: estado, fin planificado, real y planificado, como texto plano. A 375px, una tarjeta por tarea.
+- **"Atrasada" significa que la fecha venció**: pasó el fin planificado de la tarea y no está finalizada. Va al lado de esa fecha, con la misma etiqueta que "Crítica". Lo calcula la pantalla con `baseline_end_date`.
+- **"Registrar avance" es un botón de la fila**, en tareas en curso o pausadas. **"Fijar planificación"** está en el encabezado, y pasa a "Volver a fijar".
+- **Una tarea creada después de fijar** dice "Sin fijar" y no tiene planificado.
+- **Sin planificación fijada**, un aviso en lugar de los cuatro datos; la tabla está igual, para ir registrando avance.
+- **Planificación quedó como antes de HU-16**: la Lista, las tarjetas, el menú ⋯, el detalle de la tarea y el Gantt no muestran nada de avance.
+
+**Queda calculado y sin mostrar:** `progress_gap` y `progress_standing`, por tarea y para la obra. Los sigue mandando `GET /tasks`. HU-19 decide si los usa en el dashboard; si no, se sacan ahí.
+
+**Para HU-19**, se mantiene lo dicho: los números del bloque de avance salen de `progress`, `planned_end_date` y `baseline_end_date`. Conviene que el dashboard use el mismo criterio de "atrasada" que esta pestaña (`isOverdue` en `frontend/src/features/planning/progress.ts`), para que las dos pantallas no digan cosas distintas.
+
+**Falta para cerrar HU-16:** la revisión visual de los criterios y de 375px, y el PR a `dev`.

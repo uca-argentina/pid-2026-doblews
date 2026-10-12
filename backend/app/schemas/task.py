@@ -1,5 +1,5 @@
 """What the API says about a work's planning, and what it accepts to change it
-(HU-13, HU-14).
+(HU-13, HU-14, HU-16).
 The shapes the planning screen reads and its forms send; the cost fields are
 nullable because a caller without project.cost.view gets them empty.
 """
@@ -10,6 +10,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field, StringConstraints, field_validator
 
+from app.services.progress import Standing
 from app.services.tasks import TaskAction
 
 # The limits of project_task's columns, so a bad value is a 422 naming the field
@@ -74,6 +75,16 @@ class TaskActualDates(BaseModel):
     actual_end_date: date | None
 
 
+class TaskProgress(BaseModel):
+    """How much of a task is done, as a whole percentage (HU-16).
+
+    The range is the column's CHECK, so a 120 is a 422 naming the field. Whether
+    the task is in a status that takes a progress at all is the service's rule.
+    """
+
+    progress_percent: Annotated[int, Field(ge=0, le=100)]
+
+
 class TaskLines(BaseModel):
     """The whole selection of take-off lines of a task. An empty list clears it."""
 
@@ -117,6 +128,20 @@ class TaskOut(BaseModel):
     assignee: AssigneeOut | None
     actual_start_date: date | None
     actual_end_date: date | None
+    # How much of it is done, as last recorded: 0 while pending and 100 once
+    # finished, whatever was recorded in between (ADR-009 section 13).
+    progress_percent: int
+    # The planned dates as they were when the planning was last fixed (HU-16).
+    # Null on a task loaded since: it is out of the comparison until it is
+    # fixed again.
+    baseline_start_date: date | None
+    baseline_end_date: date | None
+    # What it was planned to have done by today, against that baseline; the
+    # actual progress minus it, so negative is behind; and which of the three
+    # that makes it. All null without a baseline.
+    planned_progress_percent: int | None
+    progress_gap: int | None
+    progress_standing: Standing | None
     # The take-off lines assigned to it, at today's prices. "0.00" with none.
     cost: Decimal | None
     planned_start_date: date | None
@@ -129,6 +154,19 @@ class TaskOut(BaseModel):
     # What it waits for and what waits for it, each with its status.
     predecessors: list[TaskRefOut]
     successors: list[TaskRefOut]
+
+
+class WorkProgressOut(BaseModel):
+    """The progress of the whole work against its fixed planning (HU-16).
+
+    Each task weighs its estimated duration, and only the tasks with a baseline
+    count. The gap is the difference of the two numbers as shown.
+    """
+
+    actual_percent: int
+    planned_percent: int
+    gap: int
+    standing: Standing
 
 
 class PlanningOut(BaseModel):
@@ -145,6 +183,12 @@ class PlanningOut(BaseModel):
     project_start_date: date | None
     # The latest planned end among the tasks: when the work is planned to end.
     planned_end_date: date | None
+    # The day the planning was last fixed, and when the work was planned to end
+    # that day. Both null means the section asks to fix it.
+    baseline_set_on: date | None
+    baseline_end_date: date | None
+    # Null until the planning is fixed.
+    progress: WorkProgressOut | None
     # What the take-off lines assigned to no task cost.
     unassigned_cost: Decimal | None
     # The sum of the tasks' costs and the unassigned amount, as shown, so the

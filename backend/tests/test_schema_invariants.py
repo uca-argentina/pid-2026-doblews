@@ -450,6 +450,94 @@ def test_a_task_may_start_and_end_on_the_same_day(db: Connection, world, add_tas
     )
 
 
+@pytest.mark.parametrize("progress", [-1, 101])
+def test_the_progress_of_a_task_is_a_percentage(db: Connection, world, add_task, progress) -> None:
+    with pytest.raises(IntegrityError, match="ck_project_task_progress_percent_range"):
+        add_task(
+            world.project_a,
+            world.firm_a,
+            status="in_progress",
+            actual_start="2026-10-01",
+            progress=progress,
+        )
+
+
+def test_a_pending_task_has_no_progress(db: Connection, world, add_task) -> None:
+    """The status rules the progress (ADR-009 section 13)."""
+    with pytest.raises(IntegrityError, match="ck_project_task_pending_has_no_progress"):
+        add_task(world.project_a, world.firm_a, progress=10)
+
+
+def test_a_finished_task_is_complete(db: Connection, world, add_task) -> None:
+    with pytest.raises(IntegrityError, match="ck_project_task_finished_is_complete"):
+        add_task(
+            world.project_a,
+            world.firm_a,
+            status="finished",
+            actual_start="2026-10-01",
+            actual_end="2026-10-05",
+            progress=90,
+        )
+
+
+@pytest.mark.parametrize("status", ["in_progress", "paused"])
+@pytest.mark.parametrize("progress", [0, 100])
+def test_a_started_task_may_be_anywhere_from_zero_to_a_hundred(
+    db: Connection, world, add_task, status, progress
+) -> None:
+    """The positive half: a hundred does not make it finished."""
+    add_task(
+        world.project_a,
+        world.firm_a,
+        status=status,
+        actual_start="2026-10-01",
+        progress=progress,
+    )
+
+
+@pytest.mark.parametrize(
+    ("start", "end"), [("2026-10-01", None), (None, "2026-10-05")], ids=["no end", "no start"]
+)
+def test_the_baseline_of_a_task_is_both_dates_or_none(
+    db: Connection, world, add_task, start, end
+) -> None:
+    task = add_task(world.project_a, world.firm_a)
+
+    with pytest.raises(IntegrityError, match="ck_project_task_baseline_dates_together"):
+        db.execute(
+            text(
+                "UPDATE project_task SET baseline_start_date = :start, baseline_end_date = :end"
+                " WHERE id = :t"
+            ),
+            {"start": start, "end": end, "t": task},
+        )
+
+
+def test_the_baseline_of_a_task_cannot_end_before_it_starts(
+    db: Connection, world, add_task
+) -> None:
+    task = add_task(world.project_a, world.firm_a)
+
+    with pytest.raises(IntegrityError, match="ck_project_task_baseline_end_not_before_start"):
+        db.execute(
+            text(
+                "UPDATE project_task SET baseline_start_date = '2026-10-05',"
+                " baseline_end_date = '2026-10-01' WHERE id = :t"
+            ),
+            {"t": task},
+        )
+
+
+@pytest.mark.parametrize(
+    "columns",
+    ["baseline_set_on = '2026-10-01'", "baseline_end_date = '2026-11-27'"],
+    ids=["no end", "no day"],
+)
+def test_the_baseline_of_a_work_is_both_dates_or_none(db: Connection, world, columns) -> None:
+    with pytest.raises(IntegrityError, match="ck_project_baseline_dates_together"):
+        db.execute(text(f"UPDATE project SET {columns} WHERE id = :p"), {"p": world.project_a})
+
+
 def test_two_active_tasks_of_a_work_cannot_share_a_name(db: Connection, world, add_task) -> None:
     add_task(world.project_a, world.firm_a, "Mampostería")
 

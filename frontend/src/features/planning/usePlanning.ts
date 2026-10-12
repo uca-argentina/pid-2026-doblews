@@ -5,8 +5,10 @@ import {
   createTask,
   fetchPlanning,
   fetchTaskAssignees,
+  fixBaseline,
   removeTask,
   setTaskLines,
+  setTaskProgress,
   transitionTask,
   updateTask,
   updateTaskActualDates,
@@ -134,5 +136,28 @@ export function useSetTaskLines(firmId: number, projectId: number) {
     projectId,
     (variables: { taskId: number; lineIds: number[] }) =>
       setTaskLines(firmId, projectId, variables.taskId, variables.lineIds),
+  );
+}
+
+/** Records how much of one task is done. */
+export function useSetTaskProgress(firmId: number, projectId: number) {
+  return usePlanningWrite(
+    firmId,
+    projectId,
+    (variables: { taskId: number; progressPercent: number }) =>
+      setTaskProgress(
+        firmId,
+        projectId,
+        variables.taskId,
+        variables.progressPercent,
+      ),
+  );
+}
+
+/** Fixes the planning of the work. Takes nothing: the dates are the ones the
+ * schedule gives today. */
+export function useFixBaseline(firmId: number, projectId: number) {
+  return usePlanningWrite(firmId, projectId, () =>
+    fixBaseline(firmId, projectId),
   );
 }

@@ -11,11 +11,15 @@ from sqlalchemy import text
 
 from app.services.tasks import (
     ASSIGNEE_NOT_ALLOWED,
+    BASELINE_NEEDS_START,
+    BASELINE_NEEDS_TASKS,
     DATE_NOT_EXPECTED,
     END_BEFORE_START,
     LINE_NOT_AVAILABLE,
     NAME_TAKEN,
     PREDECESSOR_NOT_AVAILABLE,
+    PROGRESS_NEEDS_START,
+    PROGRESS_OF_FINISHED,
     TASK_NOT_AVAILABLE,
     blocked_start,
     dependency_cycle,
@@ -113,6 +117,13 @@ class TestRead:
                     "assignee": None,
                     "actual_start_date": None,
                     "actual_end_date": None,
+                    "progress_percent": 0,
+                    # Nothing was fixed, so there is nothing to compare against.
+                    "baseline_start_date": None,
+                    "baseline_end_date": None,
+                    "planned_progress_percent": None,
+                    "progress_gap": None,
+                    "progress_standing": None,
                     # Decimals travel as strings, so the frontend never sees a float.
                     "cost": WALL_120,
                     # The work has no start date, so nothing is planned yet.
@@ -126,6 +137,9 @@ class TestRead:
             ],
             "project_start_date": None,
             "planned_end_date": None,
+            "baseline_set_on": None,
+            "baseline_end_date": None,
+            "progress": None,
             "unassigned_cost": WALL_120,
             "total_cost": "7755600.00",
             "currency": "ARS",
@@ -380,6 +394,7 @@ class TestTransitions:
     def test_a_task_goes_through_its_whole_life(self, client, world, team, lead, task):
         """Every action of HU-13, in an order that visits all six."""
         statuses = []
+        progress = []
         for action in (
             "start",
             "undo_start",
@@ -393,6 +408,7 @@ class TestTransitions:
             response = client.post(self.url(world, task), json={"action": action}, headers=lead)
             assert response.status_code == 200, action
             statuses.append(response.json()["status"])
+            progress.append(response.json()["progress_percent"])
 
         assert statuses == [
             "in_progress",
@@ -404,6 +420,8 @@ class TestTransitions:
             "in_progress",
             "finished",
         ]
+        # Finishing takes it to a hundred and reopening leaves it there.
+        assert progress == [0, 0, 0, 0, 0, 100, 100, 100]
 
     def test_starting_and_finishing_record_the_dates_sent(self, client, world, team, lead, task):
         client.post(
@@ -520,6 +538,207 @@ class TestActualDates:
         )
 
         assert response.status_code == 403
+
+
+class TestProgress:
+    def url(self, world, task: int) -> str:
+        return f"{tasks_url(world, task_id=task)}/progress"
+
+    @pytest.fixture
+    def started(self, world, add_task) -> int:
+        return add_task(
+            world.project_a, world.firm_a, status="in_progress", actual_start="2026-10-05"
+        )
+
+    @pytest.mark.parametrize("role", WRITERS)
+    def test_these_roles_record_it(self, client, world, team, started, auth_header, role):
+        response = client.put(
+            self.url(world, started),
+            json={"progress_percent": 40},
+            headers=auth_header(team[role]),
+        )
+
+        assert response.status_code == 200
+        assert response.json()["progress_percent"] == 40
+
+    def test_whoever_sees_the_planning_sees_it(
+        self, client, world, team, lead, started, auth_header
+    ):
+        client.put(self.url(world, started), json={"progress_percent": 40}, headers=lead)
+
+        # Not a cost: the client of the work reads how it is going.
+        response = client.get(tasks_url(world), headers=auth_header(team["client"]))
+
+        assert response.json()["tasks"][0]["progress_percent"] == 40
+
+    def test_a_hundred_does_not_finish_the_task(self, client, world, team, lead, started):
+        response = client.put(
+            self.url(world, started), json={"progress_percent": 100}, headers=lead
+        )
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "in_progress"
+        assert response.json()["actual_end_date"] is None
+
+    def test_a_pending_task_is_a_409_that_says_to_start_it(self, client, world, team, lead, task):
+        response = client.put(self.url(world, task), json={"progress_percent": 40}, headers=lead)
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == PROGRESS_NEEDS_START
+
+    def test_a_finished_task_is_a_409_that_says_to_reopen_it(
+        self, client, world, team, lead, add_task
+    ):
+        finished = add_task(
+            world.project_a,
+            world.firm_a,
+            status="finished",
+            actual_start="2026-10-01",
+            actual_end="2026-10-05",
+        )
+
+        response = client.put(
+            self.url(world, finished), json={"progress_percent": 90}, headers=lead
+        )
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == PROGRESS_OF_FINISHED
+
+    @pytest.mark.parametrize("bad", [{}, {"progress_percent": -1}, {"progress_percent": 101}])
+    def test_a_value_out_of_range_is_a_422(self, client, world, team, lead, started, bad):
+        response = client.put(self.url(world, started), json=bad, headers=lead)
+
+        assert response.status_code == 422
+
+    @pytest.mark.parametrize("role", NOT_WRITERS)
+    def test_the_others_get_403(self, client, world, team, started, auth_header, role):
+        response = client.put(
+            self.url(world, started),
+            json={"progress_percent": 40},
+            headers=auth_header(team[role]),
+        )
+
+        assert response.status_code == 403
+
+    def test_a_task_of_another_work_of_the_same_firm_is_a_404(
+        self, client, world, team, lead, new_project, add_task
+    ):
+        other_work = new_project(world.firm_a, world.account_a, "Casa Este")
+        elsewhere = add_task(
+            other_work, world.firm_a, status="in_progress", actual_start="2026-10-05"
+        )
+
+        response = client.put(
+            self.url(world, elsewhere), json={"progress_percent": 40}, headers=lead
+        )
+
+        assert response.status_code == 404
+
+
+class TestBaseline:
+    """HU-16 at the border: who fixes the planning, and that the comparison
+    reaches every reader. October 2026: the 5th is a Monday."""
+
+    @pytest.fixture
+    def on(self, monkeypatch):
+        def _on(day: date) -> None:
+            monkeypatch.setattr("app.services.tasks.today", lambda: day)
+
+        _on(date(2026, 10, 5))
+        return _on
+
+    @pytest.fixture
+    def started_work(self, db, world, on) -> None:
+        db.execute(
+            text("UPDATE project SET estimated_start_date = '2026-10-05' WHERE id = :p"),
+            {"p": world.project_a},
+        )
+
+    def url(self, world) -> str:
+        return f"{tasks_url(world)}/baseline"
+
+    @pytest.mark.parametrize("role", WRITERS)
+    def test_these_roles_fix_it_and_get_the_whole_planning_back(
+        self, client, world, team, started_work, task, auth_header, role
+    ):
+        response = client.post(self.url(world), headers=auth_header(team[role]))
+
+        assert response.status_code == 200
+        planning = response.json()
+        # Ten working days from Monday the 5th.
+        assert (planning["baseline_set_on"], planning["baseline_end_date"]) == (
+            "2026-10-05",
+            "2026-10-16",
+        )
+        assert planning["progress"] == {
+            "actual_percent": 0,
+            "planned_percent": 10,
+            "gap": -10,
+            "standing": "behind",
+        }
+        fixed = planning["tasks"][0]
+        assert (fixed["baseline_start_date"], fixed["baseline_end_date"]) == (
+            "2026-10-05",
+            "2026-10-16",
+        )
+        assert (
+            fixed["planned_progress_percent"],
+            fixed["progress_gap"],
+            fixed["progress_standing"],
+        ) == (10, -10, "behind")
+
+    def test_the_client_reads_the_comparison(
+        self, client, world, team, lead, started_work, task, auth_header, on
+    ):
+        client.post(self.url(world), headers=lead)
+
+        on(date(2026, 10, 9))
+        planning = client.get(tasks_url(world), headers=auth_header(team["client"])).json()
+
+        # Not a cost: how the work is going is no secret from whoever it is for.
+        assert planning["progress"]["planned_percent"] == 50
+        assert planning["tasks"][0]["progress_standing"] == "behind"
+        assert planning["total_cost"] is None
+
+    def test_a_task_loaded_afterwards_has_no_comparison(
+        self, client, world, team, lead, started_work, task
+    ):
+        client.post(self.url(world), headers=lead)
+
+        late = client.post(tasks_url(world), json=body(name="Pintura"), headers=lead).json()
+
+        assert late["baseline_start_date"] is None
+        assert late["planned_progress_percent"] is None
+        assert late["progress_standing"] is None
+
+    def test_a_work_with_no_start_date_is_a_409(self, client, world, team, lead, task):
+        response = client.post(self.url(world), headers=lead)
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == BASELINE_NEEDS_START
+
+    def test_a_work_with_no_tasks_is_a_409(self, client, world, team, lead, started_work):
+        response = client.post(self.url(world), headers=lead)
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == BASELINE_NEEDS_TASKS
+
+    @pytest.mark.parametrize("role", NOT_WRITERS)
+    def test_the_others_get_403_and_nothing_is_fixed(
+        self, db, client, world, team, started_work, task, auth_header, role
+    ):
+        response = client.post(self.url(world), headers=auth_header(team[role]))
+
+        assert response.status_code == 403
+        fixed = db.execute(
+            text("SELECT baseline_set_on FROM project WHERE id = :p"), {"p": world.project_a}
+        ).scalar_one()
+        assert fixed is None
+
+    def test_another_firms_work_is_a_404(self, client, world, team, lead):
+        response = client.post(f"{tasks_url(world, world.project_b)}/baseline", headers=lead)
+
+        assert response.status_code == 404
 
 
 class TestTaskLines:
