@@ -12,6 +12,7 @@ import { ProjectBudgetVersionPage } from "./pages/ProjectBudgetVersionPage";
 import { ProjectBudgetVersionsPage } from "./pages/ProjectBudgetVersionsPage";
 import { ProjectDetailPage } from "./pages/ProjectDetailPage";
 import { ProjectPlanningPage } from "./pages/ProjectPlanningPage";
+import { ProjectProgressPage } from "./pages/ProjectProgressPage";
 import { ProjectTakeoffPage } from "./pages/ProjectTakeoffPage";
 import { ProjectTeamPage } from "./pages/ProjectTeamPage";
 import { NoFirmPage } from "./pages/NoFirmPage";
@@ -108,6 +109,7 @@ function App() {
             <Route index element={<ProjectDetailPage />} />
             <Route path="takeoff" element={<ProjectTakeoffPage />} />
             <Route path="planning" element={<ProjectPlanningPage />} />
+            <Route path="progress" element={<ProjectProgressPage />} />
             <Route path="budget" element={<ProjectBudgetVersionsPage />} />
             {/* The listing used to live here, one level below the live budget
                 that "budget" showed. Kept as a redirect so a saved link still

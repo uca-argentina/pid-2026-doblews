@@ -183,6 +183,16 @@ function ProjectTabs({ basePath, project, firmCan }: ProjectTabsProps) {
         firmCan("project.view_all"),
     },
     {
+      value: "progress",
+      path: "progress",
+      label: "Avance",
+      // HU-16. It reads the planning's own answer, so it opens to exactly
+      // whoever the planning tab opens to.
+      visible:
+        project.permissions.includes("project.task.view") ||
+        firmCan("project.view_all"),
+    },
+    {
       value: "budget",
       path: "budget",
       // Plural: the tab is the list of budgets saved from the take-off, not
