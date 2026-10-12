@@ -512,3 +512,42 @@ El cálculo del eje vive en `frontend/src/features/planning/ganttScale.ts`, func
 **Falta para cerrar HU-15:** el PR a `dev` y la revisión visual de los criterios.
 
 **Queda liberada:** HU-16 (avance), que ya lo estaba.
+
+**2026-10-12 (HU-16).** **HU-16 implementada, backend y frontend** (`feat/hu16-progress`): el avance real de cada tarea, la planificación fijada y la comparación entre los dos, por tarea y para la obra. **D-10 a D-13 quedaron cerradas** en [ADR-009 §13](../adr/0009-project-planning.md). No hay tablas ni permisos nuevos: son tres columnas en `project_task` y dos en `project` (migración `f5b2d8c41a96`), y escribir exige `project.task.manage`.
+
+El cálculo vive en `backend/app/services/progress.py`, funciones puras sin base como las de `schedule.py` y sobre su calendario, con sus tests en `test_progress.py`.
+
+**Contrato nuevo**, sobre las mismas rutas de HU-13:
+
+| Dónde | Qué cambia |
+|---|---|
+| `PUT /tasks/{id}/progress` | Nueva. `{"progress_percent": 40}`, entero de 0 a 100. **409** si la tarea está pendiente o finalizada, diciendo qué hacer |
+| `POST /tasks/baseline` | Nueva, sin cuerpo: fija la planificación y responde la planificación entera. **409** si la obra no tiene fecha de inicio o no tiene tareas |
+| `POST /tasks/{id}/transitions` | `finish` deja el avance en 100 y `undo_start` en 0. `reopen` lo conserva |
+| Cada tarea (`GET /tasks` y lo que devuelve cada escritura) | Suma `progress_percent`, `baseline_start_date`, `baseline_end_date`, `planned_progress_percent`, `progress_gap` y `progress_standing` (`behind`, `on_track`, `ahead`). Los tres últimos en `null` si la tarea no tiene línea base |
+| `GET /tasks` | Suma `baseline_set_on`, `baseline_end_date` y `progress: {actual_percent, planned_percent, gap, standing}`, en `null` hasta fijar |
+
+El avance y la comparación los ve también el `client`; los costos, no.
+
+Cómo quedó resuelto en pantalla:
+
+- **"Registrar avance" está en el menú ⋯** de la tarea, solo en curso o pausada. Abre un modal con un deslizador y un campo numérico sobre el mismo valor. En 100% avisa que eso no finaliza la tarea.
+- **Columna "Avance"** en la tabla y una línea en la tarjeta: la barra con el color del estado y el número; debajo, el planificado y la etiqueta **Atrasada**, **En fecha** o **Adelantada**.
+- **Bloque "Avance de la obra"** arriba del listado, con el real y el planificado en dos barras y la diferencia. Sin planificación fijada, en su lugar un aviso que pide fijarla.
+- **"Fijar planificación"** pide confirmación y dice qué se guarda. Con una ya fijada el botón es "Volver a fijar" y avisa que la anterior no se conserva.
+- **Una tarea creada después de fijar** muestra "Sin fijar" y no entra en el avance de la obra.
+- **"Fin planificado"** aparece al lado de "Fin previsto": los dos juntos son cuánto se corrió la obra.
+- **El detalle de la tarea** suma el avance real, el planificado a hoy, la diferencia y las fechas fijadas.
+- **Sin fecha de inicio o sin tareas** el bloque no aparece: los avisos que ya había piden eso primero.
+
+**Para HU-19:** el bloque "avance planificado vs. real" sale de `progress`, y "fin previsto contra el planificado" de `planned_end_date` y `baseline_end_date`, todo en `GET /tasks`. No hace falta un endpoint nuevo.
+
+**Para T-09:** el seed tiene que fijar la planificación de "Casa Rodríguez" (`fix_baseline`) y dejar alguna tarea en curso con avance por debajo del planificado, para que la comparación no arranque vacía ni toda "en fecha". Como "hoy" se mueve, conviene fijarla con las fechas reales de las tareas iniciadas en el pasado.
+
+**Quedó para después**, y está anotado como extensión en ADR-009: el avance dibujado sobre las barras del Gantt, y el historial de avances con la curva S.
+
+**Sobre el test intermitente** anotado el 2026-10-10: en las corridas donde falló, la API respondió **401** donde el test esperaba otro código, en tests de catálogo, equipo y tareas. Apunta a la autenticación de los tests y no a un módulo. Sigue sin causa.
+
+**Falta para cerrar HU-16:** la revisión visual de los criterios y de 375px, y el PR a `dev`.
+
+**Queda liberada:** HU-19 (dashboard) y, con HU-17, T-09 (datos de demo).
