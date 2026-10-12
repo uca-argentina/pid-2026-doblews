@@ -176,6 +176,7 @@ No son decisiones de este sprint: son lo que los Sprints 1 y 2 dejaron fijado, y
 
 **Criterios de aceptación**
 
+- Dentro de la obra hay una sección **"Avance"**, aparte de "Planificación". Todo lo de esta historia está ahí: en "Planificación" no se ve ni se carga avance.
 - En cada tarea **en curso o pausada** se registra el **porcentaje de avance real**, un entero de 0 a 100.
 - **El estado manda sobre el avance:** una tarea pendiente está en 0% y una finalizada en 100%, y en ninguna de las dos se carga. Finalizar la lleva a 100% y deshacer el inicio a 0%; reabrir conserva el valor que tenía.
 - **Llegar al 100% no finaliza la tarea**: finalizar sigue siendo su propia acción, con su fecha.
@@ -184,10 +185,11 @@ No son decisiones de este sprint: son lo que los Sprints 1 y 2 dejaron fijado, y
 - Sin planificación fijada, la comparación no se muestra y la sección pide fijarla.
 - Una tarea creada después de fijar aparece marcada, y no entra en la comparación hasta que se vuelva a fijar.
 - Cada tarea muestra su **avance planificado** a la fecha de hoy: crece parejo, en días hábiles, entre su inicio y su fin fijados, con el día de hoy incluido.
-- Cada tarea muestra la **diferencia** entre los dos, e indica si viene **atrasada**, **en fecha** o **adelantada**. Hasta 5 puntos de diferencia es en fecha.
-- La comparación se ve también para **la obra entera**: el avance real y el planificado de sus tareas, pesando cada una por su duración estimada.
+- Cada tarea muestra **los dos números lado a lado**, el real y el planificado, y su **fin planificado**.
+- Una tarea se marca **atrasada** solo cuando **pasó su fin planificado y no está finalizada**. Llevar menos avance que el planificado, dentro de sus fechas, no la marca.
+- La comparación se ve también para **la obra entera**: el avance real y el planificado de sus tareas, pesando cada una por su duración estimada, y **cuántas tareas están atrasadas**. La obra no lleva una etiqueta propia.
 - Se guarda **solo el avance actual** de cada tarea, sin historial.
-- La planificación muestra el **fin fijado de la obra** al lado del previsto.
+- La sección muestra el **fin planificado de la obra** al lado del previsto.
 - El avance **no mueve las fechas previstas**: esas dependen solo de duraciones, dependencias y fechas reales (ADR-009 §4).
 - Registrar avance y fijar la planificación exigen `project.task.manage`. El avance y la comparación los ve quien ve las tareas, también el `client`.
 - Se usa bien a 375px.
@@ -551,3 +553,28 @@ Cómo quedó resuelto en pantalla:
 **Falta para cerrar HU-16:** la revisión visual de los criterios y de 375px, y el PR a `dev`.
 
 **Queda liberada:** HU-19 (dashboard) y, con HU-17, T-09 (datos de demo).
+
+**2026-10-12 (HU-16, replanteo del front).** **La comparación de avance pasó a una pestaña propia, "Avance"**, en la misma rama. Reemplaza el "cómo quedó resuelto en pantalla" de la entrada anterior. **El backend no cambió**: ni rutas, ni campos, ni cálculo.
+
+La primera versión metía todo dentro de "Planificación": una columna "Avance" en la Lista, un bloque de la obra arriba y etiquetas de atrasada, en fecha o adelantada. En la revisión no convenció, por tres motivos:
+
+- **Cargaba una pantalla que ya estaba cargada.** Planificación es para el día a día, qué se hace y cuándo; "¿cómo venimos?" es otra pregunta.
+- **Marcaba la obra como atrasada sin que ninguna tarea hubiera llegado a su fecha de fin.** Es lo que da comparar contra un planificado lineal con una tolerancia, y se leía como una alarma falsa.
+- **Las etiquetas tenían otro tamaño y otra forma** que las del resto de la tabla.
+
+Cómo quedó:
+
+- **Pestaña "Avance"**, entre Planificación y Presupuestos, en `/projects/:id/progress`. La ve quien ve las tareas, también el `client`. Lee la misma respuesta que Planificación (`GET /tasks`).
+- **Arriba, cuatro datos de la obra**: avance real, planificado a hoy, fin previsto y fin planificado. Debajo, cuándo se fijó la planificación y cuántas tareas están atrasadas, si hay alguna. Sin barras y sin etiqueta para la obra.
+- **Una tabla con una fila por tarea**: estado, fin planificado, real y planificado, como texto plano. A 375px, una tarjeta por tarea.
+- **"Atrasada" significa que la fecha venció**: pasó el fin planificado de la tarea y no está finalizada. Va al lado de esa fecha, con la misma etiqueta que "Crítica". Lo calcula la pantalla con `baseline_end_date`.
+- **"Registrar avance" es un botón de la fila**, en tareas en curso o pausadas. **"Fijar planificación"** está en el encabezado, y pasa a "Volver a fijar".
+- **Una tarea creada después de fijar** dice "Sin fijar" y no tiene planificado.
+- **Sin planificación fijada**, un aviso en lugar de los cuatro datos; la tabla está igual, para ir registrando avance.
+- **Planificación quedó como antes de HU-16**: la Lista, las tarjetas, el menú ⋯, el detalle de la tarea y el Gantt no muestran nada de avance.
+
+**Queda calculado y sin mostrar:** `progress_gap` y `progress_standing`, por tarea y para la obra. Los sigue mandando `GET /tasks`. HU-19 decide si los usa en el dashboard; si no, se sacan ahí.
+
+**Para HU-19**, se mantiene lo dicho: los números del bloque de avance salen de `progress`, `planned_end_date` y `baseline_end_date`. Conviene que el dashboard use el mismo criterio de "atrasada" que esta pestaña (`isOverdue` en `frontend/src/features/planning/progress.ts`), para que las dos pantallas no digan cosas distintas.
+
+**Falta para cerrar HU-16:** la revisión visual de los criterios y de 375px, y el PR a `dev`.

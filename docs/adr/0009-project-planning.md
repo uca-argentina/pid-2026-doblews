@@ -293,6 +293,15 @@ Cómo se mueve el avance con las transiciones de §5:
 
 El cálculo vive en un módulo propio de funciones puras, al lado del de §11 y sobre su calendario.
 
+**En pantalla**
+
+Precisado el 2026-10-12, después de revisar una primera versión que mostraba todo dentro de la planificación.
+
+- **El avance tiene su propia sección de la obra, "Avance"**, y no es parte de "Planificación". Son dos preguntas: qué se hace y cuándo, y cómo venimos. La lista de tareas y el Gantt (§12) ya llevan lo que pueden llevar; ahí no se muestra ni se carga avance.
+- **En pantalla, "atrasada" es una tarea cuyo fin fijado ya pasó y que no está finalizada.** No es la situación por tolerancia de arriba. Una tarea a mitad de su tramo con poco avance está por debajo de un ritmo parejo que nadie le prometió; mostrarla como atrasada, y con ella a la obra, se leía como una alarma falsa. Una fecha vencida no se discute.
+- Para lo demás, la pantalla muestra **los dos números lado a lado**, el real y el planificado, sin veredicto. La obra tampoco lleva etiqueta: muestra sus dos porcentajes y cuántas tareas están atrasadas.
+- **La diferencia y la situación por tolerancia se siguen calculando** y viajan en la respuesta, sin mostrarse. Quedan para el dashboard (HU-19), que decide si las usa.
+
 ---
 
 ## Consecuencias
@@ -379,6 +388,10 @@ El cálculo vive en un módulo propio de funciones puras, al lado del de §11 y 
 **Que llegar al 100% finalice la tarea.** Un paso menos. Descartado porque sería un cambio de estado como efecto secundario de un número: registraría la fecha real de fin sin preguntarla, salteando la confirmación de §5.
 
 **Avance independiente del estado.** Lo más simple: un número suelto que ninguna transición toca. Descartado porque permite una tarea finalizada al 40% o una pendiente al 60%.
+
+**Mostrar el avance dentro de la planificación** (una columna en la lista y un bloque arriba). Fue la primera versión. Descartada porque cargaba la pantalla del día a día con una pregunta que no es la suya, y repetía en dos lugares lo mismo.
+
+**Etiquetar en pantalla cada tarea y la obra como atrasada, en fecha o adelantada, por tolerancia.** Es lo que calcula el backend. Descartado en pantalla porque marcaba como atrasada una obra en la que ninguna tarea había llegado a su fecha de fin.
 
 **Guardar el historial de los avances.** Deja lista la curva S. Descartado para este sprint porque es una tabla nueva con su pantalla y nada de lo pedido la consume. Queda como extensión.
 
