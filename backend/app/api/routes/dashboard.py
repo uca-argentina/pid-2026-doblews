@@ -127,6 +127,15 @@ def read_dashboard(
         else None
     )
 
+    current = today()
+    overdue = sum(
+        1
+        for task in planning.tasks
+        if task.baseline_end_date is not None
+        and task.status != "finished"
+        and task.baseline_end_date < current
+    )
+
     # Every dated task counts towards how long the work lasts; only the ones
     # with a cost spend (D-18). The unassigned lines are shown apart.
     months = monthly_projection(
@@ -137,7 +146,7 @@ def read_dashboard(
             for task in planning.tasks
             if task.planned_start_date is not None and task.planned_end_date is not None
         ),
-        today(),
+        current,
     )
 
     return DashboardOut(
@@ -148,6 +157,7 @@ def read_dashboard(
             planned_end_date=planning.planned_end_date,
             baseline_end_date=planning.baseline_end_date,
             end_delay_days=delay,
+            overdue_tasks=overdue,
             has_tasks=bool(planning.tasks),
         ),
         projection=ProjectionOut(

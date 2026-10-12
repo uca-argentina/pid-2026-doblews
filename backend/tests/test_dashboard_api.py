@@ -141,6 +141,21 @@ class TestProgressAndProjection:
         assert block["planned_end_date"] == planning["planned_end_date"] == "2026-11-09"
         assert block["baseline_end_date"] == planning["baseline_end_date"]
         assert block["end_delay_days"] == 0
+        assert block["overdue_tasks"] == 0
+
+    def test_a_task_past_its_fixed_end_counts_as_overdue(
+        self, db, client, world, team, lead, planned_work, monkeypatch
+    ):
+        client.post(f"{url(world)}/tasks/baseline", headers=lead)
+        # Mampostería and Pintura were fixed to end on 6/11 and 9/11; on the
+        # 10th neither is finished.
+        later = date(2026, 11, 10)
+        monkeypatch.setattr("app.services.tasks.today", lambda: later)
+        monkeypatch.setattr("app.api.routes.dashboard.today", lambda: later)
+
+        block = client.get(f"{url(world)}/dashboard", headers=lead).json()["progress"]
+
+        assert block["overdue_tasks"] == 2
 
     def test_without_a_fixed_planning_there_is_no_comparison(
         self, client, world, team, lead, planned_work

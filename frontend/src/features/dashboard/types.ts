@@ -35,6 +35,9 @@ export interface ProgressBlockOut {
   baseline_end_date: string | null;
   /** Working days the planned end is past the fixed one; negative is ahead. */
   end_delay_days: number | null;
+  /** Tasks past their fixed end and not finished: the Avance tab's own
+   * "atrasada". Zero without a fixed planning. */
+  overdue_tasks: number;
   has_tasks: boolean;
 }
 

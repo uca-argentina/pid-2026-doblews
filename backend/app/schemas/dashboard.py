@@ -56,6 +56,10 @@ class ProgressBlockOut(BaseModel):
     baseline_end_date: date | None
     # Working days between the two: positive is late. Null without both.
     end_delay_days: int | None
+    # Tasks whose fixed end has passed and are not finished: the progress
+    # tab's own meaning of "atrasada" (ADR-009 section 13), so the two screens
+    # never disagree. Zero without a fixed planning.
+    overdue_tasks: int
     has_tasks: bool
 
 
