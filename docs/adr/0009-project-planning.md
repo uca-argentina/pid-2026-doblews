@@ -302,6 +302,31 @@ Precisado el 2026-10-12, después de revisar una primera versión que mostraba t
 - Para lo demás, la pantalla muestra **los dos números lado a lado**, el real y el planificado, sin veredicto. La obra tampoco lleva etiqueta: muestra sus dos porcentajes y cuántas tareas están atrasadas.
 - **La diferencia y la situación por tolerancia se siguen calculando** y viajan en la respuesta, sin mostrarse. Quedan para el dashboard (HU-19), que decide si las usa.
 
+### 14. El dashboard
+
+Decidido el 2026-10-12, al arrancar HU-19. Cierra D-16, D-17 y D-18. **No agrega tablas ni permisos**: es un endpoint de lectura, `GET /firms/{firm_id}/projects/{project_id}/dashboard`, que junta lo que ya calculan las otras secciones.
+
+**Los números son los de las secciones porque salen del mismo código.** El presupuesto actualizado es `build_budget`, el mismo de la pestaña Cómputo. El avance, las fechas y el costo de cada tarea vienen de la misma lectura de la planificación que usan Planificación y Avance (`app/api/planning_read.py`). Lo único nuevo es el reparto por mes, una función pura (`app/services/projection.py`) sobre esas mismas tareas.
+
+| | Pregunta | Decisión | Por qué |
+|---|---|---|---|
+| D-16 | Quién ve el dashboard | **Quien ve costos**: `project.cost.view` en la obra o `project.view_all`. El `client` no | Dos de los tres bloques son plata. Es el mismo permiso que Presupuestos, sin permisos nuevos |
+| D-17 | Qué es el presupuesto "original" | **La primera versión guardada (v1)** | Es el primero que se congeló, normalmente el que se presentó. Las versiones no se borran (ADR-007), así que la v1 no cambia. Sin versiones, el bloque pide guardar una |
+| D-17 | Qué es el "actualizado" | **El presupuesto vivo**: el cómputo de hoy a precios de referencia de hoy | Es el total que se ve en Cómputo. No usa precios de proveedor: no hace depender HU-19 de HU-17 y HU-18, y el presupuesto se arma siempre con el precio de referencia (ADR-010) |
+| D-17 | ¿Las versiones guardan a qué tarea estaba asignada cada línea? | **No hace falta para el dashboard** | La proyección usa el cómputo vivo, no una versión. Queda como extensión, abajo |
+| D-18 | Cómo se reparte el costo de una tarea que cruza meses | **Parejo en sus días hábiles**: cada mes recibe la parte de los hábiles de la tarea que caen en él | Mismo supuesto de ritmo parejo que el avance planificado (§13), y mismo calendario (§4) |
+| D-18 | Con qué fechas | **Las previstas, que son las reales cuando la tarea ya arrancó o terminó** | Lo que hoy se espera gastar: si algo se atrasa, el gasto se corre de mes. Son las mismas fechas de la lista y del Gantt |
+| D-18 | Qué pasa con el cómputo sin asignar a tareas | **Se muestra aparte, sin repartir** | Nadie planificó cuándo se gasta. Lo proyectado más lo sin asignar da el total de Planificación |
+
+**Precisiones**
+
+- **El reparto cierra al centavo.** Cada tarea reparte sus centavos por el método del mayor resto, así sus meses suman exactamente su costo y el total del gráfico es la suma de los costos que muestra Planificación.
+- **Se muestran todos los meses de la obra**, del primer inicio al último fin, incluso los meses en cero. Los meses anteriores al actual van atenuados como "transcurridos". No hay gasto real cargado (está fuera de alcance): son lo que se esperaba gastar.
+- **Una tarea sin costo igual alarga la obra** en el gráfico. Una tarea sin ningún día hábil (fechas reales cargadas en un fin de semana) se gasta en el mes en que terminó.
+- **El desvío del avance se muestra como número y no como veredicto**, igual que en la pestaña Avance (§13). Lo que marca la obra son las **tareas atrasadas** con el mismo criterio de esa pestaña: pasó su fin fijado y no está finalizada. Así las dos pantallas no dicen cosas distintas. La situación por tolerancia (`standing`) sigue viajando en la respuesta y sigue sin mostrarse.
+- **El atraso del fin de obra** se da en días hábiles entre el fin fijado y el previsto: positivo es atraso, negativo adelanto.
+- **La diferencia de presupuesto** se da en pesos y en porcentaje a un decimal. Con un original en cero no hay porcentaje.
+
 ---
 
 ## Consecuencias
@@ -310,7 +335,7 @@ Precisado el 2026-10-12, después de revisar una primera versión que mostraba t
 
 - HU-13 (tareas) y HU-14 (dependencias y fechas previstas).
 - HU-15 tiene qué dibujar: fechas previstas y reales, estado, críticas y aristas.
-- HU-19 puede proyectar el gasto por mes: cada tarea tiene costo y fechas.
+- HU-19 puede proyectar el gasto por mes: cada tarea tiene costo y fechas (§14).
 
 **Compromisos que asumimos:**
 
@@ -324,7 +349,6 @@ Precisado el 2026-10-12, después de revisar una primera versión que mostraba t
 | Tema | Se decide al arrancar |
 |---|---|
 | **Rubros.** Fuera por ahora: el pedido los menciona una sola vez y se consulta con la cátedra. Si entran, es una tabla y una FK nullable en `project_task` | Respuesta de la cátedra |
-| **Versiones del presupuesto y asignación a tareas.** Cargar una versión (HU-12) da de baja las líneas del cómputo y crea otras nuevas, así que hoy **las líneas cargadas quedan sin asignar** y la pantalla lo avisa. Previsto: que `budget_version_line` guarde `task_id` y la carga lo restaure si la tarea sigue activa | HU-19 (D-17) |
 
 **Extensiones previstas, no descartadas:**
 
@@ -339,6 +363,7 @@ Precisado el 2026-10-12, después de revisar una primera versión que mostraba t
 | Avance dibujado sobre las barras del Gantt | Después de HU-16 |
 | **Vista de grafo de las dependencias.** La red de tareas dibujada como nodos y aristas. Es donde las dependencias se ven de un vistazo, y por eso el Gantt no las dibuja (§12) | Después del Gantt |
 | El Gantt a 375px | Después de HU-15, en su propia rama |
+| **Versiones del presupuesto y asignación a tareas.** Cargar una versión (HU-12) da de baja las líneas del cómputo y crea otras nuevas, así que **las líneas cargadas quedan sin asignar** y la pantalla lo avisa. Previsto: que `budget_version_line` guarde `task_id` y la carga lo restaure si la tarea sigue activa. HU-19 no lo necesitó (§14) | Cargar versiones y reasignar a mano resulte incómodo |
 | Arrastrar tareas en el Gantt. Mover una barra escribiría el "no antes de" y estirarla la duración; el resto de los movimientos no tiene qué escribir | La edición desde el detalle resulte incómoda |
 
 ---
@@ -394,6 +419,20 @@ Precisado el 2026-10-12, después de revisar una primera versión que mostraba t
 **Etiquetar en pantalla cada tarea y la obra como atrasada, en fecha o adelantada, por tolerancia.** Es lo que calcula el backend. Descartado en pantalla porque marcaba como atrasada una obra en la que ninguna tarea había llegado a su fecha de fin.
 
 **Guardar el historial de los avances.** Deja lista la curva S. Descartado para este sprint porque es una tabla nueva con su pantalla y nada de lo pedido la consume. Queda como extensión.
+
+**Que el usuario marque qué versión es la original.** Más flexible si la v1 fue un borrador. Descartado por ahora: es una columna y un botón más, y la v1 es la respuesta que nadie tiene que explicar. Si una obra lo necesita, agregarlo después no cambia nada de lo demás.
+
+**Comparar la v1 contra la última versión guardada.** Solo cambiaría cuando alguien guarda. Descartado porque el dashboard tiene que mostrar cómo viene la obra hoy, y lo de hoy es el cómputo vivo.
+
+**Presupuesto actualizado con el precio del proveedor más barato.** Es lo más parecido a lo que se va a gastar. Descartado porque haría depender HU-19 de HU-17 y HU-18, y porque cambiaría la regla de que el presupuesto se arma con el precio de referencia (ADR-010).
+
+**Gastar el costo de una tarea en su mes de inicio, o en el de fin.** Más simple. Descartado porque una tarea de tres meses aparecería entera en uno solo.
+
+**Repartir lo sin asignar parejo entre los meses de la obra.** El gráfico sumaría el total del presupuesto. Descartado porque inventa cuándo se gasta algo que nadie planificó.
+
+**Proyectar con las fechas de la planificación fijada.** No se movería con los atrasos. Descartado porque proyectar es decir cuándo se espera gastar hoy, y sin planificación fijada el bloque quedaría vacío.
+
+**Mostrar la obra como atrasada, en fecha o adelantada en el dashboard.** Es lo que calcula el backend. Descartado por lo mismo que en la pestaña Avance (§13): el dashboard muestra el desvío y las tareas atrasadas.
 
 ---
 

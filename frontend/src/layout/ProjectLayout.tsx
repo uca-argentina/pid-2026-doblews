@@ -193,6 +193,17 @@ function ProjectTabs({ basePath, project, firmCan }: ProjectTabsProps) {
         firmCan("project.view_all"),
     },
     {
+      value: "dashboard",
+      path: "dashboard",
+      label: "Dashboard",
+      // HU-19 is about money, so it takes the saved budgets' rule below (D-16):
+      // project.cost.view on the work, or the owner's project.view_all. The
+      // client of the work does not see it.
+      visible:
+        project.permissions.includes("project.cost.view") ||
+        firmCan("project.view_all"),
+    },
+    {
       value: "budget",
       path: "budget",
       // Plural: the tab is the list of budgets saved from the take-off, not

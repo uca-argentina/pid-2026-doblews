@@ -4,7 +4,7 @@
 **Duración del sprint:** 2 semanas
 **Equipo:** 3 personas (fullstack)
 
-> **Estado de este documento:** HU-13 y HU-14 están firmes, las define [ADR-009](../adr/0009-project-planning.md); HU-17 y HU-18 también, por [ADR-010](../adr/0010-suppliers-price-lists.md); HU-15 y HU-16 quedaron firmes al arrancarlas, por ADR-009 §12 y §13. HU-19 todavía tiene puntos sin decidir, marcados **[D-n]** y listados en [Preguntas de diseño abiertas](#preguntas-de-diseño-abiertas): se cierran al arrancarla, no antes.
+> **Estado de este documento:** HU-13 y HU-14 están firmes, las define [ADR-009](../adr/0009-project-planning.md); HU-17 y HU-18 también, por [ADR-010](../adr/0010-suppliers-price-lists.md); HU-15, HU-16 y HU-19 quedaron firmes al arrancarlas, por ADR-009 §12, §13 y §14. Los **[D-n]** que quedan en su texto remiten a las [preguntas de diseño](#preguntas-de-diseño-abiertas), ya cerradas.
 
 ## Requerimientos de la cátedra
 
@@ -307,11 +307,7 @@ Lo que queda sin decidir. Cada pregunta se cierra **al arrancar la historia que 
 
 **Se deciden al llegar**
 
-| | Pregunta | Destraba |
-|---|---|---|
-| **D-16** | **Permisos del dashboard.** Los de planificación están en ADR-009 §9 y los de proveedores en ADR-010 §6 | HU-19 |
-| **D-17** | **Qué es el presupuesto "original" y qué el "actualizado".** ¿El original es una versión guardada (cuál)? ¿El actualizado es el borrador vivo, o usa precios de proveedor? ¿Las versiones guardan la asignación de líneas a tareas? | HU-19 |
-| **D-18** | **Cómo se proyecta el gasto por mes.** ¿Cómo se reparte el costo de una tarea que dura varios meses, y qué pasa con el costo sin asignar a ninguna tarea? | HU-19 |
+Ninguna: D-16, D-17 y D-18 se cerraron al arrancar HU-19.
 
 **Pendiente de la cátedra**
 
@@ -323,6 +319,7 @@ Lo que queda sin decidir. Cada pregunta se cierra **al arrancar la historia que 
 - D-9, en [ADR-009](../adr/0009-project-planning.md) §12: la vista es un Gantt, hecho con un componente propio y de lectura; elegir una tarea abre su detalle, desde donde se edita; las dependencias no se dibujan; a 375px se ve el listado.
 - D-10 a D-13, en [ADR-009](../adr/0009-project-planning.md) §13: el avance planificado crece parejo en días hábiles sobre las fechas fijadas con "Fijar planificación"; en la obra cada tarea pesa por su duración; pendiente es 0% y finalizada 100%, y llegar a 100% no finaliza; se guarda solo el valor actual.
 - D-14 y D-15, en [ADR-010](../adr/0010-suppliers-price-lists.md): los proveedores son del estudio; el envío es un importe fijo por material.
+- D-16 a D-18, en [ADR-009](../adr/0009-project-planning.md) §14: el dashboard lo ve quien ve costos (`project.cost.view` o `project.view_all`); el original es la v1 y el actualizado el presupuesto vivo, sin precios de proveedor; cada tarea gasta su costo parejo en sus días hábiles, sobre sus fechas previstas, y lo sin asignar se muestra aparte.
 
 ---
 
@@ -578,3 +575,27 @@ Cómo quedó:
 **Para HU-19**, se mantiene lo dicho: los números del bloque de avance salen de `progress`, `planned_end_date` y `baseline_end_date`. Conviene que el dashboard use el mismo criterio de "atrasada" que esta pestaña (`isOverdue` en `frontend/src/features/planning/progress.ts`), para que las dos pantallas no digan cosas distintas.
 
 **Falta para cerrar HU-16:** la revisión visual de los criterios y de 375px, y el PR a `dev`.
+
+**2026-10-12 (HU-19).** **HU-19 implementada, backend y frontend** (`feat/hu19-dashboard`): la pestaña "Dashboard" de la obra, con sus tres bloques. **D-16, D-17 y D-18 quedaron cerradas** en [ADR-009 §14](../adr/0009-project-planning.md). No hay tablas, migraciones ni permisos nuevos.
+
+**Los números coinciden porque salen del mismo código.** La lectura de la planificación pasó a `backend/app/api/planning_read.py`, compartida por Planificación, Avance y el dashboard. El presupuesto actualizado es `build_budget`, el mismo de Cómputo. Lo único nuevo es el reparto por mes, en `backend/app/services/projection.py`, funciones puras con sus tests en `test_projection.py`.
+
+**Contrato**, bajo `/firms/{firm_id}/projects/{project_id}`:
+
+| Ruta | Qué devuelve |
+|---|---|
+| `GET /dashboard` | `budget`: `original` (la v1, o `null`), `updated_total`, `prices_as_of`, `difference`, `difference_percent` y `direction` (`above`, `below`, `equal`) |
+| | `progress`: el `progress` de la obra de HU-16, `planned_end_date`, `baseline_end_date`, `end_delay_days` (hábiles, positivo es atraso), `overdue_tasks` y `has_tasks` |
+| | `projection`: `months` (`{month, amount, is_past}`, sin huecos), `projected_total` y `unassigned_cost` |
+
+Lo ven `lead`, `collaborator` y el `owner`; el `client` recibe 403.
+
+Cómo quedó en pantalla:
+
+- **Pestaña "Dashboard"**, entre Avance y Presupuestos, en `/projects/:id/dashboard`. El `client` no la ve.
+- **Presupuesto:** original (v1, con su nota y fecha) y actualizado (con la fecha de sus precios), y la diferencia en pesos y en porcentaje: roja con ▲ si subió, verde con ▼ si bajó.
+- **Avance:** dos barras, real y planificado a hoy; el desvío en puntos, **sin veredicto**, y cuántas tareas están atrasadas con el criterio de la pestaña Avance. Debajo, fin previsto contra fin planificado, con el atraso o adelanto en días hábiles.
+- **Proyección:** un gráfico de barras por mes (`@mantine/charts`, `recharts` pasa a ser dependencia explícita), con los meses ya transcurridos en gris, y la lista de importes con el total. Lo sin asignar se aclara debajo.
+- **Cada bloque tiene su estado vacío** que dice qué falta y lleva a la pestaña donde se carga: guardar una versión, cargar tareas, la fecha de inicio, fijar la planificación o asignar líneas a tareas.
+
+**Falta para cerrar HU-19:** la revisión visual de los criterios y de 375px, y el PR a `dev`.
