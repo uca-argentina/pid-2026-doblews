@@ -7,6 +7,10 @@
 export type TaskStatus = "pending" | "in_progress" | "paused" | "finished";
 
 /** The six things that can be done to a task's status, and nothing else. */
+/** How the actual progress compares with the planned one (HU-16): more than
+ * five points under it, within five, or more than five over. */
+export type ProgressStanding = "behind" | "on_track" | "ahead";
+
 export type TaskAction =
   "start" | "pause" | "resume" | "finish" | "reopen" | "undo_start";
 
@@ -38,6 +42,20 @@ export interface TaskOut {
   actual_start_date: string | null;
   /** Recorded by finishing it. null unless it is finished. */
   actual_end_date: string | null;
+  /** How much of it is done, as last recorded: a whole number from 0 to 100.
+   * Always 0 while pending and 100 once finished (ADR-009 13). */
+  progress_percent: number;
+  /** The planned dates as they were when the planning was last fixed. null on
+   * a task loaded since, which is out of the comparison until it is fixed
+   * again. */
+  baseline_start_date: string | null;
+  baseline_end_date: string | null;
+  /** What it was planned to have done by today, against that baseline; the
+   * actual progress minus it, so negative is behind; and which of the three
+   * that makes it. All null without a baseline. */
+  planned_progress_percent: number | null;
+  progress_gap: number | null;
+  progress_standing: ProgressStanding | null;
   /** What its take-off lines cost at today's prices: "0.00" with none. null
    * when the caller may not see costs — the project client (ADR-009 9). */
   cost: string | null;
@@ -56,6 +74,15 @@ export interface TaskOut {
   successors: TaskRefOut[];
 }
 
+/** The progress of the whole work against its fixed planning (HU-16): each
+ * task weighs its estimated duration, and only those with a baseline count. */
+export interface WorkProgressOut {
+  actual_percent: number;
+  planned_percent: number;
+  gap: number;
+  standing: ProgressStanding;
+}
+
 /** GET .../projects/{projectId}/tasks: the tasks and what they add up to, in
  * one answer so the list and the unassigned amount never disagree on screen. */
 export interface PlanningOut {
@@ -66,6 +93,12 @@ export interface PlanningOut {
   project_start_date: string | null;
   /** When the work is planned to end: the latest planned end of its tasks. */
   planned_end_date: string | null;
+  /** The day the planning was last fixed, and when the work was planned to
+   * end that day. Both null means the screen asks to fix it. */
+  baseline_set_on: string | null;
+  baseline_end_date: string | null;
+  /** null until the planning is fixed. */
+  progress: WorkProgressOut | null;
   /** What the take-off lines assigned to no task cost. */
   unassigned_cost: string | null;
   /** The tasks' costs plus the unassigned amount. Not shown: the work's total

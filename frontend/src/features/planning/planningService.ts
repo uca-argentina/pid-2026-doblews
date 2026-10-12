@@ -118,3 +118,18 @@ export async function setTaskLines(
   );
   return data;
 }
+
+/** Records how much of a task is done, from 0 to 100. A 409 means its status
+ * takes no progress: a pending task is at 0 and a finished one at 100. */
+export async function setTaskProgress(
+  firmId: number,
+  projectId: number,
+  taskId: number,
+  progressPercent: number,
+): Promise<TaskOut> {
+  const { data } = await api.put<TaskOut>(
+    `${tasksUrl(firmId, projectId)}/${taskId}/progress`,
+    { progress_percent: progressPercent },
+  );
+  return data;
+}

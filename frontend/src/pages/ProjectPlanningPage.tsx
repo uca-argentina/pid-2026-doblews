@@ -18,6 +18,7 @@ import { PageHeader } from "../components/PageHeader";
 import { useCurrentFirm } from "../features/firms/firmContext";
 import { ActualDatesModal } from "../features/planning/ActualDatesModal";
 import { GanttChart } from "../features/planning/GanttChart";
+import { ProgressModal } from "../features/planning/ProgressModal";
 import { RemoveTaskModal } from "../features/planning/RemoveTaskModal";
 import { ReopenTaskModal } from "../features/planning/ReopenTaskModal";
 import { TaskActionsMenu } from "../features/planning/TaskActionsMenu";
@@ -104,6 +105,9 @@ function PlanningView({
   const [editing, setEditing] = useState<TaskOut | null>(null);
   const [removing, setRemoving] = useState<TaskOut | null>(null);
   const [fixingDates, setFixingDates] = useState<TaskOut | null>(null);
+  const [recordingProgress, setRecordingProgress] = useState<TaskOut | null>(
+    null,
+  );
   const [assigningLines, setAssigningLines] = useState<TaskOut | null>(null);
   const [confirming, setConfirming] = useState<DatedTransition | null>(null);
   const [reopening, setReopening] = useState<TaskOut | null>(null);
@@ -186,6 +190,7 @@ function PlanningView({
           task={task}
           onEdit={setEditing}
           onFixDates={setFixingDates}
+          onRecordProgress={setRecordingProgress}
           onAssignLines={setAssigningLines}
           onRemove={setRemoving}
         />
@@ -254,6 +259,12 @@ function PlanningView({
             firmId={firmId}
             projectId={projectId}
             onClose={() => setFixingDates(null)}
+          />
+          <ProgressModal
+            task={recordingProgress}
+            firmId={firmId}
+            projectId={projectId}
+            onClose={() => setRecordingProgress(null)}
           />
           <TaskLinesModal
             task={assigningLines}

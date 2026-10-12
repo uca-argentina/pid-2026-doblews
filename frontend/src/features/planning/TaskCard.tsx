@@ -4,6 +4,7 @@ import { formatMoney } from "../../lib/format";
 import { SlackBadge } from "./SlackBadge";
 import { formatWorkingDays, taskEnd, taskStart } from "./taskFields";
 import { TaskDateText } from "./TaskDateText";
+import { TaskProgress } from "./TaskProgress";
 import { TaskStatusBadge } from "./TaskStatusBadge";
 import type { TaskOut } from "./types";
 
@@ -78,6 +79,8 @@ export function TaskCard({
             <SlackBadge task={task} labelled />
           </Group>
         )}
+
+        <TaskProgress task={task} />
 
         {(task.cost !== null || actions) && (
           <Group justify="space-between" wrap="nowrap" align="center" mt={4}>

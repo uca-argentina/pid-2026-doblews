@@ -7,6 +7,7 @@ import {
   fetchTaskAssignees,
   removeTask,
   setTaskLines,
+  setTaskProgress,
   transitionTask,
   updateTask,
   updateTaskActualDates,
@@ -134,5 +135,20 @@ export function useSetTaskLines(firmId: number, projectId: number) {
     projectId,
     (variables: { taskId: number; lineIds: number[] }) =>
       setTaskLines(firmId, projectId, variables.taskId, variables.lineIds),
+  );
+}
+
+/** Records how much of one task is done. */
+export function useSetTaskProgress(firmId: number, projectId: number) {
+  return usePlanningWrite(
+    firmId,
+    projectId,
+    (variables: { taskId: number; progressPercent: number }) =>
+      setTaskProgress(
+        firmId,
+        projectId,
+        variables.taskId,
+        variables.progressPercent,
+      ),
   );
 }

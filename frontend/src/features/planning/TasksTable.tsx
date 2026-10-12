@@ -5,6 +5,7 @@ import { EMPTY } from "../projects/projectFields";
 import { SlackBadge } from "./SlackBadge";
 import { formatDuration, taskEnd, taskStart } from "./taskFields";
 import { TaskDateText } from "./TaskDateText";
+import { TaskProgress } from "./TaskProgress";
 import { TaskStatusBadge } from "./TaskStatusBadge";
 import type { TaskOut } from "./types";
 
@@ -42,7 +43,7 @@ export function TasksTable({
   renderActions,
 }: TasksTableProps) {
   return (
-    <Table.ScrollContainer minWidth={860}>
+    <Table.ScrollContainer minWidth={980}>
       <Table verticalSpacing="sm" highlightOnHover>
         <Table.Thead>
           <Table.Tr>
@@ -52,6 +53,7 @@ export function TasksTable({
             <Table.Th>Estado</Table.Th>
             <Table.Th>Inicio</Table.Th>
             <Table.Th>Fin</Table.Th>
+            <Table.Th>Avance</Table.Th>
             <Table.Th>Holgura</Table.Th>
             {showsCost && <Table.Th ta="right">Costo</Table.Th>}
             {/* No heading, like the team's actions column: the menu's own
@@ -98,6 +100,9 @@ export function TasksTable({
               </Table.Td>
               <Table.Td>
                 <TaskDateText date={taskEnd(task)} />
+              </Table.Td>
+              <Table.Td>
+                <TaskProgress task={task} />
               </Table.Td>
               <Table.Td>
                 <SlackBadge task={task} />

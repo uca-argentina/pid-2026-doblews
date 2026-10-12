@@ -5,6 +5,7 @@ interface TaskActionsMenuProps {
   task: TaskOut;
   onEdit: (task: TaskOut) => void;
   onFixDates: (task: TaskOut) => void;
+  onRecordProgress: (task: TaskOut) => void;
   onAssignLines: (task: TaskOut) => void;
   onRemove: (task: TaskOut) => void;
 }
@@ -21,6 +22,7 @@ export function TaskActionsMenu({
   task,
   onEdit,
   onFixDates,
+  onRecordProgress,
   onAssignLines,
   onRemove,
 }: TaskActionsMenuProps) {
@@ -37,6 +39,13 @@ export function TaskActionsMenu({
       </Menu.Target>
       <Menu.Dropdown>
         <Menu.Item onClick={() => onEdit(task)}>Editar</Menu.Item>
+        {/* Only a task under way takes a progress: a pending one is at 0%
+            and a finished one at 100% (ADR-009 13). */}
+        {(task.status === "in_progress" || task.status === "paused") && (
+          <Menu.Item onClick={() => onRecordProgress(task)}>
+            Registrar avance
+          </Menu.Item>
+        )}
         <Menu.Item onClick={() => onAssignLines(task)}>
           Líneas de cómputo
         </Menu.Item>
