@@ -1,6 +1,6 @@
 # ADR-010: Proveedores y listas de precios
 
-**Estado:** Propuesta
+**Estado:** Aceptada
 **Fecha:** 2026-10-07
 **Contexto:** Modelo de datos para los proveedores de un estudio, sus precios por material y la comparación de compra. Desbloquea HU-17 y HU-18 del Sprint 3 y cierra el pendiente "precios por proveedor" que dejaron [ADR-003](0003-recipe-catalog.md) y [ADR-005](0005-catalog-administration.md).
 
@@ -153,6 +153,15 @@ Van en el servicio, cada una con su test:
 - `GET/POST /firms/{firm_id}/suppliers/{supplier_id}/prices`, `PATCH .../prices/{price_id}`, `POST .../prices/{price_id}/deactivate` — igual.
 - `GET /firms/{firm_id}/purchasing/compare?resource_id=&quantity=` — `supplier.view`.
 - `GET /firms/{firm_id}/projects/{project_id}/purchasing` — `project.cost.view` o `project.view_all`.
+
+**Precisado al implementar HU-17** (las dos rutas de comparación son de HU-18 y todavía no existen):
+
+- `GET .../suppliers/{supplier_id}` devuelve el proveedor **con su lista**, para que la pantalla de un proveedor se arme con un solo pedido; `.../prices` queda para quien solo necesite la lista.
+- `PATCH` es parcial: un campo enviado como `null` se borra y uno no enviado se conserva. El nombre es obligatorio y no se puede borrar. En un renglón solo se editan los importes: el material lo identifica, y para cotizar otro se quita el renglón y se agrega el otro.
+- Dar de baja un proveedor o un renglón es un `POST .../deactivate` que responde **204**. No hay `DELETE` bajo `/suppliers`, y un test sobre la tabla de rutas lo sostiene.
+- Errores: 404 para un proveedor o renglón ajeno, dado de baja o inexistente (el mismo para los tres); 409 para un nombre repetido entre activos o un material ya listado; 422 para un material que no se puede cotizar (mano de obra, equipo, dado de baja o inexistente).
+- El `client` del estudio recibe **403** en toda la sección (no una lista vacía): son costos del estudio.
+- Cada renglón devuelve también el `reference_price` del material, para que la pantalla muestre los dos precios lado a lado y diga siempre cuál es cuál (§5).
 
 ---
 

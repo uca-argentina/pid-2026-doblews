@@ -22,6 +22,11 @@ export function FirmNavbar({ onNavigate }: FirmNavbarProps) {
       label: "Catálogo",
       visible: can("catalog.view"),
     },
+    {
+      to: `${base}/suppliers`,
+      label: "Proveedores",
+      visible: can("supplier.view"),
+    },
     { to: `${base}/members`, label: "Padrón", visible: can("member.add") },
   ];
 

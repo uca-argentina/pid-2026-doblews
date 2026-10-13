@@ -599,3 +599,15 @@ Cómo quedó en pantalla:
 - **Cada bloque tiene su estado vacío** que dice qué falta y lleva a la pestaña donde se carga: guardar una versión, cargar tareas, la fecha de inicio, fijar la planificación o asignar líneas a tareas.
 
 **Falta para cerrar HU-19:** la revisión visual de los criterios y de 375px, y el PR a `dev`.
+
+**2026-10-08.** **HU-17 implementada** en tres ramas, como la HU-12: esquema (`feat/hu17-suppliers-schema`), backend (`feat/hu17-suppliers-back`) y front (`feat/hu17-suppliers-front`). Las dos tablas de ADR-010, los permisos `supplier.view` y `supplier.manage` para `owner` y `architect`, las rutas de `/suppliers` y la sección "Proveedores" del estudio, con la lista de precios de cada proveedor. ADR-010 pasa a **Aceptada**.
+
+Tres cosas que se precisaron al implementar (el detalle está en ADR-010 §8):
+
+- **La baja es un `POST .../deactivate` y no hay `DELETE`.** Como las versiones del presupuesto en HU-12, es una ausencia que un test sobre la tabla de rutas sostiene: nadie la rompe sin que algo falle.
+- **Un proveedor dado de baja se lleva su lista sin tocar los renglones.** Cada lectura de precios exige que el proveedor esté activo; así HU-18 hereda la regla gratis y no hay que recorrer renglones para apagarlos.
+- **En un renglón solo se editan los importes.** El material identifica al renglón; para cotizar otro, se lo quita y se agrega el otro.
+
+**Queda:** la Definition of Done de HU-17: promoción `dev → main`, verificación a mano en Azure y el responsive a 375px. Queda liberada **HU-18** (comparar compras).
+
+*Integrada a `dev` el 2026-10-13, después de HU-19: las tres ramas se rebasearon sobre `dev` y la migración de proveedores pasó a colgar de la última de planificación (`f5b2d8c41a96`), para no dejar dos heads de Alembic.*
