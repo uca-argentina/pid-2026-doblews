@@ -216,9 +216,7 @@ class TestSuppliers:
 
 
 class TestPrices:
-    def test_add_answers_201_with_the_row_and_both_prices(
-        self, client, url, owner, resource_id
-    ):
+    def test_add_answers_201_with_the_row_and_both_prices(self, client, url, owner, resource_id):
         created = create(client, url, owner)
 
         response = add_price(client, url, owner, created["id"], resource_id)
@@ -303,9 +301,7 @@ class TestPrices:
 
         assert [row["resource"]["name"] for row in rows] == [CEMENT, BRICK]
 
-    def test_patch_changes_the_amounts_and_not_the_material(
-        self, client, url, owner, resource_id
-    ):
+    def test_patch_changes_the_amounts_and_not_the_material(self, client, url, owner, resource_id):
         created = create(client, url, owner)
         row = add_price(client, url, owner, created["id"], resource_id).json()
 
