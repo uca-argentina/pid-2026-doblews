@@ -823,3 +823,157 @@ def test_deleting_a_version_takes_its_items_and_lines_with_it(db: Connection, wo
         {"v": version},
     ).scalar_one()
     assert orphans == 0
+
+
+# --- suppliers and their price lists ----------------------------------------
+#
+# ADR-010's two tables. What is checked here is what the schema promises on its
+# own: a supplier's name is unique among the firm's active ones, a price cannot
+# hang off another firm's supplier, the amounts cannot be negative, and a supplier
+# does not repeat a material. That the material is a material and not labour or
+# equipment is the service's job (ADR-010 section 7), and so is its test.
+
+INSERT_SUPPLIER = "INSERT INTO supplier (firm_id, name) VALUES (:firm, :name) RETURNING id"
+
+INSERT_SUPPLIER_PRICE = (
+    "INSERT INTO supplier_price"
+    " (supplier_id, firm_id, resource_id, unit_price, shipping_cost, currency)"
+    " VALUES (:supplier, :firm, :resource, :price, :shipping, :currency) RETURNING id"
+)
+
+
+def new_supplier(db: Connection, firm: int, name: str = "Corralón de prueba") -> int:
+    return db.execute(text(INSERT_SUPPLIER), {"firm": firm, "name": name}).scalar_one()
+
+
+def new_supplier_price(db: Connection, supplier: int, firm: int, resource: int, **overrides) -> int:
+    """A valid price row, plus whatever the caller wants wrong about it."""
+    row = {
+        "supplier": supplier,
+        "firm": firm,
+        "resource": resource,
+        "price": 230,
+        "shipping": 1500,
+        "currency": "ARS",
+    } | overrides
+    return db.execute(text(INSERT_SUPPLIER_PRICE), row).scalar_one()
+
+
+def test_two_active_suppliers_of_one_firm_cannot_share_a_name(db: Connection, world) -> None:
+    """The lower() in the index is what keeps "Corralón Norte" and "corralón norte"
+    from coexisting (modelo-datos 3.4)."""
+    new_supplier(db, world.firm_a, "Corralón de prueba")
+
+    with pytest.raises(IntegrityError, match="uq_supplier_name_active"):
+        new_supplier(db, world.firm_a, "CORRALÓN DE PRUEBA")
+
+
+def test_two_firms_may_each_have_a_supplier_of_the_same_name(db: Connection, world) -> None:
+    """The index is per firm: a supplier's name says nothing outside its tenant."""
+    new_supplier(db, world.firm_a)
+    new_supplier(db, world.firm_b)
+
+
+def test_a_deactivated_supplier_frees_its_name(db: Connection, world) -> None:
+    """The positive half of modelo-datos 3.4, and the reason the index is partial."""
+    supplier = new_supplier(db, world.firm_a)
+    db.execute(text("UPDATE supplier SET is_active = false WHERE id = :s"), {"s": supplier})
+
+    new_supplier(db, world.firm_a)
+
+
+def test_a_supplier_cannot_belong_to_a_firm_that_does_not_exist(db: Connection) -> None:
+    with pytest.raises(IntegrityError, match="fk_supplier_firm_id"):
+        new_supplier(db, 999_999)
+
+
+def test_a_price_cannot_hang_off_another_firms_supplier(db: Connection, world) -> None:
+    """The composite FK of modelo-datos 3.8: not refused by a service, impossible,
+    because the (supplier_id, firm_id) pair has to exist in supplier."""
+    supplier = new_supplier(db, world.firm_a)
+
+    with pytest.raises(IntegrityError, match="fk_supplier_price_supplier_id"):
+        new_supplier_price(db, supplier, world.firm_b, new_resource(db))
+
+
+def test_a_supplier_does_not_repeat_a_material_in_its_list(db: Connection, world) -> None:
+    supplier, resource = new_supplier(db, world.firm_a), new_resource(db)
+    new_supplier_price(db, supplier, world.firm_a, resource)
+
+    with pytest.raises(IntegrityError, match="uq_supplier_price_resource_active"):
+        new_supplier_price(db, supplier, world.firm_a, resource)
+
+
+def test_a_material_may_be_in_the_lists_of_several_suppliers(db: Connection, world) -> None:
+    """The whole point of HU-17: the same material, a different price per supplier."""
+    resource = new_resource(db)
+    first = new_supplier(db, world.firm_a, "Corralón uno")
+    second = new_supplier(db, world.firm_a, "Corralón dos")
+
+    new_supplier_price(db, first, world.firm_a, resource, price=230)
+    new_supplier_price(db, second, world.firm_a, resource, price=215)
+
+
+def test_a_removed_price_row_can_be_loaded_again(db: Connection, world) -> None:
+    """The positive half of the partial index: a row removed by mistake is loaded
+    again as a new one, and the old one stays as a tombstone."""
+    supplier, resource = new_supplier(db, world.firm_a), new_resource(db)
+    price = new_supplier_price(db, supplier, world.firm_a, resource)
+    db.execute(text("UPDATE supplier_price SET is_active = false WHERE id = :p"), {"p": price})
+
+    new_supplier_price(db, supplier, world.firm_a, resource)
+
+
+def test_a_supplier_price_cannot_be_negative(db: Connection, world) -> None:
+    """Zero is legitimate — a promotion, a gift — below zero never is."""
+    supplier, resource = new_supplier(db, world.firm_a), new_resource(db)
+
+    with pytest.raises(IntegrityError, match="ck_supplier_price_unit_price_not_negative"):
+        new_supplier_price(db, supplier, world.firm_a, resource, price=-1)
+
+
+def test_a_shipping_cost_cannot_be_negative(db: Connection, world) -> None:
+    """Zero is the supplier that does not charge for delivery."""
+    supplier, resource = new_supplier(db, world.firm_a), new_resource(db)
+
+    with pytest.raises(IntegrityError, match="ck_supplier_price_shipping_cost_not_negative"):
+        new_supplier_price(db, supplier, world.firm_a, resource, shipping=-1)
+
+
+def test_a_supplier_price_currency_must_be_an_iso_4217_code(db: Connection, world) -> None:
+    supplier, resource = new_supplier(db, world.firm_a), new_resource(db)
+
+    with pytest.raises(IntegrityError, match="ck_supplier_price_currency_iso_4217"):
+        new_supplier_price(db, supplier, world.firm_a, resource, currency="ars")
+
+
+def test_a_supplier_price_cannot_point_at_a_resource_that_does_not_exist(
+    db: Connection, world
+) -> None:
+    supplier = new_supplier(db, world.firm_a)
+
+    with pytest.raises(IntegrityError, match="fk_supplier_price_resource_id"):
+        new_supplier_price(db, supplier, world.firm_a, 999_999)
+
+
+def test_editing_a_supplier_moves_updated_at_but_not_the_price_date(db: Connection, world) -> None:
+    """The trigger keeps updated_at, and price_updated_at stays out of it: it is the
+    "actualizado el" of the screen and only a changed price may move it (ADR-010 2)."""
+    supplier, resource = new_supplier(db, world.firm_a), new_resource(db)
+    price = new_supplier_price(db, supplier, world.firm_a, resource)
+    db.execute(
+        text("UPDATE supplier_price SET price_updated_at = '2000-01-01' WHERE id = :p"),
+        {"p": price},
+    )
+
+    db.execute(text("UPDATE supplier_price SET is_active = true WHERE id = :p"), {"p": price})
+
+    row = db.execute(
+        text(
+            "SELECT updated_at = now() AS touched, price_updated_at AS priced"
+            " FROM supplier_price WHERE id = :p"
+        ),
+        {"p": price},
+    ).one()
+    assert row.touched is True
+    assert row.priced.year == 2000
