@@ -19,7 +19,7 @@ Three things here are deliberate rather than forgotten:
   (resource_id, resource_type) pattern of modelo-datos 3.8 was not worth it here.
 
 Revision ID: d6a1f4b82e57
-Revises: b5e8a3f17c24
+Revises: f5b2d8c41a96
 Create Date: 2026-10-08
 
 """
@@ -31,7 +31,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "d6a1f4b82e57"
-down_revision: str | Sequence[str] | None = "b5e8a3f17c24"
+down_revision: str | Sequence[str] | None = "f5b2d8c41a96"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

@@ -9,7 +9,7 @@
 >
 > El CI falla si este archivo no coincide con los modelos.
 
-Es el estado **actual** del esquema: 19 tablas. Lo que todavía se está
+Es el estado **actual** del esquema: 21 tablas. Lo que todavía se está
 diseñando no aparece acá sino en la ADR que lo propone. El porqué de cada tabla está en
 las ADR que cita cada área, y las convenciones en
 [modelo-datos-sprint-1.md](modelo-datos-sprint-1.md).
