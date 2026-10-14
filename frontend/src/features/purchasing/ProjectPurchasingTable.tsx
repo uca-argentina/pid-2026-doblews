@@ -98,6 +98,9 @@ export function ProjectPurchasingTable({
                         <Text size="sm" c="dimmed">
                           {formatMoney(item.reference_total, currency)}
                         </Text>
+                        <Text size="xs" c="dimmed">
+                          {referenceUnitText(item, currency)}
+                        </Text>
                       </Table.Td>
                     </Table.Tr>
                     {expanded && (
@@ -139,7 +142,8 @@ export function ProjectPurchasingTable({
                 )}
                 <Text size="sm" c="dimmed">
                   A precio de referencia:{" "}
-                  {formatMoney(item.reference_total, currency)}
+                  {formatMoney(item.reference_total, currency)} (
+                  {referenceUnitText(item, currency)})
                 </Text>
                 {offered && (
                   <>
@@ -172,6 +176,12 @@ export function ProjectPurchasingTable({
       </Stack>
     </>
   );
+}
+
+/** The reference price of one unit: what HU-18 shows for a material nobody
+ * offers, and what the budget computes with whichever wins. */
+function referenceUnitText(item: ComparedMaterial, currency: string): string {
+  return `${formatMoney(item.reference_price, currency)} por ${item.unit.abbreviation}`;
 }
 
 /** Who wins this material — every one of them, when they tie — or "Sin
