@@ -6,7 +6,10 @@ supplier of another firm, a deactivated one and one that never existed are the
 same None here, and the route answers all three with the same 404.
 """
 
+from collections.abc import Collection
 from dataclasses import dataclass
+from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import func, select
 
@@ -35,6 +38,18 @@ class PriceEntry:
     resource: Resource
     unit_code: str
     unit_abbreviation: str
+
+
+@dataclass(frozen=True)
+class OfferEntry:
+    """What one supplier asks for one material: a row of HU-18's comparison."""
+
+    resource_id: int
+    supplier_id: int
+    supplier_name: str
+    unit_price: Decimal
+    shipping_cost: Decimal
+    price_updated_at: datetime
 
 
 class SupplierRepository(FirmScopedRepository[Supplier]):
@@ -74,6 +89,10 @@ class SupplierRepository(FirmScopedRepository[Supplier]):
         if exclude_id is not None:
             statement = statement.where(Supplier.id != exclude_id)
         return self.db.scalars(statement.limit(1)).first() is not None
+
+    def any(self) -> bool:
+        """Whether this firm has a live supplier at all: HU-18's empty state."""
+        return self.db.scalars(self.select().limit(1)).first() is not None
 
 
 class SupplierPriceRepository(FirmScopedRepository[SupplierPrice]):
@@ -130,3 +149,36 @@ class SupplierPriceRepository(FirmScopedRepository[SupplierPrice]):
                 SupplierPrice.supplier_id == supplier_id, SupplierPrice.resource_id == resource_id
             )
         ).first()
+
+    def offers(self, resource_ids: Collection[int]) -> list[OfferEntry]:
+        """Every live offer of these materials, across the firm's live suppliers.
+
+        One query for a whole work's materials, not one per material. A row only
+        counts while its supplier is live and the catalogue still has the
+        material (ADR-010 section 7, rules 2 and 4): a material the support
+        deactivated stays in the lists but is no longer offered.
+
+        Unordered: the order depends on the quantity, so it is the comparison's
+        to decide (services/purchasing.py).
+        """
+        if not resource_ids:
+            return []
+        rows = self.db.execute(
+            self.select()
+            .join(Supplier, Supplier.id == SupplierPrice.supplier_id)
+            .where(Supplier.is_active)
+            .join(Resource, Resource.id == SupplierPrice.resource_id)
+            .where(Resource.is_active, SupplierPrice.resource_id.in_(resource_ids))
+            .add_columns(Supplier.name)
+        ).all()
+        return [
+            OfferEntry(
+                resource_id=price.resource_id,
+                supplier_id=price.supplier_id,
+                supplier_name=name,
+                unit_price=price.unit_price,
+                shipping_cost=price.shipping_cost,
+                price_updated_at=price.price_updated_at,
+            )
+            for price, name in rows
+        ]

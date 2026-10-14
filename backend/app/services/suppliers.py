@@ -138,7 +138,7 @@ def deactivate_supplier(db: Session, firm_id: int, supplier_id: int) -> None:
     db.flush()
 
 
-def _priceable_material(db: Session, resource_id: int) -> Resource:
+def priceable_material(db: Session, resource_id: int) -> Resource:
     """The catalogue material to price, or the reason it cannot be.
 
     ADR-010 section 7, rules 1 and 2: a list carries materials and not labour or
@@ -163,7 +163,7 @@ def add_price(
 ) -> SupplierPrice:
     """Price one more material in a supplier's list."""
     supplier = get_supplier(db, firm_id, supplier_id)
-    resource = _priceable_material(db, resource_id)
+    resource = priceable_material(db, resource_id)
 
     if SupplierPriceRepository(db, firm_id=firm_id).listed_resource(supplier.id, resource.id):
         raise SupplierError(MATERIAL_ALREADY_LISTED)
