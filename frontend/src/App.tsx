@@ -14,6 +14,7 @@ import { ProjectDashboardPage } from "./pages/ProjectDashboardPage";
 import { ProjectDetailPage } from "./pages/ProjectDetailPage";
 import { ProjectPlanningPage } from "./pages/ProjectPlanningPage";
 import { ProjectProgressPage } from "./pages/ProjectProgressPage";
+import { ProjectPurchasingPage } from "./pages/ProjectPurchasingPage";
 import { ProjectTakeoffPage } from "./pages/ProjectTakeoffPage";
 import { ProjectTeamPage } from "./pages/ProjectTeamPage";
 import { NoFirmPage } from "./pages/NoFirmPage";
@@ -129,6 +130,7 @@ function App() {
               path="budget/versions/:versionId"
               element={<ProjectBudgetVersionPage />}
             />
+            <Route path="purchasing" element={<ProjectPurchasingPage />} />
             <Route path="team" element={<ProjectTeamPage />} />
           </Route>
           {/* Every firm role holds catalog.view today, so the gate is for the

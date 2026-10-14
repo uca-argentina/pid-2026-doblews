@@ -218,6 +218,17 @@ function ProjectTabs({ basePath, project, firmCan }: ProjectTabsProps) {
         firmCan("project.view_all"),
     },
     {
+      value: "purchasing",
+      path: "purchasing",
+      label: "Compras",
+      // HU-18: what the work would cost to buy, so the budget's rule again
+      // (ADR-010 section 6) and no permission of its own. The client of the
+      // work does not see it.
+      visible:
+        project.permissions.includes("project.cost.view") ||
+        firmCan("project.view_all"),
+    },
+    {
       value: "team",
       path: "team",
       label: "Equipo",
