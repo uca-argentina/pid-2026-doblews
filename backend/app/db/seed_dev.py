@@ -24,11 +24,13 @@ from app.models import (
     Recipe,
     Resource,
     Role,
+    Supplier,
     UnitOfMeasure,
 )
 from app.services.catalog_admin import CatalogError, InvalidReferenceError, RecipeLineInput
 from app.services.firm_recipes import create_firm_recipe
 from app.services.project import ProjectError, create_project
+from app.services.suppliers import InvalidMaterialError, add_price, create_supplier
 from app.services.takeoff import add_line
 
 SUPPORT = ("Soporte warchitecture", "soporte@warchitecture.test")
@@ -82,6 +84,46 @@ FIRM_RECIPE = (
         ("Ayudante", "0.6000"),
     ],
 )
+
+
+# Estudio Norte's suppliers (HU-17), priced so HU-18's comparison has something
+# to show on Casa Rodríguez. Norte is cheaper per unit but charges for delivery,
+# Sur delivers free: Norte wins the work's 7,200 bricks, Sur wins a hundred, and
+# at exactly 1,000 they tie. The lime is on nobody's list, so the work shows a
+# material "sin proveedor".
+# (firm, supplier, contact, phone, [(material, unit price, shipping)])
+SUPPLIERS = [
+    (
+        "Estudio Norte",
+        "Corralón Norte",
+        "Marta Ríos",
+        "388 555 0101",
+        [
+            ("Ladrillo común", "220.00", "5000.00"),
+            ("Cemento portland (bolsa 50 kg)", "15500.00", "8000.00"),
+        ],
+    ),
+    (
+        "Estudio Norte",
+        "Corralón Sur",
+        "Hugo Paz",
+        "388 555 0202",
+        [
+            ("Ladrillo común", "225.00", "0.00"),
+            ("Cemento portland (bolsa 50 kg)", "15800.00", "0.00"),
+        ],
+    ),
+    (
+        "Estudio Norte",
+        "Arenera del Río",
+        None,
+        "388 555 0303",
+        [
+            ("Arena gruesa", "42000.00", "12000.00"),
+            ("Cascote", "36000.00", "12000.00"),
+        ],
+    ),
+]
 
 
 def _role(session: Session, code: str, scope: str) -> Role:
@@ -159,6 +201,7 @@ def seed(session: Session, password: str) -> None:
 
     _seed_firm_recipe(session, firms)
     _seed_demo_work(session, firms)
+    _seed_suppliers(session, firms)
 
 
 def _seed_firm_recipe(session: Session, firms: dict[str, Firm]) -> None:
@@ -256,6 +299,45 @@ def _seed_demo_work(session: Session, firms: dict[str, Firm]) -> None:
         )
         add_line(session, project, recipe_id=recipe_id, quantity=Decimal(quantity), note=note)
         print(f"creada    computo  {quantity} x {recipe_name}")
+
+
+def _seed_suppliers(session: Session, firms: dict[str, Firm]) -> None:
+    """The firm's suppliers and their lists, through HU-17's own service.
+
+    A supplier is created with its list only if the firm has no active one of
+    that name, and left alone otherwise, so prices edited on the screen survive a
+    re-seed. A material the catalogue no longer has is skipped with a notice.
+    """
+    for firm_name, name, contact, phone, prices in SUPPLIERS:
+        firm = firms[firm_name]
+        exists = session.scalar(
+            select(Supplier.id).where(
+                Supplier.firm_id == firm.id, Supplier.name == name, Supplier.is_active
+            )
+        )
+        if exists is not None:
+            print(f"ya estaba  proveedor {name} ({firm_name})")
+            continue
+
+        session.flush()  # the firm row, if it was created above
+        supplier = create_supplier(session, firm.id, name=name, contact_name=contact, phone=phone)
+        print(f"creado    proveedor {name} ({firm_name})")
+
+        for material, unit_price, shipping in prices:
+            resource_id = session.scalar(select(Resource.id).where(Resource.name == material))
+            try:
+                add_price(
+                    session,
+                    firm.id,
+                    supplier.id,
+                    resource_id=resource_id,
+                    unit_price=Decimal(unit_price),
+                    shipping_cost=Decimal(shipping),
+                )
+            except InvalidMaterialError as error:
+                print(f"salteado  precio    {material}: {error.detail}")
+                continue
+            print(f"creado    precio    {material} a {unit_price} + envío {shipping}")
 
 
 def main() -> None:
