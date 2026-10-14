@@ -611,3 +611,15 @@ Tres cosas que se precisaron al implementar (el detalle está en ADR-010 §8):
 **Queda:** la Definition of Done de HU-17: promoción `dev → main`, verificación a mano en Azure y el responsive a 375px. Queda liberada **HU-18** (comparar compras).
 
 *Integrada a `dev` el 2026-10-13, después de HU-19: las tres ramas se rebasearon sobre `dev` y la migración de proveedores pasó a colgar de la última de planificación (`f5b2d8c41a96`), para no dejar dos heads de Alembic.*
+
+**2026-10-14.** **HU-18 implementada** en una sola rama, `feat/hu18-purchasing`. No cambia el esquema: la comparación se calcula al leer y no se guarda.
+
+- **Por material:** vista "Comparar" en Proveedores. Se elige un material y una cantidad (1 por defecto), y se ven todos los proveedores del estudio que lo ofrecen, del más barato al más caro, con el más económico destacado. Si empatan, se destacan todos. Al cambiar la cantidad la lista se reordena.
+- **Por obra:** pestaña "Compras", con la misma regla de acceso que Dashboard y Presupuestos (el `client` no la ve). Cada material del cómputo trae su cantidad, el proveedor más económico para esa cantidad, su costo total y el costo a precio de referencia. Cada fila se despliega con todas las ofertas. Si nadie ofrece un material, aparece "Sin proveedor".
+- **Sin total general de compra:** la comparación es material por material, y la suma de los ganadores se leería como la compra óptima que el pedido excluye.
+- **El presupuesto no cambia:** sigue con el precio de referencia, y las dos pantallas rotulan cuál es cuál.
+- El seed local suma tres proveedores a Estudio Norte, pensados para mostrar la regla. Corralón Norte (precio más bajo, cobra envío) gana los 7.200 ladrillos de Casa Rodríguez, Corralón Sur (envío gratis) gana 100, y en 1.000 empatan. La cal no la ofrece nadie.
+
+El detalle de lo que se precisó está en ADR-010 §8.
+
+**Falta para cerrar HU-18:** la revisión visual de los criterios y de 375px, y el PR a `dev`.

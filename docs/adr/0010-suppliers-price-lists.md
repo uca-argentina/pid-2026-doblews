@@ -154,7 +154,7 @@ Van en el servicio, cada una con su test:
 - `GET /firms/{firm_id}/purchasing/compare?resource_id=&quantity=` — `supplier.view`.
 - `GET /firms/{firm_id}/projects/{project_id}/purchasing` — `project.cost.view` o `project.view_all`.
 
-**Precisado al implementar HU-17** (las dos rutas de comparación son de HU-18 y todavía no existen):
+**Precisado al implementar HU-17:**
 
 - `GET .../suppliers/{supplier_id}` devuelve el proveedor **con su lista**, para que la pantalla de un proveedor se arme con un solo pedido; `.../prices` queda para quien solo necesite la lista.
 - `PATCH` es parcial: un campo enviado como `null` se borra y uno no enviado se conserva. El nombre es obligatorio y no se puede borrar. En un renglón solo se editan los importes: el material lo identifica, y para cotizar otro se quita el renglón y se agrega el otro.
@@ -162,6 +162,16 @@ Van en el servicio, cada una con su test:
 - Errores: 404 para un proveedor o renglón ajeno, dado de baja o inexistente (el mismo para los tres); 409 para un nombre repetido entre activos o un material ya listado; 422 para un material que no se puede cotizar (mano de obra, equipo, dado de baja o inexistente).
 - El `client` del estudio recibe **403** en toda la sección (no una lista vacía): son costos del estudio.
 - Cada renglón devuelve también el `reference_price` del material, para que la pantalla muestre los dos precios lado a lado y diga siempre cuál es cuál (§5).
+
+**Precisado al implementar HU-18:**
+
+- Las dos rutas devuelven, por material, la cantidad, el `reference_price`, el costo de esa cantidad a precio de referencia (`reference_total`) y las ofertas **ordenadas de la más barata a la más cara**. Cada oferta trae precio, envío, total, `price_updated_at` y `cheapest`, que es `true` en **todas** las empatadas en el mínimo. Entre totales iguales se ordena por nombre de proveedor, para que la lista no cambie de orden entre una lectura y otra.
+- El total redondea el producto al centavo hacia arriba en el medio (`ROUND_HALF_UP`), como `round()` de Postgres en el cómputo, y después suma el envío.
+- `quantity` es opcional en `/compare` (1 por defecto), mayor que cero y con hasta 3 decimales, la escala del cómputo. Comparar mano de obra, equipo o un material dado de baja o inexistente da **422**, el mismo error que al cotizarlo en HU-17.
+- La vista de la obra compara solo los recursos `material` del cómputo, con la cantidad y el costo de referencia de HU-5, así que coincide al centavo con el presupuesto. Un material sin ofertas, o que el catálogo dio de baja, aparece con la lista vacía: es el "sin proveedor" de la pantalla.
+- **No hay total general de la compra.** Sumar el más barato de cada material se leería como una compra óptima, que el pedido excluye.
+- Las dos respuestas traen `has_suppliers`, para que la pantalla distinga "el estudio no tiene proveedores" (estado vacío, con un llamado a cargar el primero) de "nadie ofrece este material".
+- En el front, la comparación por material es la vista "Comparar" de la sección Proveedores, y la de la obra es la pestaña "Compras", visible con la misma regla que Dashboard y Presupuestos.
 
 ---
 
