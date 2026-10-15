@@ -623,3 +623,15 @@ Tres cosas que se precisaron al implementar (el detalle está en ADR-010 §8):
 El detalle de lo que se precisó está en ADR-010 §8.
 
 **Falta para cerrar HU-18:** la revisión visual de los criterios y de 375px, y el PR a `dev`.
+
+**2026-10-15 (T-09).** **Datos de demo implementados** (`chore/t09-demo-data`), todo en `backend/app/db/seed_dev.py`. "Casa Rodríguez" ahora abre Planificación, Gantt, Avance y Dashboard con datos.
+
+- **Presupuesto:** una v1 ("Presupuesto inicial") y, después de guardarla, 220 m² de "Revoque grueso a la cal", la receta propia del estudio. El actualizado queda un 44% por encima del original.
+- **Planificación:** seis tareas encadenadas, con las líneas del cómputo asignadas y los cuatro estados. La excavación terminó dos días tarde y lo que sigue se corrió: "Mampostería planta baja" pasó su fin planificado y aparece **Atrasada**; "Instalación sanitaria" está pausada y por detrás, pero dentro de sus fechas. La obra termina 4 días hábiles después de lo planificado.
+- **Las fechas son relativas al día en que se corre:** la obra empieza 22 días hábiles antes. Si se siembra mucho antes de la defensa, para ese día habrá más tareas atrasadas, porque nadie registró avance; conviene sembrar cerca de la fecha.
+- **La planificación fijada es el plan del primer día**, no el de hoy. `fix_baseline` copia las fechas como caen hoy, después de los atrasos, y la obra hubiera dado exactamente en su plan. El seed calcula la línea base con `compute_schedule` como si fuera el día de inicio y la escribe en las mismas columnas. Es el único lugar donde el seed escribe sin pasar por un servicio.
+- **Corre sobre la obra ya existente**, que es el caso de Azure: el presupuesto y la planificación son pasos aparte, cada uno con su guarda. El presupuesto se siembra si la obra no tiene ninguna versión guardada; la planificación, si nunca tuvo tareas y no tiene fecha de inicio. Si no, `ya estaba`, como en T-04 y T-06.
+
+`tests/test_seed_dev.py` fija lo que se ve en las pantallas, leído por los mismos endpoints, y que una segunda corrida no escribe nada.
+
+**Falta:** correr el seed en Azure, que va con T-10.
