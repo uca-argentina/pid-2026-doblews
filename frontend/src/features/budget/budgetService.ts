@@ -1,7 +1,7 @@
 import { api } from "../../lib/api";
 import type { BudgetOut } from "./types";
 
-/** The one call HU-11's screen makes. The budget is derived from the take-off,
+/** The one call the live budget makes, from the take-off's screen. The budget is derived from the take-off,
  * so there is nothing to write here: HU-5's line endpoints are what change it. */
 export async function fetchBudget(
   firmId: number,

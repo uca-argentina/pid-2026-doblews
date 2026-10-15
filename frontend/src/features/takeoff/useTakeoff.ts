@@ -4,6 +4,7 @@ import {
   createLine,
   fetchTakeoff,
   removeLine,
+  setLineTask,
   updateLine,
 } from "./takeoffService";
 import type { TakeoffLineCreate, TakeoffLineUpdate } from "./types";
@@ -68,5 +69,19 @@ export function useUpdateLine(firmId: number, projectId: number) {
 export function useRemoveLine(firmId: number, projectId: number) {
   return useTakeoffWrite(firmId, projectId, (lineId: number) =>
     removeLine(firmId, projectId, lineId),
+  );
+}
+
+/** Assigns one line to a task, or to none (HU-13).
+ *
+ * Refreshes the take-off only. The planning shows the same link from the
+ * other side, but it is another tab: its query is refetched when that screen
+ * mounts, so there is nothing on screen here to keep in step with it. */
+export function useSetLineTask(firmId: number, projectId: number) {
+  return useTakeoffWrite(
+    firmId,
+    projectId,
+    (variables: { lineId: number; taskId: number | null }) =>
+      setLineTask(firmId, projectId, variables.lineId, variables.taskId),
   );
 }

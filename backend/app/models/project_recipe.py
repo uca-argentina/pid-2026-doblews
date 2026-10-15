@@ -49,10 +49,19 @@ class ProjectRecipe(Base):
             ["project_id", "firm_id"],
             ["project.id", "project.firm_id"],
         ),
+        # A line belongs to at most one task, and only to a task of its own work
+        # (ADR-009 section 1): the pair has to exist in project_task. With
+        # task_id NULL the constraint is not checked, which is an unassigned line.
+        ForeignKeyConstraint(
+            ["task_id", "project_id"],
+            ["project_task.id", "project_task.project_id"],
+        ),
         # The take-off query of ADR-003 section 2 filters by project_id.
         Index("ix_project_recipe_project_id", "project_id"),
         # Every read filters by firm_id, from the base repository (ADR-002 8).
         Index("ix_project_recipe_firm_id", "firm_id"),
+        # "The lines of this task", which is how a task's cost is added up.
+        Index("ix_project_recipe_task_id", "task_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
@@ -65,6 +74,10 @@ class ProjectRecipe(Base):
     # Plain FK, not composite: the catalogue is global, so there is no firm to
     # match against.
     recipe_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("recipe.id"))
+
+    # The task this line is carried out in, or NULL while unassigned. Its cost
+    # is what the task costs (ADR-009 section 8).
+    task_id: Mapped[int | None] = mapped_column(BigInteger)
 
     # What was measured on site, in the recipe's own unit. Three decimals is
     # enough for a surface or a volume; this is not money either.

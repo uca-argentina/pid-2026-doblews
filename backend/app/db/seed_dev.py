@@ -7,29 +7,45 @@ with a known password. Idempotent: running it twice changes nothing.
     uv run python -m app.db.seed_dev
 """
 
+from datetime import date
 from decimal import Decimal
 
 from sqlalchemy import make_url, select
 from sqlalchemy.orm import Session
 
+from app.core.clock import today
 from app.core.config import get_settings
 from app.core.security import hash_password
 from app.db.session import SessionLocal
 from app.models import (
     Account,
+    BudgetVersion,
     Firm,
     FirmMember,
     PlatformMember,
     Project,
+    ProjectRecipe,
+    ProjectTask,
     Recipe,
     Resource,
     Role,
+    Supplier,
     UnitOfMeasure,
 )
+from app.repositories.project_task import ProjectTaskRepository
+from app.services.budget_versions import BudgetVersionError, save_version
 from app.services.catalog_admin import CatalogError, InvalidReferenceError, RecipeLineInput
 from app.services.firm_recipes import create_firm_recipe
 from app.services.project import ProjectError, create_project
+from app.services.schedule import (
+    TaskInput,
+    add_business_days,
+    compute_schedule,
+    subtract_business_days,
+)
+from app.services.suppliers import InvalidMaterialError, add_price, create_supplier
 from app.services.takeoff import add_line
+from app.services.tasks import assign_lines, create_task, set_progress, transition
 
 SUPPORT = ("Soporte warchitecture", "soporte@warchitecture.test")
 
@@ -64,6 +80,66 @@ DEMO_WORK = (
     ],
 )
 
+# The demo work's first saved budget (HU-12), and a line loaded after it, so
+# HU-19's dashboard opens with the updated budget above the original. The line
+# is the firm's own recipe (FIRM_RECIPE), measured after the walls were.
+# (version note, (recipe, quantity, note))
+DEMO_BUDGET = ("Presupuesto inicial", ("Revoque grueso a la cal", "220", "interior"))
+
+# The demo work's planning (HU-13 to HU-16), dated around the day the seed runs:
+# "today" moves, and a demo seeded weeks before the defence would otherwise
+# show a work finished long ago. Days are working days counted from the work's
+# start, which is day 0; today is DEMO_TODAY.
+#
+# The story it tells: the excavation ran two days over, everything after it
+# shifted, and the ground-floor walls are now past the end they were planned
+# for — late in the Avance tab from the first day, and the reason the work
+# ends after its fixed planning in the dashboard. The plumbing is paused and
+# behind, but still inside its dates, so it is not marked late.
+DEMO_TODAY = 22
+
+# (task, duration, predecessors, take-off lines by (recipe, note), assigned to the lead)
+DEMO_TASKS = [
+    ("Replanteo y excavación", 5, [], [], True),
+    ("Contrapiso", 6, ["Replanteo y excavación"], [("Contrapiso de cascote", None)], True),
+    (
+        "Mampostería planta baja",
+        10,
+        ["Contrapiso"],
+        [("Pared de ladrillo común 15cm", "planta baja")],
+        True,
+    ),
+    ("Instalación sanitaria", 15, ["Contrapiso"], [], False),
+    (
+        "Mampostería planta alta",
+        12,
+        ["Mampostería planta baja"],
+        [("Pared de ladrillo común 15cm", "planta alta")],
+        True,
+    ),
+    (
+        "Revoque grueso",
+        15,
+        ["Mampostería planta alta"],
+        [("Revoque grueso a la cal", "interior")],
+        False,
+    ),
+]
+
+# What happened on site, in order. (task, action, working day or None)
+DEMO_HISTORY = [
+    ("Replanteo y excavación", "start", 0),
+    ("Replanteo y excavación", "finish", 6),
+    ("Contrapiso", "start", 7),
+    ("Contrapiso", "finish", 13),
+    ("Instalación sanitaria", "start", 14),
+    ("Mampostería planta baja", "start", 15),
+    ("Instalación sanitaria", "pause", None),
+]
+
+# The progress recorded on the tasks still open. (task, percent)
+DEMO_PROGRESS = [("Mampostería planta baja", 50), ("Instalación sanitaria", 20)]
+
 
 # One recipe of Estudio Norte's own (HU-9), so its catalogue shows both origins
 # and Estudio Sur has something it must not see.
@@ -82,6 +158,46 @@ FIRM_RECIPE = (
         ("Ayudante", "0.6000"),
     ],
 )
+
+
+# Estudio Norte's suppliers (HU-17), priced so HU-18's comparison has something
+# to show on Casa Rodríguez. Norte is cheaper per unit but charges for delivery,
+# Sur delivers free: Norte wins the work's 7,200 bricks, Sur wins a hundred, and
+# at exactly 1,000 they tie. The lime is on nobody's list, so the work shows a
+# material "sin proveedor".
+# (firm, supplier, contact, phone, [(material, unit price, shipping)])
+SUPPLIERS = [
+    (
+        "Estudio Norte",
+        "Corralón Norte",
+        "Marta Ríos",
+        "388 555 0101",
+        [
+            ("Ladrillo común", "220.00", "5000.00"),
+            ("Cemento portland (bolsa 50 kg)", "15500.00", "8000.00"),
+        ],
+    ),
+    (
+        "Estudio Norte",
+        "Corralón Sur",
+        "Hugo Paz",
+        "388 555 0202",
+        [
+            ("Ladrillo común", "225.00", "0.00"),
+            ("Cemento portland (bolsa 50 kg)", "15800.00", "0.00"),
+        ],
+    ),
+    (
+        "Estudio Norte",
+        "Arenera del Río",
+        None,
+        "388 555 0303",
+        [
+            ("Arena gruesa", "42000.00", "12000.00"),
+            ("Cascote", "36000.00", "12000.00"),
+        ],
+    ),
+]
 
 
 def _role(session: Session, code: str, scope: str) -> Role:
@@ -159,6 +275,9 @@ def seed(session: Session, password: str) -> None:
 
     _seed_firm_recipe(session, firms)
     _seed_demo_work(session, firms)
+    _seed_demo_budget(session, firms)
+    _seed_demo_planning(session, firms)
+    _seed_suppliers(session, firms)
 
 
 def _seed_firm_recipe(session: Session, firms: dict[str, Firm]) -> None:
@@ -256,6 +375,217 @@ def _seed_demo_work(session: Session, firms: dict[str, Firm]) -> None:
         )
         add_line(session, project, recipe_id=recipe_id, quantity=Decimal(quantity), note=note)
         print(f"creada    computo  {quantity} x {recipe_name}")
+
+
+def _demo_project(session: Session, firms: dict[str, Firm]) -> Project | None:
+    """The demo work, if it is there and active.
+
+    None when it was archived by hand, or never created because the roster
+    was edited first (_seed_demo_work skips it then).
+    """
+    firm_name, work_name, *_ = DEMO_WORK
+    session.flush()  # the work, if _seed_demo_work just created it
+    return session.scalar(
+        select(Project).where(
+            Project.firm_id == firms[firm_name].id,
+            Project.name == work_name,
+            Project.is_active,
+        )
+    )
+
+
+def _seed_demo_budget(session: Session, firms: dict[str, Firm]) -> None:
+    """Save the demo work's v1, then load one more line on top of it.
+
+    A step of its own and not part of _seed_demo_work, because the deployed
+    environment already has the work from an earlier seed and that function
+    skips it whole. This one asks its own question: does the work have any
+    saved version? If it does, someone saved one on the screen, and the
+    version numbers are theirs.
+    """
+    _, work_name, lead_email, *_ = DEMO_WORK
+    note, (recipe_name, quantity, line_note) = DEMO_BUDGET
+
+    project = _demo_project(session, firms)
+    if project is None:
+        print(f"salteado  presupuesto: la obra {work_name} no existe o no está activa")
+        return
+    saved = session.scalar(
+        select(BudgetVersion.id).where(BudgetVersion.project_id == project.id).limit(1)
+    )
+    if saved is not None:
+        print(f"ya estaba  presupuesto de {work_name}")
+        return
+
+    lead = session.scalar(select(Account).where(Account.email == lead_email))
+    try:
+        version = save_version(session, project, account_id=lead.id, note=note)
+    except BudgetVersionError as error:
+        print(f"salteado  presupuesto: {error.detail}")
+        return
+    print(f"creada    version  v{version.version_number} de {work_name} ({note})")
+
+    # The firm's own recipe, not a general one of the same name.
+    recipe_id = session.scalar(
+        select(Recipe.id).where(
+            Recipe.firm_id == project.firm_id, Recipe.name == recipe_name, Recipe.is_active
+        )
+    )
+    if recipe_id is None:
+        print(f"salteada  computo  {recipe_name}: el estudio ya no tiene esa receta")
+        return
+    add_line(session, project, recipe_id=recipe_id, quantity=Decimal(quantity), note=line_note)
+    print(f"creada    computo  {quantity} x {recipe_name}, después de la v{version.version_number}")
+
+
+def _seed_demo_planning(session: Session, firms: dict[str, Firm]) -> None:
+    """The demo work's tasks, their history on site and a fixed planning.
+
+    A step of its own for the same reason as _seed_demo_budget: the deployed
+    work already exists. Runs only on a work that never had a task, removed ones
+    included, and has no start date: either means someone planned it on the
+    screen, and dates seeded on top of theirs would make no sense of either.
+
+    Everything goes through the services the routes use — create_task,
+    assign_lines, transition, set_progress — so the dependencies, the start
+    block and the status rules hold exactly as over HTTP. Except the baseline:
+    see _write_original_baseline.
+    """
+    _, work_name, lead_email, *_ = DEMO_WORK
+    project = _demo_project(session, firms)
+    if project is None:
+        print(f"salteada  planificacion: la obra {work_name} no existe o no está activa")
+        return
+    had_tasks = session.scalar(
+        select(ProjectTask.id).where(ProjectTask.project_id == project.id).limit(1)
+    )
+    if had_tasks is not None or project.estimated_start_date is not None:
+        print(f"ya estaba  planificacion de {work_name}")
+        return
+
+    start = subtract_business_days(today(), DEMO_TODAY + 1)
+
+    def day(n: int) -> date:
+        return start if n == 0 else add_business_days(start, n + 1)
+
+    project.estimated_start_date = start
+    lead = session.scalar(select(Account).where(Account.email == lead_email))
+
+    tasks: dict[str, ProjectTask] = {}
+    for name, duration, predecessors, lines, assigned in DEMO_TASKS:
+        tasks[name] = create_task(
+            session,
+            project,
+            name=name,
+            estimated_duration_days=duration,
+            assignee_account_id=lead.id if assigned else None,
+            predecessor_ids=[tasks[p].id for p in predecessors],
+        )
+        line_ids = _unassigned_lines(session, project, lines)
+        if line_ids:
+            assign_lines(session, tasks[name], line_ids)
+        print(f"creada    tarea    {name} ({duration} días, {len(line_ids)} líneas)")
+
+    _write_original_baseline(session, project, list(tasks.values()))
+
+    for name, action, on in DEMO_HISTORY:
+        transition(session, tasks[name], action, on_date=None if on is None else day(on))
+    for name, percent in DEMO_PROGRESS:
+        set_progress(session, tasks[name], percent)
+    print(f"creada    planificacion de {work_name}, iniciada el {start}")
+
+
+def _unassigned_lines(
+    session: Session, project: Project, wanted: list[tuple[str, str | None]]
+) -> list[int]:
+    """The ids of the work's live, unassigned lines matching these (recipe, note).
+
+    A line edited or removed on the screen simply is not found, and the task is
+    created with fewer lines rather than not at all.
+    """
+    ids = []
+    for recipe_name, note in wanted:
+        line_id = session.scalar(
+            select(ProjectRecipe.id)
+            .join(Recipe, Recipe.id == ProjectRecipe.recipe_id)
+            .where(
+                ProjectRecipe.project_id == project.id,
+                ProjectRecipe.is_active,
+                ProjectRecipe.task_id.is_(None),
+                ProjectRecipe.note.is_not_distinct_from(note),
+                Recipe.name == recipe_name,
+            )
+            .limit(1)
+        )
+        if line_id is None:
+            print(f"salteada  linea    {recipe_name} ({note}): no está en el cómputo")
+        else:
+            ids.append(line_id)
+    return ids
+
+
+def _write_original_baseline(session: Session, project: Project, tasks: list[ProjectTask]) -> None:
+    """Fix the planning as it stood on the work's first day, not today.
+
+    fix_baseline copies the dates as they fall *today*, after whatever delays
+    happened: seeded through it, the demo would show a work exactly on its
+    plan. So the copy is computed here with the same compute_schedule, asking
+    what the dates were on the start day — every task still pending — and
+    written onto the columns fix_baseline writes. It is the only place the seed
+    writes past a service, and why the comparison has something to compare.
+    """
+    start = project.estimated_start_date
+    schedule = compute_schedule(
+        start,
+        [TaskInput(id=t.id, duration=t.estimated_duration_days, status=t.status) for t in tasks],
+        ProjectTaskRepository(session, firm_id=project.firm_id).edges(project.id),
+        start,
+    )
+    for task in tasks:
+        task.baseline_start_date = schedule.tasks[task.id].planned_start
+        task.baseline_end_date = schedule.tasks[task.id].planned_end
+    project.baseline_set_on = start
+    project.baseline_end_date = schedule.project_end
+    session.flush()
+
+
+def _seed_suppliers(session: Session, firms: dict[str, Firm]) -> None:
+    """The firm's suppliers and their lists, through HU-17's own service.
+
+    A supplier is created with its list only if the firm has no active one of
+    that name, and left alone otherwise, so prices edited on the screen survive a
+    re-seed. A material the catalogue no longer has is skipped with a notice.
+    """
+    for firm_name, name, contact, phone, prices in SUPPLIERS:
+        firm = firms[firm_name]
+        exists = session.scalar(
+            select(Supplier.id).where(
+                Supplier.firm_id == firm.id, Supplier.name == name, Supplier.is_active
+            )
+        )
+        if exists is not None:
+            print(f"ya estaba  proveedor {name} ({firm_name})")
+            continue
+
+        session.flush()  # the firm row, if it was created above
+        supplier = create_supplier(session, firm.id, name=name, contact_name=contact, phone=phone)
+        print(f"creado    proveedor {name} ({firm_name})")
+
+        for material, unit_price, shipping in prices:
+            resource_id = session.scalar(select(Resource.id).where(Resource.name == material))
+            try:
+                add_price(
+                    session,
+                    firm.id,
+                    supplier.id,
+                    resource_id=resource_id,
+                    unit_price=Decimal(unit_price),
+                    shipping_cost=Decimal(shipping),
+                )
+            except InvalidMaterialError as error:
+                print(f"salteado  precio    {material}: {error.detail}")
+                continue
+            print(f"creado    precio    {material} a {unit_price} + envío {shipping}")
 
 
 def main() -> None:

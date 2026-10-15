@@ -13,6 +13,12 @@ export interface RecipeRef {
   unit: UnitRef;
 }
 
+/** The task of the planning a line is assigned to: enough to name it. */
+export interface TaskRef {
+  id: number;
+  name: string;
+}
+
 /** One line of the take-off: this much of a recipe, maybe with a note that
  * tells it apart from another line of the same recipe ("planta baja"). */
 export interface TakeoffLineOut {
@@ -21,6 +27,9 @@ export interface TakeoffLineOut {
   /** In the recipe's own unit: "120.000" of a per-m2 wall is 120 m2. */
   quantity: string;
   note: string | null;
+  /** The task this line is carried out in (HU-13), or null while it is
+   * assigned to none. Its cost is what that task costs. */
+  task: TaskRef | null;
 }
 
 /** One resource the work needs, summed across every line that uses it.
@@ -44,9 +53,9 @@ export interface TakeoffMaterialOut {
 export interface TakeoffOut {
   lines: TakeoffLineOut[];
   materials: TakeoffMaterialOut[];
-  /** The sum of the materials' costs as shown. "0.00" for an empty take-off,
-   * null when the caller may not see costs — which is what the screen asks
-   * before rendering any cost at all. */
+  /** The sum of the materials' costs. "0.00" for an empty take-off, null when
+   * the caller may not see costs. Not shown: the screen takes its total, and
+   * every other price, from the budget. */
   total_cost: string | null;
   currency: string;
   /** An instant: the oldest price the costs are built from, for "precios de

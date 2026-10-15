@@ -10,8 +10,9 @@ interface TakeoffLinesProps {
   renderActions?: (line: TakeoffLineOut) => ReactNode;
 }
 
-/** What was loaded onto the work: each recipe, how much of it, and the note
- * that tells two lines of the same recipe apart.
+/** What was loaded onto the work: each recipe, how much of it, the note that
+ * tells two lines of the same recipe apart, and the task of the planning it is
+ * assigned to (HU-13).
  *
  * The order is the backend's — recipe, then note — so two storeys of the same
  * wall sit next to each other and nothing reshuffles between reloads. */
@@ -24,6 +25,7 @@ export function TakeoffLines({ lines, renderActions }: TakeoffLinesProps) {
             <Table.Tr>
               <Table.Th>Receta</Table.Th>
               <Table.Th>Nota</Table.Th>
+              <Table.Th>Tarea</Table.Th>
               <Table.Th ta="right">Cantidad</Table.Th>
               {/* No heading, like the roster's actions column: the menu's own
                   label says what it does. */}
@@ -41,6 +43,11 @@ export function TakeoffLines({ lines, renderActions }: TakeoffLinesProps) {
                 <Table.Td>
                   <Text size="sm" c={line.note ? undefined : "dimmed"}>
                     {line.note ?? "—"}
+                  </Text>
+                </Table.Td>
+                <Table.Td>
+                  <Text size="sm" c={line.task ? undefined : "dimmed"}>
+                    {line.task?.name ?? "Sin asignar"}
                   </Text>
                 </Table.Td>
                 <Table.Td ta="right">
@@ -70,6 +77,9 @@ export function TakeoffLines({ lines, renderActions }: TakeoffLinesProps) {
                 <Text size="sm" mt={4}>
                   {formatQuantity(line.quantity)}{" "}
                   {line.recipe.unit.abbreviation}
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {line.task ? `Tarea: ${line.task.name}` : "Sin asignar"}
                 </Text>
               </div>
               {renderActions?.(line)}

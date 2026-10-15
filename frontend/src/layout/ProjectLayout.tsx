@@ -1,9 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import {
   Anchor,
-  Button,
   Center,
-  Group,
   Loader,
   Stack,
   Tabs,
@@ -19,8 +17,6 @@ import {
   useParams,
 } from "react-router-dom";
 import { useCurrentFirm } from "../features/firms/firmContext";
-import { ArchiveProjectModal } from "../features/projects/ArchiveProjectModal";
-import { ProjectFormModal } from "../features/projects/ProjectFormModal";
 import {
   ProjectContext,
   type CurrentProject,
@@ -38,10 +34,9 @@ const NOT_FOUND = "No encontramos esa obra, o no formás parte de ella.";
  * (take-off) go inside this screen: as child routes they get the work and the
  * caller's permissions on it without fetching either again.
  *
- * The header is also the only place the actions live. Editing and archiving
- * are project-scope permissions, and this is the one response that carries
- * them — which is why the listing links here instead of offering a menu per
- * row.
+ * The header carries the name and the client and nothing to press: editing
+ * and archiving the work are on its data tab (ProjectDetailPage), next to what
+ * they change, so the other tabs open with their own actions only.
  *
  * Unlike FirmLayout, which renders an explanation in place, a work that cannot
  * be seen sends the caller back to the listing. The difference is deliberate:
@@ -63,9 +58,6 @@ export function ProjectLayout() {
   const isValidId = Number.isInteger(projectId) && projectId > 0;
 
   const { data: project, isLoading, isError } = useProject(firm.id, projectId);
-
-  const [editing, setEditing] = useState(false);
-  const [archiving, setArchiving] = useState(false);
 
   const listingPath = `/firms/${firm.id}/projects`;
   const unreachable = !isValidId || isError;
@@ -118,45 +110,14 @@ export function ProjectLayout() {
           </Anchor>
         </div>
 
-        <Group justify="space-between" align="flex-start" wrap="nowrap">
-          <div>
-            <Title order={3}>{current.project.name}</Title>
-            <Text c="dimmed" size="sm">
-              {current.project.client
-                ? `Cliente: ${current.project.client.name}`
-                : "Sin cliente asignado"}
-            </Text>
-          </div>
-
-          <Group gap="sm" wrap="nowrap">
-            {current.can("project.edit") && (
-              <Button variant="default" onClick={() => setEditing(true)}>
-                Editar
-              </Button>
-            )}
-            {current.can("project.archive") && (
-              <Button
-                variant="subtle"
-                color="red"
-                onClick={() => setArchiving(true)}
-              >
-                Dar de baja
-              </Button>
-            )}
-          </Group>
-        </Group>
-
-        <ProjectFormModal
-          opened={editing}
-          project={current.project}
-          onClose={() => setEditing(false)}
-        />
-        <ArchiveProjectModal
-          opened={archiving}
-          project={current.project}
-          onClose={() => setArchiving(false)}
-          onArchived={() => navigate(listingPath, { replace: true })}
-        />
+        <div>
+          <Title order={3}>{current.project.name}</Title>
+          <Text c="dimmed" size="sm">
+            {current.project.client
+              ? `Cliente: ${current.project.client.name}`
+              : "Sin cliente asignado"}
+          </Text>
+        </div>
 
         <ProjectTabs
           basePath={`${listingPath}/${current.project.id}`}
@@ -211,13 +172,58 @@ function ProjectTabs({ basePath, project, firmCan }: ProjectTabsProps) {
         firmCan("project.view_all"),
     },
     {
+      value: "planning",
+      path: "planning",
+      label: "Planificación",
+      // The same two heights as the take-off: every project role holds
+      // project.task.view, the client included, and the owner reaches it
+      // through project.view_all (ADR-009 section 9).
+      visible:
+        project.permissions.includes("project.task.view") ||
+        firmCan("project.view_all"),
+    },
+    {
+      value: "progress",
+      path: "progress",
+      label: "Avance",
+      // HU-16. It reads the planning's own answer, so it opens to exactly
+      // whoever the planning tab opens to.
+      visible:
+        project.permissions.includes("project.task.view") ||
+        firmCan("project.view_all"),
+    },
+    {
+      value: "dashboard",
+      path: "dashboard",
+      label: "Dashboard",
+      // HU-19 is about money, so it takes the saved budgets' rule below (D-16):
+      // project.cost.view on the work, or the owner's project.view_all. The
+      // client of the work does not see it.
+      visible:
+        project.permissions.includes("project.cost.view") ||
+        firmCan("project.view_all"),
+    },
+    {
       value: "budget",
       path: "budget",
-      label: "Presupuesto",
+      // Plural: the tab is the list of budgets saved from the take-off, not
+      // the live one, which is on "Cómputo".
+      label: "Presupuestos",
       // Costs, so a tighter rule than the take-off above: project.cost.view is
-      // what the client of the work lacks, and HU-11 asks for the section to be
+      // what the client of the work lacks, and HU-12 keeps the saved budgets
       // closed to them rather than emptied. project.view_all still lets the
       // owner audit a work they are not on, as everywhere else.
+      visible:
+        project.permissions.includes("project.cost.view") ||
+        firmCan("project.view_all"),
+    },
+    {
+      value: "purchasing",
+      path: "purchasing",
+      label: "Compras",
+      // HU-18: what the work would cost to buy, so the budget's rule again
+      // (ADR-010 section 6) and no permission of its own. The client of the
+      // work does not see it.
       visible:
         project.permissions.includes("project.cost.view") ||
         firmCan("project.view_all"),

@@ -15,7 +15,9 @@ from app.models.firm import Firm
 from app.models.membership import FirmMember, PlatformMember
 from app.models.project import Project, ProjectMember
 from app.models.project_recipe import ProjectRecipe
+from app.models.project_task import ProjectTask, ProjectTaskDependency
 from app.models.role import Permission, Role, RolePermission
+from app.models.supplier import Supplier, SupplierPrice
 from app.models.unit_of_measure import UnitOfMeasure
 
 # Listed so the imports above read as the deliberate registry they are, rather
@@ -32,10 +34,14 @@ __all__ = [
     "Project",
     "ProjectMember",
     "ProjectRecipe",
+    "ProjectTask",
+    "ProjectTaskDependency",
     "Recipe",
     "RecipeResource",
     "Resource",
     "Role",
     "RolePermission",
+    "Supplier",
+    "SupplierPrice",
     "UnitOfMeasure",
 ]

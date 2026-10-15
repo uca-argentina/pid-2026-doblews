@@ -7,6 +7,7 @@ Contexto: el modelo de datos establece que **la base defiende sus propios invari
 1. Leer para tener la lista completa de invariantes esperados:
    - `docs/adr/0002-authorization-model.md` — `firm`, `account`, `role`, `permission`, `project` y las reglas que la base **no** puede garantizar (§11).
    - `docs/modelo-datos-sprint-1.md` — convenciones de modelado (§3) y qué sigue abierto (§5).
+   - `docs/der.md` — el esquema actual tabla por tabla, con sus `CHECK`, unicidades y claves compuestas. Es generado: si `uv run python -m scripts.generate_erd --check` falla, regenerarlo antes de leerlo.
 2. Con la base de `docker compose` levantada, correr desde `backend/`:
    - `uv run alembic upgrade head` — las migraciones aplican limpio.
    - `uv run alembic check` — modelos y migraciones no divergieron.

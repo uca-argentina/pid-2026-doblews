@@ -8,12 +8,16 @@ from app.api.routes import (
     budget_versions,
     catalog,
     catalog_admin,
+    dashboard,
     firms,
     members,
     platform,
     project_members,
     projects,
+    purchasing,
+    suppliers,
     takeoff,
+    tasks,
     units_of_measure,
 )
 
@@ -23,10 +27,14 @@ api_router.include_router(budget.router)
 api_router.include_router(budget_versions.router)
 api_router.include_router(catalog.router)
 api_router.include_router(catalog_admin.router)
+api_router.include_router(dashboard.router)
 api_router.include_router(firms.router)
 api_router.include_router(members.router)
 api_router.include_router(platform.router)
 api_router.include_router(project_members.router)
 api_router.include_router(projects.router)
+api_router.include_router(purchasing.router)
+api_router.include_router(suppliers.router)
 api_router.include_router(takeoff.router)
+api_router.include_router(tasks.router)
 api_router.include_router(units_of_measure.router)

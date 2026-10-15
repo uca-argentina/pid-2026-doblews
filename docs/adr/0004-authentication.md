@@ -1,6 +1,6 @@
 # ADR-004: Autenticación — JWT stateless en el cliente
 
-**Estado:** Propuesta
+**Estado:** Aceptada
 **Fecha:** 2026-09-07
 **Contexto:** HU-1 (iniciar sesión). Define cómo se prueba la identidad en cada request; toda historia posterior se apoya en esto.
 

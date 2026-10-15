@@ -376,14 +376,76 @@ def add_takeoff_line(db: Connection):
         quantity: str,
         note: str | None = None,
         is_active: bool = True,
+        task: int | None = None,
     ) -> int:
         return db.execute(
             text(
                 "INSERT INTO project_recipe"
-                " (project_id, firm_id, recipe_id, quantity, note, is_active)"
-                " VALUES (:p, :f, :r, :q, :n, :a) RETURNING id"
+                " (project_id, firm_id, recipe_id, quantity, note, is_active, task_id)"
+                " VALUES (:p, :f, :r, :q, :n, :a, :t) RETURNING id"
             ),
-            {"p": project, "f": firm, "r": recipe, "q": quantity, "n": note, "a": is_active},
+            {
+                "p": project,
+                "f": firm,
+                "r": recipe,
+                "q": quantity,
+                "n": note,
+                "a": is_active,
+                "t": task,
+            },
+        ).scalar_one()
+
+    return _add
+
+
+@pytest.fixture
+def add_task(db: Connection):
+    """Insert one project_task row: a task of this work, in any state.
+
+    Raw SQL for the same reason as add_takeoff_line: the tests about what the
+    schema refuses, and the reads, need tasks to exist without going through
+    the service that writes them.
+    """
+
+    def _add(
+        project: int,
+        firm: int,
+        name: str = "Tarea de prueba",
+        *,
+        duration: int = 5,
+        status: str = "pending",
+        assignee: int | None = None,
+        actual_start: str | None = None,
+        actual_end: str | None = None,
+        progress: int | None = None,
+        is_active: bool = True,
+    ) -> int:
+        # Left out, the progress is the one the status implies: a finished
+        # task is at a hundred (ADR-009 section 13). Given, it is written as
+        # is, which is how the tests about the CHECKs break them.
+        if progress is None:
+            progress = 100 if status == "finished" else 0
+        return db.execute(
+            text(
+                "INSERT INTO project_task"
+                " (project_id, firm_id, name, estimated_duration_days, status,"
+                "  assignee_account_id, actual_start_date, actual_end_date,"
+                "  progress_percent, is_active)"
+                " VALUES (:p, :f, :n, :d, :s, :a, :start, :end, :progress, :active)"
+                " RETURNING id"
+            ),
+            {
+                "p": project,
+                "f": firm,
+                "n": name,
+                "d": duration,
+                "s": status,
+                "a": assignee,
+                "start": actual_start,
+                "end": actual_end,
+                "progress": progress,
+                "active": is_active,
+            },
         ).scalar_one()
 
     return _add

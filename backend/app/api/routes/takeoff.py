@@ -23,16 +23,19 @@ from app.api.deps import (
 from app.models import Project, ProjectRecipe
 from app.repositories.project import ProjectRepository
 from app.repositories.project_recipe import ProjectRecipeRepository, TakeoffLineEntry
+from app.repositories.project_task import ProjectTaskRepository
 from app.schemas.catalog import UnitRef
 from app.schemas.takeoff import (
     TakeoffLineCreate,
     TakeoffLineOut,
+    TakeoffLineTask,
     TakeoffLineUpdate,
     TakeoffMaterialOut,
     TakeoffOut,
 )
 from app.services.authz import VIEW_ALL
 from app.services.takeoff import TakeoffError, add_line, remove_line, update_line
+from app.services.tasks import TASK_MANAGE, TASK_NOT_AVAILABLE, set_line_task
 
 router = APIRouter(prefix="/firms/{firm_id}/projects/{project_id}/takeoff", tags=["takeoff"])
 
@@ -257,3 +260,47 @@ def delete_line(
 
     remove_line(db, line)
     db.commit()
+
+
+@router.put(
+    "/lines/{line_id}/task",
+    response_model=TakeoffLineOut,
+    # The planning's permission and not the take-off's: this does not change what
+    # the work needs, it changes which task that need is planned in. Today the
+    # same two roles hold both, and the day they do not, this is the one that
+    # should decide.
+    dependencies=[Depends(requires(TASK_MANAGE, "project"))],
+)
+def assign_line_to_task(
+    project_id: int,
+    line_id: int,
+    payload: TakeoffLineTask,
+    account: CurrentAccount,
+    membership: CurrentMembership,
+    granted: FirmPermissions,
+    db: DbSession,
+) -> TakeoffLineOut:
+    """Assign a line to a task of the work's planning, or to none (HU-13).
+
+    The take-off's side of the same link PUT .../tasks/{task_id}/lines writes
+    from the task's side. A line already in another task is moved.
+
+    A task that is gone is a 409 and not a 404: the 404 here is about the line
+    the URL names, and a removed task is the stale-picker case, like a recipe
+    retired while the add form was open.
+    """
+    _load_project(db, membership, account.id, granted, project_id)
+    line = _load_line(db, membership, project_id, line_id)
+
+    task = None
+    if payload.task_id is not None:
+        task = ProjectTaskRepository(db, firm_id=membership.firm_id).task(
+            project_id, payload.task_id
+        )
+        if task is None:
+            raise HTTPException(status.HTTP_409_CONFLICT, detail=TASK_NOT_AVAILABLE)
+
+    set_line_task(db, line, task)
+    db.commit()
+
+    return _read_back(db, membership, project_id, line_id)

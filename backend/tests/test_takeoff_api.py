@@ -34,19 +34,16 @@ def team(world, new_member, add_project_member):
     work: she reaches the take-off only through project.view_all.
     """
     collaborator = new_member(world.firm_a, "carlos@test.com", "architect")
-    viewer = new_member(world.firm_a, "vera@test.com", "architect")
     client = new_member(world.firm_a, "clara@test.com", "client")
     bystander = new_member(world.firm_a, "otto@test.com", "architect")
 
     add_project_member(world.project_a, world.account_a2, world.firm_a, "lead")
     add_project_member(world.project_a, collaborator, world.firm_a, "collaborator")
-    add_project_member(world.project_a, viewer, world.firm_a, "viewer")
     add_project_member(world.project_a, client, world.firm_a, "client")
 
     return {
         "lead": world.account_a2,
         "collaborator": collaborator,
-        "viewer": viewer,
         "client": client,
         "owner": world.account_a,
         "bystander": bystander,
@@ -98,9 +95,9 @@ class TestRead:
         assert by_name[BRICK] == "material"
         assert by_name["Oficial"] == "labor"
 
-    @pytest.mark.parametrize("role", ["collaborator", "viewer", "owner"])
+    @pytest.mark.parametrize("role", ["collaborator", "owner"])
     def test_these_roles_see_the_costs(self, client, world, team, wall, auth_header, role):
-        """viewer holds project.cost.view; the owner sees them through project.view_all."""
+        """The owner is on no work and sees them through project.view_all."""
         body = client.get(takeoff_url(world), headers=auth_header(team[role])).json()
 
         assert body["total_cost"] == "3877800.00"
@@ -224,7 +221,7 @@ class TestCreate:
         assert response.status_code == 409
         assert response.json()["detail"] == RECIPE_NOT_AVAILABLE
 
-    @pytest.mark.parametrize("role", ["viewer", "client", "owner"])
+    @pytest.mark.parametrize("role", ["client", "owner"])
     def test_those_who_only_read_get_403(self, client, world, team, recipe_id, auth_header, role):
         """They can already see the work, so hiding it protects nothing: 403, not 404.
         The owner included — project.view_all opens the reading, not the writing."""
@@ -299,11 +296,11 @@ class TestUpdate:
 
         assert response.status_code == 404
 
-    def test_the_viewer_gets_403(self, client, world, team, wall, auth_header):
+    def test_the_client_gets_403(self, client, world, team, wall, auth_header):
         response = client.put(
             takeoff_url(world, line_id=wall),
             json={"quantity": "80"},
-            headers=auth_header(team["viewer"]),
+            headers=auth_header(team["client"]),
         )
 
         assert response.status_code == 403

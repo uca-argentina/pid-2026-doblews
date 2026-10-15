@@ -8,14 +8,19 @@ import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { HomeRedirect } from "./pages/HomeRedirect";
 import { LoginPage } from "./pages/LoginPage";
 import { MembersPage } from "./pages/MembersPage";
-import { ProjectBudgetPage } from "./pages/ProjectBudgetPage";
 import { ProjectBudgetVersionPage } from "./pages/ProjectBudgetVersionPage";
 import { ProjectBudgetVersionsPage } from "./pages/ProjectBudgetVersionsPage";
+import { ProjectDashboardPage } from "./pages/ProjectDashboardPage";
 import { ProjectDetailPage } from "./pages/ProjectDetailPage";
+import { ProjectPlanningPage } from "./pages/ProjectPlanningPage";
+import { ProjectProgressPage } from "./pages/ProjectProgressPage";
+import { ProjectPurchasingPage } from "./pages/ProjectPurchasingPage";
 import { ProjectTakeoffPage } from "./pages/ProjectTakeoffPage";
 import { ProjectTeamPage } from "./pages/ProjectTeamPage";
 import { NoFirmPage } from "./pages/NoFirmPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
+import { SupplierDetailPage } from "./pages/SupplierDetailPage";
+import { SuppliersPage } from "./pages/SuppliersPage";
 import { PlatformLayout } from "./layout/PlatformLayout";
 import { PasswordResetPage } from "./pages/PasswordResetPage";
 import { PlatformFirmsPage } from "./pages/PlatformFirmsPage";
@@ -101,23 +106,31 @@ function App() {
           <Route path="projects" element={<ProjectsPage />} />
           {/* One work, with its name as the context of everything inside it
               (HU-3). Each tab of the work is a child route: the index is its
-              data, "takeoff" is HU-5's take-off, "budget" is HU-11's, and
-              HU-6's team joins them the same way. */}
+              data, "takeoff" is the take-off with its live budget (HU-5 and
+              HU-11), "budget" is the budgets saved from it (HU-12), and HU-6's
+              team joins them the same way. */}
           <Route path="projects/:projectId" element={<ProjectLayout />}>
             <Route index element={<ProjectDetailPage />} />
             <Route path="takeoff" element={<ProjectTakeoffPage />} />
-            <Route path="budget" element={<ProjectBudgetPage />} />
-            {/* Under "budget" and not beside it, so the Presupuesto tab stays
-                selected while reading a version: the tab matches on the first
-                segment after the work's id (HU-12). */}
+            <Route path="planning" element={<ProjectPlanningPage />} />
+            <Route path="progress" element={<ProjectProgressPage />} />
+            <Route path="dashboard" element={<ProjectDashboardPage />} />
+            <Route path="budget" element={<ProjectBudgetVersionsPage />} />
+            {/* The listing used to live here, one level below the live budget
+                that "budget" showed. Kept as a redirect so a saved link still
+                lands on it. */}
             <Route
               path="budget/versions"
-              element={<ProjectBudgetVersionsPage />}
+              element={<Navigate to=".." relative="path" replace />}
             />
+            {/* Under "budget" and not beside it, so the Presupuestos tab stays
+                selected while reading a version: the tab matches on the first
+                segment after the work's id (HU-12). */}
             <Route
               path="budget/versions/:versionId"
               element={<ProjectBudgetVersionPage />}
             />
+            <Route path="purchasing" element={<ProjectPurchasingPage />} />
             <Route path="team" element={<ProjectTeamPage />} />
           </Route>
           {/* Every firm role holds catalog.view today, so the gate is for the
@@ -130,6 +143,31 @@ function App() {
                 message="Tu rol en este estudio no incluye ver el catálogo."
               >
                 <CatalogPage />
+              </RequirePermission>
+            }
+          />
+          {/* HU-17: the firm's suppliers and their price lists. The detail is
+              a child of the same gate, so reading a list needs supplier.view
+              like the listing does; the client of a firm holds neither. */}
+          <Route
+            path="suppliers"
+            element={
+              <RequirePermission
+                code="supplier.view"
+                message="Tu rol en este estudio no incluye ver los proveedores."
+              >
+                <SuppliersPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="suppliers/:supplierId"
+            element={
+              <RequirePermission
+                code="supplier.view"
+                message="Tu rol en este estudio no incluye ver los proveedores."
+              >
+                <SupplierDetailPage />
               </RequirePermission>
             }
           />

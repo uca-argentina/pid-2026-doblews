@@ -1,5 +1,6 @@
 """The seeded catalogue, checked against ADR-002 section 7, ADR-003 section 8,
-ADR-005 section 2 and ADR-006 section 3.
+ADR-005 section 2, ADR-006 section 3, ADR-007 section 4, ADR-009 section 9
+and ADR-010 section 6.
 
 The expected matrix is typed out here by hand rather than imported from the seed
 migrations. That duplication is the test: a check that reads the same source as
@@ -12,8 +13,9 @@ from sqlalchemy import Connection, text
 # (role code, scope) -> permission codes it grants. The catalogue.* and
 # project.recipe.*/project.cost.* rows come from ADR-003 section 8; catalog.manage
 # comes from ADR-005 section 2; recipe.manage from ADR-006 section 3;
-# project.budget.manage from ADR-007 section 4; everything else from ADR-002
-# section 7.
+# project.budget.manage from ADR-007 section 4; project.task.* from ADR-009
+# section 9; supplier.view and supplier.manage from ADR-010 section 6; everything
+# else from ADR-002 section 7.
 EXPECTED: dict[tuple[str, str], set[str]] = {
     ("support", "platform"): {
         "firm.create",
@@ -38,6 +40,8 @@ EXPECTED: dict[tuple[str, str], set[str]] = {
         "project.view_all",
         "catalog.view",
         "recipe.manage",
+        "supplier.view",
+        "supplier.manage",
     },
     ("architect", "firm"): {
         "firm.view",
@@ -45,9 +49,12 @@ EXPECTED: dict[tuple[str, str], set[str]] = {
         "project.create",
         "catalog.view",
         "recipe.manage",
+        "supplier.view",
+        "supplier.manage",
     },
     # No recipe.manage: the client reads the firm's recipes and never writes them
-    # (HU-9).
+    # (HU-9). No supplier.* either: a supplier's prices are the firm's costs
+    # (ADR-010 section 6).
     ("client", "firm"): {"firm.view", "catalog.view"},
     ("lead", "project"): {
         "project.view",
@@ -59,6 +66,8 @@ EXPECTED: dict[tuple[str, str], set[str]] = {
         "project.recipe.manage",
         "project.cost.view",
         "project.budget.manage",
+        "project.task.view",
+        "project.task.manage",
     },
     ("collaborator", "project"): {
         "project.view",
@@ -68,19 +77,14 @@ EXPECTED: dict[tuple[str, str], set[str]] = {
         "project.recipe.manage",
         "project.cost.view",
         "project.budget.manage",
-    },
-    # No project.budget.manage: the viewer reads the budget and its versions
-    # through project.cost.view, and never freezes or replaces the draft
-    # (ADR-007 section 4).
-    ("viewer", "project"): {
-        "project.view",
-        "project.member.view",
-        "project.recipe.view",
-        "project.cost.view",
+        "project.task.view",
+        "project.task.manage",
     },
     # No project.cost.view: the client sees how much material their work takes,
-    # never what it costs the studio (ADR-003 section 8).
-    ("client", "project"): {"project.view", "project.recipe.view"},
+    # never what it costs the studio (ADR-003 section 8). The same goes for the
+    # planning: project.task.view shows them the tasks, not what each one costs
+    # (ADR-009 section 9).
+    ("client", "project"): {"project.view", "project.recipe.view", "project.task.view"},
 }
 
 GRANTS = text("""
@@ -130,11 +134,7 @@ def test_support_has_no_content_permissions(db: Connection) -> None:
 
 
 def test_the_project_client_does_not_see_costs(db: Connection) -> None:
-    """ADR-003 section 8, and the reason viewer and client exist as two roles.
-
-    Back in ADR-002 they granted the same thing, and were seeded apart anyway on
-    the bet that the difference would show up once money entered the model. This
-    is that bet paying off: the client sees how much material their work takes
+    """ADR-003 section 8: the client sees how much material their work takes
     and never what it costs the studio. "Un cliente no es 've menos': ve otra
     cosa."
 
@@ -145,4 +145,4 @@ def test_the_project_client_does_not_see_costs(db: Connection) -> None:
 
     assert "project.recipe.view" in granted[("client", "project")]
     assert "project.cost.view" not in granted[("client", "project")]
-    assert "project.cost.view" in granted[("viewer", "project")]
+    assert "project.cost.view" in granted[("collaborator", "project")]

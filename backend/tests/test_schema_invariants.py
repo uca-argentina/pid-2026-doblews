@@ -376,6 +376,279 @@ def test_editing_a_resource_moves_updated_at_but_not_the_price_date(db: Connecti
     assert row.priced.year == 2000
 
 
+# --- planning: the tasks of a work -------------------------------------------
+#
+# ADR-009 section 1. What is checked here is what the schema promises on its
+# own: a task carries exactly the actual dates its status implies, its name is
+# unique among the live tasks of its work, and neither a task nor the line
+# assigned to it can cross into another work or another firm. Which status may
+# follow which, and who may be made the assignee, are the service's rules.
+
+
+def test_a_task_must_last_at_least_one_day(db: Connection, world, add_task) -> None:
+    with pytest.raises(IntegrityError, match="ck_project_task_estimated_duration_days_positive"):
+        add_task(world.project_a, world.firm_a, duration=0)
+
+
+def test_a_task_status_is_one_of_the_four(db: Connection, world, add_task) -> None:
+    with pytest.raises(IntegrityError, match="ck_project_task_status_valid"):
+        add_task(world.project_a, world.firm_a, status="cancelled", actual_start="2026-10-01")
+
+
+def test_a_pending_task_has_no_actual_start(db: Connection, world, add_task) -> None:
+    with pytest.raises(IntegrityError, match="ck_project_task_pending_has_no_actual_start"):
+        add_task(world.project_a, world.firm_a, actual_start="2026-10-01")
+
+
+@pytest.mark.parametrize("status", ["in_progress", "paused", "finished"])
+def test_a_started_task_has_its_actual_start(db: Connection, world, add_task, status) -> None:
+    with pytest.raises(IntegrityError, match="ck_project_task_started_has_actual_start"):
+        # The end is given to a finished one, so only the missing start is at fault.
+        add_task(
+            world.project_a,
+            world.firm_a,
+            status=status,
+            actual_end="2026-10-05" if status == "finished" else None,
+        )
+
+
+def test_a_finished_task_has_its_actual_end(db: Connection, world, add_task) -> None:
+    with pytest.raises(IntegrityError, match="ck_project_task_actual_end_iff_finished"):
+        add_task(world.project_a, world.firm_a, status="finished", actual_start="2026-10-01")
+
+
+def test_only_a_finished_task_has_an_actual_end(db: Connection, world, add_task) -> None:
+    with pytest.raises(IntegrityError, match="ck_project_task_actual_end_iff_finished"):
+        add_task(
+            world.project_a,
+            world.firm_a,
+            status="in_progress",
+            actual_start="2026-10-01",
+            actual_end="2026-10-05",
+        )
+
+
+def test_a_task_cannot_end_before_it_started(db: Connection, world, add_task) -> None:
+    with pytest.raises(IntegrityError, match="ck_project_task_actual_end_not_before_start"):
+        add_task(
+            world.project_a,
+            world.firm_a,
+            status="finished",
+            actual_start="2026-10-05",
+            actual_end="2026-10-01",
+        )
+
+
+def test_a_task_may_start_and_end_on_the_same_day(db: Connection, world, add_task) -> None:
+    """The positive half of the rule above: >= and not >."""
+    add_task(
+        world.project_a,
+        world.firm_a,
+        status="finished",
+        actual_start="2026-10-01",
+        actual_end="2026-10-01",
+    )
+
+
+@pytest.mark.parametrize("progress", [-1, 101])
+def test_the_progress_of_a_task_is_a_percentage(db: Connection, world, add_task, progress) -> None:
+    with pytest.raises(IntegrityError, match="ck_project_task_progress_percent_range"):
+        add_task(
+            world.project_a,
+            world.firm_a,
+            status="in_progress",
+            actual_start="2026-10-01",
+            progress=progress,
+        )
+
+
+def test_a_pending_task_has_no_progress(db: Connection, world, add_task) -> None:
+    """The status rules the progress (ADR-009 section 13)."""
+    with pytest.raises(IntegrityError, match="ck_project_task_pending_has_no_progress"):
+        add_task(world.project_a, world.firm_a, progress=10)
+
+
+def test_a_finished_task_is_complete(db: Connection, world, add_task) -> None:
+    with pytest.raises(IntegrityError, match="ck_project_task_finished_is_complete"):
+        add_task(
+            world.project_a,
+            world.firm_a,
+            status="finished",
+            actual_start="2026-10-01",
+            actual_end="2026-10-05",
+            progress=90,
+        )
+
+
+@pytest.mark.parametrize("status", ["in_progress", "paused"])
+@pytest.mark.parametrize("progress", [0, 100])
+def test_a_started_task_may_be_anywhere_from_zero_to_a_hundred(
+    db: Connection, world, add_task, status, progress
+) -> None:
+    """The positive half: a hundred does not make it finished."""
+    add_task(
+        world.project_a,
+        world.firm_a,
+        status=status,
+        actual_start="2026-10-01",
+        progress=progress,
+    )
+
+
+@pytest.mark.parametrize(
+    ("start", "end"), [("2026-10-01", None), (None, "2026-10-05")], ids=["no end", "no start"]
+)
+def test_the_baseline_of_a_task_is_both_dates_or_none(
+    db: Connection, world, add_task, start, end
+) -> None:
+    task = add_task(world.project_a, world.firm_a)
+
+    with pytest.raises(IntegrityError, match="ck_project_task_baseline_dates_together"):
+        db.execute(
+            text(
+                "UPDATE project_task SET baseline_start_date = :start, baseline_end_date = :end"
+                " WHERE id = :t"
+            ),
+            {"start": start, "end": end, "t": task},
+        )
+
+
+def test_the_baseline_of_a_task_cannot_end_before_it_starts(
+    db: Connection, world, add_task
+) -> None:
+    task = add_task(world.project_a, world.firm_a)
+
+    with pytest.raises(IntegrityError, match="ck_project_task_baseline_end_not_before_start"):
+        db.execute(
+            text(
+                "UPDATE project_task SET baseline_start_date = '2026-10-05',"
+                " baseline_end_date = '2026-10-01' WHERE id = :t"
+            ),
+            {"t": task},
+        )
+
+
+@pytest.mark.parametrize(
+    "columns",
+    ["baseline_set_on = '2026-10-01'", "baseline_end_date = '2026-11-27'"],
+    ids=["no end", "no day"],
+)
+def test_the_baseline_of_a_work_is_both_dates_or_none(db: Connection, world, columns) -> None:
+    with pytest.raises(IntegrityError, match="ck_project_baseline_dates_together"):
+        db.execute(text(f"UPDATE project SET {columns} WHERE id = :p"), {"p": world.project_a})
+
+
+def test_two_active_tasks_of_a_work_cannot_share_a_name(db: Connection, world, add_task) -> None:
+    add_task(world.project_a, world.firm_a, "Mampostería")
+
+    with pytest.raises(IntegrityError, match="uq_project_task_name_active"):
+        add_task(world.project_a, world.firm_a, "MAMPOSTERÍA")
+
+
+def test_a_removed_task_frees_its_name(db: Connection, world, add_task) -> None:
+    """Why the index is partial (modelo-datos 3.4): the name is a label."""
+    add_task(world.project_a, world.firm_a, "Mampostería", is_active=False)
+
+    add_task(world.project_a, world.firm_a, "Mampostería")
+
+
+def test_two_works_may_each_have_a_task_of_the_same_name(
+    db: Connection, world, add_task, new_project
+) -> None:
+    other = new_project(world.firm_a, world.account_a, "Casa Este")
+
+    add_task(world.project_a, world.firm_a, "Mampostería")
+    add_task(other, world.firm_a, "Mampostería")
+
+
+def test_a_task_cannot_be_hung_off_another_firms_work(db: Connection, world, add_task) -> None:
+    with pytest.raises(IntegrityError, match="fk_project_task_project_id"):
+        add_task(world.project_a, world.firm_b)
+
+
+def test_a_task_assignee_must_be_on_that_firms_roster(db: Connection, world, add_task) -> None:
+    """account_b exists, but only on firm B's roster."""
+    with pytest.raises(IntegrityError, match="fk_project_task_firm_id"):
+        add_task(world.project_a, world.firm_a, assignee=world.account_b)
+
+
+def test_a_take_off_line_cannot_be_assigned_to_another_works_task(
+    db: Connection, world, add_task, add_takeoff_line, new_project
+) -> None:
+    """Same firm, different work: the firm filter alone would let this through."""
+    other = new_project(world.firm_a, world.account_a, "Casa Este")
+    task = add_task(other, world.firm_a)
+    line = add_takeoff_line(world.project_a, world.firm_a, new_recipe(db), "120")
+
+    with pytest.raises(IntegrityError, match="fk_project_recipe_task_id"):
+        db.execute(
+            text("UPDATE project_recipe SET task_id = :task WHERE id = :line"),
+            {"task": task, "line": line},
+        )
+
+
+def test_editing_a_task_moves_its_updated_at(db: Connection, world, add_task) -> None:
+    """The trigger of modelo-datos 3.11, which only the migration creates."""
+    task = add_task(world.project_a, world.firm_a)
+    db.execute(
+        text("UPDATE project_task SET updated_at = '2000-01-01' WHERE id = :id"), {"id": task}
+    )
+
+    db.execute(text("UPDATE project_task SET name = 'Renombrada' WHERE id = :id"), {"id": task})
+
+    touched = db.execute(
+        text("SELECT updated_at = now() FROM project_task WHERE id = :id"), {"id": task}
+    ).scalar_one()
+    assert touched is True
+
+
+# --- planning: what waits for what --------------------------------------------
+#
+# project_task_dependency, ADR-009 section 1. The schema holds that a task does
+# not wait for itself, that a dependency is not repeated, and that both ends are
+# tasks of the same work. No cycles is a rule over many rows: the service's.
+
+INSERT_DEPENDENCY = (
+    "INSERT INTO project_task_dependency (predecessor_id, successor_id, project_id)"
+    " VALUES (:predecessor, :successor, :project)"
+)
+
+
+def test_a_task_cannot_depend_on_itself(db: Connection, world, add_task) -> None:
+    task = add_task(world.project_a, world.firm_a)
+
+    with pytest.raises(IntegrityError, match="ck_project_task_dependency_not_self"):
+        db.execute(
+            text(INSERT_DEPENDENCY),
+            {"predecessor": task, "successor": task, "project": world.project_a},
+        )
+
+
+def test_a_dependency_cannot_be_repeated(db: Connection, world, add_task) -> None:
+    first = add_task(world.project_a, world.firm_a, "Cimientos")
+    second = add_task(world.project_a, world.firm_a, "Mampostería")
+    row = {"predecessor": first, "successor": second, "project": world.project_a}
+    db.execute(text(INSERT_DEPENDENCY), row)
+
+    with pytest.raises(IntegrityError, match="pk_project_task_dependency"):
+        db.execute(text(INSERT_DEPENDENCY), row)
+
+
+def test_a_dependency_cannot_join_tasks_of_two_works(
+    db: Connection, world, add_task, new_project
+) -> None:
+    """Same firm, different work: whichever project_id is claimed, one end fails."""
+    other = new_project(world.firm_a, world.account_a, "Casa Este")
+    here = add_task(world.project_a, world.firm_a)
+    there = add_task(other, world.firm_a)
+
+    with pytest.raises(IntegrityError, match="fk_project_task_dependency_successor_id"):
+        db.execute(
+            text(INSERT_DEPENDENCY),
+            {"predecessor": here, "successor": there, "project": world.project_a},
+        )
+
+
 # --- saved budget versions --------------------------------------------------
 #
 # ADR-007's three tables. What is checked here is what the schema promises on its
@@ -550,3 +823,157 @@ def test_deleting_a_version_takes_its_items_and_lines_with_it(db: Connection, wo
         {"v": version},
     ).scalar_one()
     assert orphans == 0
+
+
+# --- suppliers and their price lists ----------------------------------------
+#
+# ADR-010's two tables. What is checked here is what the schema promises on its
+# own: a supplier's name is unique among the firm's active ones, a price cannot
+# hang off another firm's supplier, the amounts cannot be negative, and a supplier
+# does not repeat a material. That the material is a material and not labour or
+# equipment is the service's job (ADR-010 section 7), and so is its test.
+
+INSERT_SUPPLIER = "INSERT INTO supplier (firm_id, name) VALUES (:firm, :name) RETURNING id"
+
+INSERT_SUPPLIER_PRICE = (
+    "INSERT INTO supplier_price"
+    " (supplier_id, firm_id, resource_id, unit_price, shipping_cost, currency)"
+    " VALUES (:supplier, :firm, :resource, :price, :shipping, :currency) RETURNING id"
+)
+
+
+def new_supplier(db: Connection, firm: int, name: str = "Corralón de prueba") -> int:
+    return db.execute(text(INSERT_SUPPLIER), {"firm": firm, "name": name}).scalar_one()
+
+
+def new_supplier_price(db: Connection, supplier: int, firm: int, resource: int, **overrides) -> int:
+    """A valid price row, plus whatever the caller wants wrong about it."""
+    row = {
+        "supplier": supplier,
+        "firm": firm,
+        "resource": resource,
+        "price": 230,
+        "shipping": 1500,
+        "currency": "ARS",
+    } | overrides
+    return db.execute(text(INSERT_SUPPLIER_PRICE), row).scalar_one()
+
+
+def test_two_active_suppliers_of_one_firm_cannot_share_a_name(db: Connection, world) -> None:
+    """The lower() in the index is what keeps "Corralón Norte" and "corralón norte"
+    from coexisting (modelo-datos 3.4)."""
+    new_supplier(db, world.firm_a, "Corralón de prueba")
+
+    with pytest.raises(IntegrityError, match="uq_supplier_name_active"):
+        new_supplier(db, world.firm_a, "CORRALÓN DE PRUEBA")
+
+
+def test_two_firms_may_each_have_a_supplier_of_the_same_name(db: Connection, world) -> None:
+    """The index is per firm: a supplier's name says nothing outside its tenant."""
+    new_supplier(db, world.firm_a)
+    new_supplier(db, world.firm_b)
+
+
+def test_a_deactivated_supplier_frees_its_name(db: Connection, world) -> None:
+    """The positive half of modelo-datos 3.4, and the reason the index is partial."""
+    supplier = new_supplier(db, world.firm_a)
+    db.execute(text("UPDATE supplier SET is_active = false WHERE id = :s"), {"s": supplier})
+
+    new_supplier(db, world.firm_a)
+
+
+def test_a_supplier_cannot_belong_to_a_firm_that_does_not_exist(db: Connection) -> None:
+    with pytest.raises(IntegrityError, match="fk_supplier_firm_id"):
+        new_supplier(db, 999_999)
+
+
+def test_a_price_cannot_hang_off_another_firms_supplier(db: Connection, world) -> None:
+    """The composite FK of modelo-datos 3.8: not refused by a service, impossible,
+    because the (supplier_id, firm_id) pair has to exist in supplier."""
+    supplier = new_supplier(db, world.firm_a)
+
+    with pytest.raises(IntegrityError, match="fk_supplier_price_supplier_id"):
+        new_supplier_price(db, supplier, world.firm_b, new_resource(db))
+
+
+def test_a_supplier_does_not_repeat_a_material_in_its_list(db: Connection, world) -> None:
+    supplier, resource = new_supplier(db, world.firm_a), new_resource(db)
+    new_supplier_price(db, supplier, world.firm_a, resource)
+
+    with pytest.raises(IntegrityError, match="uq_supplier_price_resource_active"):
+        new_supplier_price(db, supplier, world.firm_a, resource)
+
+
+def test_a_material_may_be_in_the_lists_of_several_suppliers(db: Connection, world) -> None:
+    """The whole point of HU-17: the same material, a different price per supplier."""
+    resource = new_resource(db)
+    first = new_supplier(db, world.firm_a, "Corralón uno")
+    second = new_supplier(db, world.firm_a, "Corralón dos")
+
+    new_supplier_price(db, first, world.firm_a, resource, price=230)
+    new_supplier_price(db, second, world.firm_a, resource, price=215)
+
+
+def test_a_removed_price_row_can_be_loaded_again(db: Connection, world) -> None:
+    """The positive half of the partial index: a row removed by mistake is loaded
+    again as a new one, and the old one stays as a tombstone."""
+    supplier, resource = new_supplier(db, world.firm_a), new_resource(db)
+    price = new_supplier_price(db, supplier, world.firm_a, resource)
+    db.execute(text("UPDATE supplier_price SET is_active = false WHERE id = :p"), {"p": price})
+
+    new_supplier_price(db, supplier, world.firm_a, resource)
+
+
+def test_a_supplier_price_cannot_be_negative(db: Connection, world) -> None:
+    """Zero is legitimate — a promotion, a gift — below zero never is."""
+    supplier, resource = new_supplier(db, world.firm_a), new_resource(db)
+
+    with pytest.raises(IntegrityError, match="ck_supplier_price_unit_price_not_negative"):
+        new_supplier_price(db, supplier, world.firm_a, resource, price=-1)
+
+
+def test_a_shipping_cost_cannot_be_negative(db: Connection, world) -> None:
+    """Zero is the supplier that does not charge for delivery."""
+    supplier, resource = new_supplier(db, world.firm_a), new_resource(db)
+
+    with pytest.raises(IntegrityError, match="ck_supplier_price_shipping_cost_not_negative"):
+        new_supplier_price(db, supplier, world.firm_a, resource, shipping=-1)
+
+
+def test_a_supplier_price_currency_must_be_an_iso_4217_code(db: Connection, world) -> None:
+    supplier, resource = new_supplier(db, world.firm_a), new_resource(db)
+
+    with pytest.raises(IntegrityError, match="ck_supplier_price_currency_iso_4217"):
+        new_supplier_price(db, supplier, world.firm_a, resource, currency="ars")
+
+
+def test_a_supplier_price_cannot_point_at_a_resource_that_does_not_exist(
+    db: Connection, world
+) -> None:
+    supplier = new_supplier(db, world.firm_a)
+
+    with pytest.raises(IntegrityError, match="fk_supplier_price_resource_id"):
+        new_supplier_price(db, supplier, world.firm_a, 999_999)
+
+
+def test_editing_a_supplier_moves_updated_at_but_not_the_price_date(db: Connection, world) -> None:
+    """The trigger keeps updated_at, and price_updated_at stays out of it: it is the
+    "actualizado el" of the screen and only a changed price may move it (ADR-010 2)."""
+    supplier, resource = new_supplier(db, world.firm_a), new_resource(db)
+    price = new_supplier_price(db, supplier, world.firm_a, resource)
+    db.execute(
+        text("UPDATE supplier_price SET price_updated_at = '2000-01-01' WHERE id = :p"),
+        {"p": price},
+    )
+
+    db.execute(text("UPDATE supplier_price SET is_active = true WHERE id = :p"), {"p": price})
+
+    row = db.execute(
+        text(
+            "SELECT updated_at = now() AS touched, price_updated_at AS priced"
+            " FROM supplier_price WHERE id = :p"
+        ),
+        {"p": price},
+    ).one()
+    assert row.touched is True
+    assert row.priced.year == 2000

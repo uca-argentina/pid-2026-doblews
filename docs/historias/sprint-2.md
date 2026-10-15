@@ -118,17 +118,19 @@ Cierra lo que T-04 dejó pendiente: "si los materiales `labor` y `equipment` se 
 
 ## HU-11 — Presupuesto estimado de la obra
 
+> **Reordenado el 2026-10-09:** el presupuesto dejó de tener sección propia y se ve en "Cómputo"; "Presupuestos" pasó a ser el listado de versiones de HU-12. Los criterios de abajo ya están ajustados. El porqué está en "Dónde estamos" del [Sprint 3](sprint-3.md#dónde-estamos).
+
 > Como **arquitecto**, quiero ver el presupuesto estimado de mi obra agrupado por recurso, separado en materiales, mano de obra y equipo, para saber cuánto va a costar y en qué se va la plata.
 
 **Criterios de aceptación**
 
-- Dentro de la obra hay una sección "Presupuesto" con tres grupos: **Materiales**, **Mano de obra** y **Equipos**.
+- El presupuesto se ve en la sección **"Cómputo"** de la obra, que es la única con los números de hoy: arriba el **total estimado**, después las recetas cargadas (HU-5) y debajo tres grupos, **Materiales**, **Mano de obra** y **Equipos**.
 - Cada grupo lista sus recursos con: nombre, unidad, cantidad total, precio unitario de referencia y subtotal.
-- Cada grupo muestra su subtotal, y el presupuesto su **total general**. Los totales suman exacto lo que se ve en pantalla (se suman los importes ya redondeados, como en HU-5).
+- Cada grupo muestra su subtotal, y el presupuesto su **total**. Los totales suman exacto lo que se ve en pantalla (se suman los importes ya redondeados, como en HU-5).
 - El presupuesto dice que sus importes son "precios de referencia al \<fecha\>" (ADR-005 §5).
 - Se recalcula solo: cambia al editar las líneas del cómputo o al cambiar un precio del catálogo. Es el **borrador** que HU-12 guarda como versión.
-- Si la obra no tiene líneas, estado vacío con un llamado a cargar el cómputo.
-- Exige `project.cost.view` o `project.view_all` (el `owner` lo ve en obras que no integra, como en HU-5). **El `client` no ve la sección.**
+- Si la obra no tiene líneas, no hay nada que presupuestar: se ve el estado vacío del cómputo (HU-5).
+- Exige `project.cost.view` o `project.view_all` (el `owner` lo ve en obras que no integra, como en HU-5). **El `client` entra al cómputo y ve las cantidades, sin precios, subtotales ni total** (HU-10).
 - Se ve bien a 375px: tarjetas por recurso en mobile, no tabla horizontal.
 
 **Fuera de alcance:** costos indirectos, gastos generales, beneficio e IVA; agrupar por rubro o capítulo; exportar a PDF o Excel; precios por proveedor.
@@ -139,15 +141,18 @@ Cierra lo que T-04 dejó pendiente: "si los materiales `labor` y `equipment` se 
 
 ## HU-12 — Versiones del presupuesto
 
+> **Reordenado el 2026-10-09:** "Guardar versión" se mudó a "Cómputo" y el listado de versiones pasó a ser la sección "Presupuestos". Los criterios de abajo ya están ajustados. El porqué está en "Dónde estamos" del [Sprint 3](sprint-3.md#dónde-estamos).
+
 > Como **arquitecto**, quiero guardar versiones del presupuesto de mi obra y poder volver a una anterior, para tener un registro fijo de lo que le presenté al cliente mientras sigo ajustando el cómputo.
 
 **Criterios de aceptación**
 
-- En la sección "Presupuesto" hay un botón **"Guardar versión"**, con nombre o nota opcional ("Presentado al cliente 20/10").
+- En la sección "Cómputo", junto al presupuesto que se va a congelar, hay un botón **"Guardar versión"**, con nombre o nota opcional ("Presentado al cliente 20/10").
 - Guardar una versión **congela** el presupuesto de ese momento: cada ítem con su cantidad, precio unitario y subtotal, y las líneas del cómputo que lo generaron. Las versiones se numeran correlativas por obra (v1, v2, …).
 - **Una versión guardada no se modifica nunca.** No existe endpoint para editarla; cualquier cambio posterior se hace en el borrador y se guarda como una versión nueva.
 - Cambiar un precio del catálogo o una receta **no altera** las versiones ya guardadas: una versión muestra los números con los que se guardó.
-- Pantalla **"Versiones"** con el listado: número, nombre/nota, fecha, autor y total.
+- La sección **"Presupuestos"** de la obra es el listado de las versiones guardadas: número, nombre/nota, fecha, autor y total. Sin versiones, estado vacío con un llamado a guardar la primera desde el cómputo.
+- El listado marca como **"Cómputo actual"** la versión cuyas líneas (receta, cantidad y nota) son exactamente las del cómputo de hoy, y no ofrece cargarla: no cambiaría nada. Pueden ser varias, si se guardó dos veces sin tocar nada, o ninguna, si el cómputo tiene cambios sin guardar. Un cambio de precio no la desmarca. El cómputo dice lo mismo desde su lado: "Igual a la v3" o "Tiene cambios sin guardar".
 - Detalle de una versión, de solo lectura, con el mismo formato agrupado de HU-11 y la fecha de los precios con los que se guardó.
 - **"Cargar esta versión"** reemplaza las líneas del borrador por las de la versión, previa confirmación. Las líneas actuales se dan de baja (lógica), no se borran. El borrador cargado vuelve a calcular con los **precios vigentes**: la versión vieja sigue intacta.
 - Si una receta de la versión se dio de baja desde entonces, esa línea no se carga y la pantalla dice cuál quedó afuera.
@@ -223,3 +228,7 @@ Tres cosas que se precisaron al implementar:
 **Queda:** nada del alcance del sprint. Falta cerrar la Definition of Done de HU-11 y HU-12: promoción `dev → main` y verificación en Azure.
 
 **2026-09-30.** **T-07 implementada** en `chore/t07-deploy-azure` ([ADR-008](../adr/0008-azure-deploy.md)). El deploy es en Azure y no en Render/Vercel, porque los planes gratis de Render y Neon ya estaban ocupados: backend en Container Apps, base en PostgreSQL Flexible Server y frontend en Static Web Apps, todo con costo USD 0. El ambiente ya está andando con las 11 migraciones y el seed demo, este último con una contraseña propia del ambiente. `.github/workflows/deploy.yml` deploya cada push a `main`. T-07 se cierra con la promoción `dev → main` (merge commit), que además es la primera corrida del workflow.
+
+**2026-10-01 (cierre).** **Sprint 2 promovido a `main`** (PR #34, merge commit) y deployado: la corrida de `deploy.yml` terminó bien. No queda nada del alcance del sprint sin mergear.
+
+**Queda:** la verificación a mano de HU-11 y HU-12 en el ambiente de Azure, que es el último punto de su Definition of Done. El Sprint 3 está en [sprint-3.md](sprint-3.md).
