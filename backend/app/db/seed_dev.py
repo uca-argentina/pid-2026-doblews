@@ -17,6 +17,7 @@ from app.core.security import hash_password
 from app.db.session import SessionLocal
 from app.models import (
     Account,
+    BudgetVersion,
     Firm,
     FirmMember,
     PlatformMember,
@@ -27,6 +28,7 @@ from app.models import (
     Supplier,
     UnitOfMeasure,
 )
+from app.services.budget_versions import BudgetVersionError, save_version
 from app.services.catalog_admin import CatalogError, InvalidReferenceError, RecipeLineInput
 from app.services.firm_recipes import create_firm_recipe
 from app.services.project import ProjectError, create_project
@@ -65,6 +67,12 @@ DEMO_WORK = (
         ("Contrapiso de cascote", "60", None),
     ],
 )
+
+# The demo work's first saved budget (HU-12), and a line loaded after it, so
+# HU-19's dashboard opens with the updated budget above the original. The line
+# is the firm's own recipe (FIRM_RECIPE), measured after the walls were.
+# (version note, (recipe, quantity, note))
+DEMO_BUDGET = ("Presupuesto inicial", ("Revoque grueso a la cal", "220", "interior"))
 
 
 # One recipe of Estudio Norte's own (HU-9), so its catalogue shows both origins
@@ -201,6 +209,7 @@ def seed(session: Session, password: str) -> None:
 
     _seed_firm_recipe(session, firms)
     _seed_demo_work(session, firms)
+    _seed_demo_budget(session, firms)
     _seed_suppliers(session, firms)
 
 
@@ -299,6 +308,67 @@ def _seed_demo_work(session: Session, firms: dict[str, Firm]) -> None:
         )
         add_line(session, project, recipe_id=recipe_id, quantity=Decimal(quantity), note=note)
         print(f"creada    computo  {quantity} x {recipe_name}")
+
+
+def _demo_project(session: Session, firms: dict[str, Firm]) -> Project | None:
+    """The demo work, if it is there and active.
+
+    None when it was archived by hand, or never created because the roster
+    was edited first (_seed_demo_work skips it then).
+    """
+    firm_name, work_name, *_ = DEMO_WORK
+    session.flush()  # the work, if _seed_demo_work just created it
+    return session.scalar(
+        select(Project).where(
+            Project.firm_id == firms[firm_name].id,
+            Project.name == work_name,
+            Project.is_active,
+        )
+    )
+
+
+def _seed_demo_budget(session: Session, firms: dict[str, Firm]) -> None:
+    """Save the demo work's v1, then load one more line on top of it.
+
+    A step of its own and not part of _seed_demo_work, because the deployed
+    environment already has the work from an earlier seed and that function
+    skips it whole. This one asks its own question: does the work have any
+    saved version? If it does, someone saved one on the screen, and the
+    version numbers are theirs.
+    """
+    _, work_name, lead_email, *_ = DEMO_WORK
+    note, (recipe_name, quantity, line_note) = DEMO_BUDGET
+
+    project = _demo_project(session, firms)
+    if project is None:
+        print(f"salteado  presupuesto: la obra {work_name} no existe o no está activa")
+        return
+    saved = session.scalar(
+        select(BudgetVersion.id).where(BudgetVersion.project_id == project.id).limit(1)
+    )
+    if saved is not None:
+        print(f"ya estaba  presupuesto de {work_name}")
+        return
+
+    lead = session.scalar(select(Account).where(Account.email == lead_email))
+    try:
+        version = save_version(session, project, account_id=lead.id, note=note)
+    except BudgetVersionError as error:
+        print(f"salteado  presupuesto: {error.detail}")
+        return
+    print(f"creada    version  v{version.version_number} de {work_name} ({note})")
+
+    # The firm's own recipe, not a general one of the same name.
+    recipe_id = session.scalar(
+        select(Recipe.id).where(
+            Recipe.firm_id == project.firm_id, Recipe.name == recipe_name, Recipe.is_active
+        )
+    )
+    if recipe_id is None:
+        print(f"salteada  computo  {recipe_name}: el estudio ya no tiene esa receta")
+        return
+    add_line(session, project, recipe_id=recipe_id, quantity=Decimal(quantity), note=line_note)
+    print(f"creada    computo  {quantity} x {recipe_name}, después de la v{version.version_number}")
 
 
 def _seed_suppliers(session: Session, firms: dict[str, Firm]) -> None:
