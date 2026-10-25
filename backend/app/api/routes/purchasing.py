@@ -28,9 +28,10 @@ from app.schemas.purchasing import (
     ComparedMaterial,
     MaterialComparisonOut,
     OfferOut,
+    ProjectPurchasingItem,
     ProjectPurchasingOut,
 )
-from app.services import purchasing, suppliers
+from app.services import purchase_orders, purchasing, suppliers
 
 router = APIRouter(tags=["purchasing"])
 
@@ -125,8 +126,15 @@ def read_project_purchasing(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=PROJECT_NOT_FOUND)
 
     materials = purchasing.project_purchasing(db, firm_id=membership.firm_id, project_id=project.id)
+    ordered = purchase_orders.ordered_quantities(db, membership.firm_id, project.id)
     return ProjectPurchasingOut(
-        items=[_compared(material) for material in materials],
+        items=[
+            ProjectPurchasingItem(
+                **_compared(material).model_dump(),
+                ordered_quantity=ordered.get(material.resource_id, Decimal("0")),
+            )
+            for material in materials
+        ],
         currency=purchasing.CURRENCY,
         has_suppliers=purchasing.firm_has_suppliers(db, firm_id=membership.firm_id),
     )
