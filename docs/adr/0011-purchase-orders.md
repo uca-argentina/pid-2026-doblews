@@ -1,6 +1,6 @@
 # ADR-011: Órdenes de compra
 
-**Estado:** Propuesta
+**Estado:** Aceptada en parte (HU-20). §1 a §8 rigen; las recepciones de §1 y §3 entran con HU-22
 **Fecha:** 2026-10-25
 **Contexto:** Modelo de datos, estados, permisos y rutas de las órdenes de compra a proveedores. Deja firmes HU-20, HU-21 y HU-22 del [Sprint 4](../historias/sprint-4.md) y es la base de los puntos de [ADR-012](0012-supplier-loyalty-points.md).
 
@@ -214,6 +214,15 @@ Bajo el estudio, para todo lo demás, así un arquitecto que no está en el equi
 - `POST .../{order_id}/receipts` — registrar una recepción. `POST .../{order_id}/receipts/{receipt_id}/deactivate` — anular la última. `purchase_order.manage`.
 
 Las rutas bajo la obra resuelven la obra con `get_visible` como el resto, así que sirven a quien está en su equipo o tiene `project.view_all`. El listado del estudio es la puerta para todos los demás.
+
+**Precisado al implementar HU-20** (2026-10-25):
+
+- **La migración crea solo `purchase_order` y `purchase_order_line`**, con todas las columnas y `CHECK` de estado de §1 desde la primera fila. `purchase_order_receipt` y `purchase_order_receipt_line` entran con HU-22, que es la que las escribe.
+- **La cantidad que propone generar es lo que falta pedir:** la del cómputo menos lo que ya está en renglones activos de órdenes activas no anuladas de esa obra, **borradores incluidos**. Así "Generar órdenes" no pide dos veces lo mismo. Un material sin nada que pedir, o sin oferta, no genera renglón y vuelve en la respuesta como omitido (`already_ordered` / `no_supplier`). Un material que no es del cómputo de la obra es un error del pedido: 422.
+- **Si el borrador ya tiene el material, se suma la cantidad** al renglón existente y su precio queda el que congeló: un precio ya congelado no se refresca a espaldas del arquitecto. Agregar a mano un material que la orden ya tiene es 409.
+- **La comparación de la obra suma `ordered_quantity`** por material (`GET .../purchasing`), que la pantalla muestra como "Ya pedido".
+- **Rutas exactas de HU-20:** `POST .../projects/{project_id}/purchase-orders/generate` (200, con las órdenes tocadas y los omitidos), `GET .../projects/{project_id}/purchase-orders?order_status=`, `GET /firms/{firm_id}/purchase-orders/{order_id}`, `POST .../lines`, `PATCH .../lines/{line_id}`, `POST .../lines/{line_id}/supplier` (responde con el borrador al que fue el renglón), `POST .../lines/{line_id}/deactivate` y `POST .../{order_id}/discard` (204). Las de editar responden con la orden entera.
+- En el front, los borradores se listan bajo la comparación, en la pestaña Compras, y cada uno abre `/firms/:firmId/purchase-orders/:orderId`.
 
 ---
 

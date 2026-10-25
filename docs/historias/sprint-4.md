@@ -362,3 +362,15 @@ Dos precisiones respecto del backlog:
 - **El cliente sigue viendo el Cómputo** (las cantidades, sin importes), además de lo que pide el enunciado. HU-26 lo lista entre sus pestañas.
 
 **Quedan liberados los tres frentes:** órdenes (HU-20), gamificación (la función de puntos de HU-23) y cliente (HU-25).
+
+**2026-10-25 (tarde).** **HU-20 implementada** en una sola rama, `feat/hu20-purchase-orders`.
+
+- **Esquema:** `purchase_order` y `purchase_order_line` (ADR-011 §1), con el estado y sus fechas atados por `CHECK`, el número único por estudio y las FKs compuestas contra la obra y el proveedor. Permisos `purchase_order.view` y `purchase_order.manage` para owner y architect. Las tablas de recepción quedan para HU-22.
+- **Generar:** en Compras se eligen materiales y "Generar órdenes" arma un borrador por proveedor con el más económico, por **lo que falta pedir** (el cómputo menos lo que ya está en órdenes de la obra, borradores incluidos). Si la obra ya tiene borrador de ese proveedor, se completa ese. Lo que no se puede pedir vuelve explicado: "ya estaba todo pedido" o "sin proveedor".
+- **Editar el borrador**, en `/firms/:id/purchase-orders/:orderId`: cambiar la cantidad, pasar un renglón a otro proveedor (va al borrador de la obra para ese proveedor, con su precio de hoy), quitar y agregar materiales del cómputo, descartar el borrador. El precio y el envío quedan congelados al generar.
+- **Compras muestra "Ya pedido"** debajo de cada cantidad, y los borradores de la obra debajo de la comparación.
+- Las gestionan owner y architect del estudio, estén o no en la obra, desde la página de la orden. El `client` recibe 403.
+
+El detalle de lo que se precisó está en ADR-011 §8.
+
+**Falta para cerrar HU-20:** la revisión visual de los criterios y de 375px, y el PR a `dev`. **Queda liberada HU-21** (emitir, anular y el listado del estudio).
