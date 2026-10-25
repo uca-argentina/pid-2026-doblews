@@ -13,7 +13,15 @@ from decimal import Decimal
 
 from sqlalchemy import func, select
 
-from app.models import Project, PurchaseOrder, PurchaseOrderLine, Resource, Supplier, UnitOfMeasure
+from app.models import (
+    Account,
+    Project,
+    PurchaseOrder,
+    PurchaseOrderLine,
+    Resource,
+    Supplier,
+    UnitOfMeasure,
+)
 from app.repositories.base import FirmScopedRepository
 
 
@@ -74,6 +82,40 @@ class PurchaseOrderRepository(FirmScopedRepository[PurchaseOrder]):
             statement = statement.where(PurchaseOrder.status == status)
         rows = self.db.execute(statement.order_by(PurchaseOrder.number.desc())).all()
         return [OrderEntry(*row) for row in rows]
+
+    def for_firm(
+        self,
+        project_id: int | None = None,
+        supplier_id: int | None = None,
+        status: str | None = None,
+    ) -> list[OrderEntry]:
+        """Every order of the firm, newest number first, narrowed by what is given.
+
+        The firm's listing (HU-21): the door through which an architect who is not
+        on a work's team reaches its orders, so it does not filter by visibility.
+        """
+        statement = self._entries()
+        if project_id is not None:
+            statement = statement.where(PurchaseOrder.project_id == project_id)
+        if supplier_id is not None:
+            statement = statement.where(PurchaseOrder.supplier_id == supplier_id)
+        if status is not None:
+            statement = statement.where(PurchaseOrder.status == status)
+        rows = self.db.execute(statement.order_by(PurchaseOrder.number.desc())).all()
+        return [OrderEntry(*row) for row in rows]
+
+    def account_names(self, account_ids: Collection[int]) -> dict[int, str]:
+        """The names of the people an order's history mentions.
+
+        Accounts are not a firm's rows, so this is a plain read by id: the ids
+        come from an order that was already resolved under this firm.
+        """
+        if not account_ids:
+            return {}
+        rows = self.db.execute(
+            select(Account.id, Account.name).where(Account.id.in_(account_ids))
+        ).all()
+        return {account_id: name for account_id, name in rows}
 
     def draft_for(self, project_id: int, supplier_id: int) -> PurchaseOrder | None:
         """The work's live draft to this supplier, if it has one.

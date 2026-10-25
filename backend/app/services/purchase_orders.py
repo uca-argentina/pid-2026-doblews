@@ -17,7 +17,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Firm, PurchaseOrder, PurchaseOrderLine
@@ -32,6 +32,10 @@ NOT_A_DRAFT = "Solo se puede modificar una orden en borrador"
 NOT_IN_TAKEOFF = "El material no está en el cómputo de la obra"
 NOT_OFFERED = "Ese proveedor no ofrece este material en su lista vigente"
 ALREADY_IN_ORDER = "La orden ya tiene este material"
+ISSUE_ONLY_DRAFT = "Solo se puede emitir una orden en borrador"
+EMPTY_ORDER = "No se puede emitir una orden sin materiales"
+CANCELLED_IS_FINAL = "Una orden anulada no cambia de estado"
+RECEIVED_NOT_CANCELLABLE = "Una orden con materiales recibidos no se puede anular"
 
 # Why a material asked for was left out of the generated drafts. Codes, not
 # sentences: the screen words them.
@@ -201,47 +205,65 @@ def _put_line(
 
 
 def generate(
-    db: Session, firm_id: int, project_id: int, resource_ids: Iterable[int], created_by: int
+    db: Session,
+    firm_id: int,
+    project_id: int,
+    items: Iterable[tuple[int, int | None]],
+    created_by: int,
 ) -> GenerateResult:
     """Drafts for these materials of the work: one per supplier (ADR-011 section 5).
 
-    Each material goes to the cheapest offer for the quantity the work still
-    needs — the take-off's, minus what is already on order — at that quantity.
-    A material with nothing left to order, or that no supplier offers, is left
-    out and returned with its reason. A material that is not in the work's
-    take-off is a mistake in the request, not something to skip: 422.
+    `items` pairs each material with the supplier chosen for it, or None for the
+    default: the cheapest offer for the quantity the work still needs. Either
+    way the quantity is that one — the take-off's, minus what is already on
+    order. A material with nothing left to order, or that no supplier offers
+    when none was chosen, is left out and returned with its reason.
+
+    A material that is not in the work's take-off, or a chosen supplier that
+    does not offer it, is a mistake in the request and not something to skip:
+    422, checked for every item before anything is written.
     """
-    requested = list(dict.fromkeys(resource_ids))
+    requested: dict[int, int | None] = {}
+    for resource_id, supplier_id in items:
+        requested[resource_id] = supplier_id
+
     materials = _takeoff_materials(db, firm_id, project_id)
     if any(resource_id not in materials for resource_id in requested):
         raise InvalidPurchaseLineError(NOT_IN_TAKEOFF)
 
-    ordered = ordered_quantities(db, firm_id, project_id)
     offers_by_material: dict[int, list[OfferEntry]] = defaultdict(list)
-    for offer in SupplierPriceRepository(db, firm_id=firm_id).offers(requested):
+    for offer in SupplierPriceRepository(db, firm_id=firm_id).offers(list(requested)):
         offers_by_material[offer.resource_id].append(offer)
 
+    def offer_of(resource_id: int, supplier_id: int) -> OfferEntry | None:
+        return next(
+            (o for o in offers_by_material[resource_id] if o.supplier_id == supplier_id),
+            None,
+        )
+
+    for resource_id, chosen in requested.items():
+        if chosen is not None and offer_of(resource_id, chosen) is None:
+            raise InvalidPurchaseLineError(NOT_OFFERED)
+
+    ordered = ordered_quantities(db, firm_id, project_id)
     touched: dict[int, None] = {}
     skipped: list[SkippedMaterial] = []
-    for resource_id in requested:
+    for resource_id, chosen in requested.items():
         material = materials[resource_id]
         pending = material.quantity - ordered.get(resource_id, Decimal("0"))
         if pending <= 0:
             skipped.append(SkippedMaterial(resource_id, material.name, SKIPPED_ALREADY_ORDERED))
             continue
-        ranked = rank(offers_by_material[resource_id], pending)
-        if not ranked:
-            skipped.append(SkippedMaterial(resource_id, material.name, SKIPPED_NO_SUPPLIER))
-            continue
-        # The first of the cheapest: on a tie, the comparison already orders them
-        # by supplier name, so the pick does not change between two clicks.
-        best = ranked[0]
-        offer = next(
-            offer
-            for offer in offers_by_material[resource_id]
-            if offer.supplier_id == best.supplier_id
-        )
-        order = _draft_for(db, firm_id, project_id, best.supplier_id, created_by)
+        if chosen is None:
+            ranked = rank(offers_by_material[resource_id], pending)
+            if not ranked:
+                skipped.append(SkippedMaterial(resource_id, material.name, SKIPPED_NO_SUPPLIER))
+                continue
+            # The first of the cheapest: on a tie, the comparison already orders
+            # them by supplier name, so the pick does not change between clicks.
+            chosen = ranked[0].supplier_id
+        offer = offer_of(resource_id, chosen)
+        order = _draft_for(db, firm_id, project_id, chosen, created_by)
         _put_line(db, firm_id, order, offer, pending)
         touched[order.id] = None
 
@@ -317,3 +339,46 @@ def discard(db: Session, firm_id: int, order_id: int) -> None:
     order = _draft(db, firm_id, order_id)
     order.is_active = False
     db.flush()
+
+
+def issue(db: Session, firm_id: int, order_id: int, issued_by: int) -> PurchaseOrder:
+    """Issue a draft (HU-21): from here on the order is not edited (ADR-011 section 3).
+
+    Only a draft with at least one live line. Anything else is a 409 that says
+    why: already issued, cancelled, or empty.
+    """
+    order = get_order(db, firm_id, order_id)
+    if order.status == "cancelled":
+        raise PurchaseOrderStateError(CANCELLED_IS_FINAL)
+    if order.status != DRAFT:
+        raise PurchaseOrderStateError(ISSUE_ONLY_DRAFT)
+    if not PurchaseOrderLineRepository(db, firm_id=firm_id).lines([order.id]):
+        raise PurchaseOrderStateError(EMPTY_ORDER)
+    order.status = "issued"
+    order.issued_at = func.now()
+    order.issued_by = issued_by
+    db.flush()
+    db.refresh(order)
+    return order
+
+
+def cancel(db: Session, firm_id: int, order_id: int, cancelled_by: int) -> PurchaseOrder:
+    """Cancel a draft or an issued order. Final: a cancelled order never moves again.
+
+    An order that already received something cannot be cancelled (ADR-011
+    section 3). Today that is its status, partially_received or received; HU-22
+    adds the receipts, and with them the check on an issued order's deliveries.
+    The order stays visible with its status, unlike a discarded draft, and its
+    quantities stop counting as ordered.
+    """
+    order = get_order(db, firm_id, order_id)
+    if order.status == "cancelled":
+        raise PurchaseOrderStateError(CANCELLED_IS_FINAL)
+    if order.status not in (DRAFT, "issued"):
+        raise PurchaseOrderStateError(RECEIVED_NOT_CANCELLABLE)
+    order.status = "cancelled"
+    order.cancelled_at = func.now()
+    order.cancelled_by = cancelled_by
+    db.flush()
+    db.refresh(order)
+    return order
