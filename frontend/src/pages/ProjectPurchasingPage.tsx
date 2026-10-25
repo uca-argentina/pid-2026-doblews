@@ -14,7 +14,7 @@ import { Link } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { useCurrentFirm } from "../features/firms/firmContext";
 import { useCurrentProject } from "../features/projects/projectContext";
-import { DraftOrdersList } from "../features/purchase-orders/DraftOrdersList";
+import { ProjectOrdersList } from "../features/purchase-orders/ProjectOrdersList";
 import { orderNumber } from "../features/purchase-orders/orderDisplay";
 import type { GenerateOrdersOut } from "../features/purchase-orders/types";
 import { useGenerateOrders } from "../features/purchase-orders/usePurchaseOrders";
@@ -31,8 +31,9 @@ import { apiErrorMessage } from "../lib/apiError";
  * of the work does not see the tab, and gets this notice if they type the URL.
  *
  * HU-20 makes it where orders start: whoever holds purchase_order.manage picks
- * materials and generates one draft per supplier, and the work's drafts are
- * listed under the comparison. */
+ * materials and generates one draft per supplier, and the work's orders are
+ * listed under the comparison. HU-21 lets them pick the supplier per material
+ * before generating, and lists the orders in every state. */
 export function ProjectPurchasingPage() {
   const firm = useCurrentFirm();
   const { project, can } = useCurrentProject();
@@ -71,6 +72,9 @@ function PurchasingView({
 }) {
   const { data, isLoading, isError } = useProjectPurchasing(firmId, projectId);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  // Only the suppliers picked away from the default; the rest go as null, so
+  // the backend prices them with the cheapest at that moment.
+  const [chosen, setChosen] = useState<Map<number, number>>(new Map());
   const generate = useGenerateOrders(firmId, projectId);
 
   const toggle = (resourceId: number) =>
@@ -81,6 +85,10 @@ function PurchasingView({
       return next;
     });
 
+  const chooseSupplier = (resourceId: number, supplierId: number) =>
+    setChosen((current) => new Map(current).set(resourceId, supplierId));
+  const supplierFor = (resourceId: number) => chosen.get(resourceId) ?? null;
+
   // Only what can still be ordered: a pick left over from before a refetch
   // (now all on order) is not sent.
   const picked = (data?.items ?? []).filter(
@@ -90,9 +98,13 @@ function PurchasingView({
   const handleGenerate = async () => {
     try {
       const result = await generate.mutateAsync(
-        picked.map((item) => item.resource_id),
+        picked.map((item) => ({
+          resource_id: item.resource_id,
+          supplier_id: supplierFor(item.resource_id),
+        })),
       );
       setSelected(new Set());
+      setChosen(new Map());
       notifications.show({
         title:
           result.orders.length === 0
@@ -158,7 +170,8 @@ function PurchasingView({
             <Group justify="space-between" wrap="wrap" gap="sm">
               <Text size="sm" c="dimmed" style={{ flex: 1, minWidth: 220 }}>
                 Elegí materiales y generá las órdenes: se arma un borrador por
-                proveedor, con el más económico y lo que falta pedir.
+                proveedor, con lo que falta pedir. Cada material va al más
+                económico, salvo que elijas otro proveedor.
               </Text>
               <Button
                 onClick={handleGenerate}
@@ -173,10 +186,14 @@ function PurchasingView({
           <ProjectPurchasingTable
             items={data.items}
             currency={data.currency}
-            selection={canManageOrders ? { selected, toggle } : undefined}
+            selection={
+              canManageOrders
+                ? { selected, toggle, supplierFor, chooseSupplier }
+                : undefined
+            }
           />
           {canSeeOrders && (
-            <DraftOrdersList firmId={firmId} projectId={projectId} />
+            <ProjectOrdersList firmId={firmId} projectId={projectId} />
           )}
         </>
       )}

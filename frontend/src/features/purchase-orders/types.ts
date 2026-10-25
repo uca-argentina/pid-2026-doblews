@@ -9,7 +9,8 @@ export interface NamedRef {
   name: string;
 }
 
-/** The five states of ADR-011 section 3. HU-20 only writes drafts. */
+/** The five states of ADR-011 section 3. HU-21 issues and cancels; the
+ * received ones come with HU-22. */
 export type OrderStatus =
   "draft" | "issued" | "partially_received" | "received" | "cancelled";
 
@@ -39,8 +40,23 @@ export interface PurchaseOrderLineOut {
   estimated_total: string;
 }
 
+/** One change of status: what, when and who (HU-21). */
+export interface OrderEvent {
+  kind: "created" | "issued" | "cancelled";
+  at: string;
+  by: NamedRef;
+}
+
 export interface PurchaseOrderOut extends PurchaseOrderSummary {
   lines: PurchaseOrderLineOut[];
+  /** Oldest first. */
+  history: OrderEvent[];
+}
+
+/** A material to order and from whom; null is the cheapest. */
+export interface GenerateItem {
+  resource_id: number;
+  supplier_id: number | null;
 }
 
 /** A material asked for that no draft got. */

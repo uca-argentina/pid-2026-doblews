@@ -1,5 +1,6 @@
 import { api } from "../../lib/api";
 import type {
+  GenerateItem,
   GenerateOrdersOut,
   OrderStatus,
   PurchaseOrderOut,
@@ -20,15 +21,16 @@ function projectOrdersUrl(firmId: number, projectId: number): string {
   return `/firms/${firmId}/projects/${projectId}/purchase-orders`;
 }
 
-/** Drafts for these materials of the work, one per supplier. */
+/** Drafts for these materials of the work, one per supplier: the one chosen
+ * for each, or the cheapest where none was. */
 export async function generateOrders(
   firmId: number,
   projectId: number,
-  resourceIds: number[],
+  items: GenerateItem[],
 ): Promise<GenerateOrdersOut> {
   const { data } = await api.post<GenerateOrdersOut>(
     `${projectOrdersUrl(firmId, projectId)}/generate`,
-    { resource_ids: resourceIds },
+    { items },
   );
   return data;
 }
@@ -43,6 +45,16 @@ export async function fetchProjectOrders(
     projectOrdersUrl(firmId, projectId),
     { params: status ? { order_status: status } : undefined },
   );
+  return data;
+}
+
+/** Every order of the firm, newest first. The firm listing filters them on
+ * the client: a studio's orders are few, and the filters' options come from
+ * the same list. */
+export async function fetchFirmOrders(
+  firmId: number,
+): Promise<PurchaseOrderSummary[]> {
+  const { data } = await api.get<PurchaseOrderSummary[]>(firmOrdersUrl(firmId));
   return data;
 }
 
@@ -115,4 +127,27 @@ export async function discardOrder(
   orderId: number,
 ): Promise<void> {
   await api.post(`${firmOrdersUrl(firmId)}/${orderId}/discard`);
+}
+
+/** Sends a draft to its supplier: from here on it is not edited. 409 if it is
+ * not a draft or has no lines. */
+export async function issueOrder(
+  firmId: number,
+  orderId: number,
+): Promise<PurchaseOrderOut> {
+  const { data } = await api.post<PurchaseOrderOut>(
+    `${firmOrdersUrl(firmId)}/${orderId}/issue`,
+  );
+  return data;
+}
+
+/** Cancels a draft or an issued order, for good. 409 from any other state. */
+export async function cancelOrder(
+  firmId: number,
+  orderId: number,
+): Promise<PurchaseOrderOut> {
+  const { data } = await api.post<PurchaseOrderOut>(
+    `${firmOrdersUrl(firmId)}/${orderId}/cancel`,
+  );
+  return data;
 }
