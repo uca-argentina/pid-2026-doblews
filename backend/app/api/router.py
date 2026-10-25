@@ -14,6 +14,7 @@ from app.api.routes import (
     platform,
     project_members,
     projects,
+    purchase_orders,
     purchasing,
     suppliers,
     takeoff,
@@ -33,6 +34,7 @@ api_router.include_router(members.router)
 api_router.include_router(platform.router)
 api_router.include_router(project_members.router)
 api_router.include_router(projects.router)
+api_router.include_router(purchase_orders.router)
 api_router.include_router(purchasing.router)
 api_router.include_router(suppliers.router)
 api_router.include_router(takeoff.router)

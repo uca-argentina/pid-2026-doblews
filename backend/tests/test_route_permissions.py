@@ -53,6 +53,9 @@ PATH_PARAMETERS = {
     # id that exists nowhere is enough to show a stranger is refused first.
     "supplier_id": lambda world: 1,
     "price_id": lambda world: 1,
+    # Same again for an order and its lines: the firm is resolved first.
+    "order_id": lambda world: 1,
+    "line_id": lambda world: 1,
 }
 
 
@@ -313,5 +316,13 @@ def test_the_suppliers_prefix_offers_no_way_to_delete_anything():
     firm's agreements; they go out of use, they are never erased."""
     prefix = "/firms/{firm_id}/suppliers"
     methods = {endpoint.method for endpoint in ENDPOINTS if endpoint.path.startswith(prefix)}
+
+    assert methods == {"GET", "POST", "PATCH"}
+
+
+def test_the_purchase_order_prefixes_offer_no_way_to_delete_anything():
+    """ADR-011 section 7, rule 9: a draft is discarded and a line deactivated, both
+    with a POST. Nothing under either prefix of the orders erases a row."""
+    methods = {endpoint.method for endpoint in ENDPOINTS if "/purchase-orders" in endpoint.path}
 
     assert methods == {"GET", "POST", "PATCH"}

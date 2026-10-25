@@ -1,6 +1,6 @@
 """The seeded catalogue, checked against ADR-002 section 7, ADR-003 section 8,
-ADR-005 section 2, ADR-006 section 3, ADR-007 section 4, ADR-009 section 9
-and ADR-010 section 6.
+ADR-005 section 2, ADR-006 section 3, ADR-007 section 4, ADR-009 section 9,
+ADR-010 section 6 and ADR-011 section 6.
 
 The expected matrix is typed out here by hand rather than imported from the seed
 migrations. That duplication is the test: a check that reads the same source as
@@ -14,7 +14,8 @@ from sqlalchemy import Connection, text
 # project.recipe.*/project.cost.* rows come from ADR-003 section 8; catalog.manage
 # comes from ADR-005 section 2; recipe.manage from ADR-006 section 3;
 # project.budget.manage from ADR-007 section 4; project.task.* from ADR-009
-# section 9; supplier.view and supplier.manage from ADR-010 section 6; everything
+# section 9; supplier.view and supplier.manage from ADR-010 section 6;
+# purchase_order.view and purchase_order.manage from ADR-011 section 6; everything
 # else from ADR-002 section 7.
 EXPECTED: dict[tuple[str, str], set[str]] = {
     ("support", "platform"): {
@@ -42,6 +43,8 @@ EXPECTED: dict[tuple[str, str], set[str]] = {
         "recipe.manage",
         "supplier.view",
         "supplier.manage",
+        "purchase_order.view",
+        "purchase_order.manage",
     },
     ("architect", "firm"): {
         "firm.view",
@@ -51,10 +54,12 @@ EXPECTED: dict[tuple[str, str], set[str]] = {
         "recipe.manage",
         "supplier.view",
         "supplier.manage",
+        "purchase_order.view",
+        "purchase_order.manage",
     },
     # No recipe.manage: the client reads the firm's recipes and never writes them
     # (HU-9). No supplier.* either: a supplier's prices are the firm's costs
-    # (ADR-010 section 6).
+    # (ADR-010 section 6). No purchase_order.* for the same reason (ADR-011 section 6).
     ("client", "firm"): {"firm.view", "catalog.view"},
     ("lead", "project"): {
         "project.view",

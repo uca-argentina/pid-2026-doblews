@@ -39,10 +39,16 @@ export interface MaterialComparisonOut extends ComparedMaterial {
   has_suppliers: boolean;
 }
 
+/** A material of the work's comparison, with how much of it is already on
+ * order: live lines of orders that were not cancelled, drafts included (HU-20). */
+export interface ProjectPurchasingItem extends ComparedMaterial {
+  ordered_quantity: string;
+}
+
 /** Each material of a work's take-off, compared at the quantity the work
  * needs. No grand total: HU-18 leaves an optimal purchase out. */
 export interface ProjectPurchasingOut {
-  items: ComparedMaterial[];
+  items: ProjectPurchasingItem[];
   currency: string;
   has_suppliers: boolean;
 }

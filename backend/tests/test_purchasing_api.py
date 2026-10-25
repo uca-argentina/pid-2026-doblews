@@ -20,51 +20,6 @@ LABOR = "Oficial"
 
 
 @pytest.fixture
-def add_supplier(db):
-    """A supplier of a firm, written behind the API's back like add_takeoff_line:
-    a read is tested here, not HU-17's write path."""
-
-    def _add(firm: int, name: str, is_active: bool = True) -> int:
-        return db.execute(
-            text(
-                "INSERT INTO supplier (firm_id, name, is_active) VALUES (:f, :n, :a) RETURNING id"
-            ),
-            {"f": firm, "n": name, "a": is_active},
-        ).scalar_one()
-
-    return _add
-
-
-@pytest.fixture
-def add_price(db, resource_id):
-    def _add(
-        firm: int,
-        supplier: int,
-        material: str,
-        unit_price: str,
-        shipping: str = "0.00",
-        is_active: bool = True,
-    ) -> int:
-        return db.execute(
-            text(
-                "INSERT INTO supplier_price"
-                " (supplier_id, firm_id, resource_id, unit_price, shipping_cost, is_active)"
-                " VALUES (:s, :f, :r, :p, :c, :a) RETURNING id"
-            ),
-            {
-                "s": supplier,
-                "f": firm,
-                "r": resource_id[material],
-                "p": unit_price,
-                "c": shipping,
-                "a": is_active,
-            },
-        ).scalar_one()
-
-    return _add
-
-
-@pytest.fixture
 def team(world, new_member, add_project_member):
     """The cast of the budget's tests: what the guard of a work's costs lets in."""
     collaborator = new_member(world.firm_a, "carlos@test.com", "architect")
