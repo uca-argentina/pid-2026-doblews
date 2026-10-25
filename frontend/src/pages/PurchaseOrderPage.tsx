@@ -2,7 +2,6 @@ import { useState } from "react";
 import {
   Alert,
   Anchor,
-  Badge,
   Button,
   Center,
   Group,
@@ -21,10 +20,16 @@ import {
   LineQuantityModal,
   LineSupplierModal,
 } from "../features/purchase-orders/DraftModals";
+import { OrderHistory } from "../features/purchase-orders/OrderHistory";
 import { OrderLinesView } from "../features/purchase-orders/OrderLinesView";
+import { OrderStatusBadge } from "../features/purchase-orders/OrderStatusBadge";
 import {
-  STATUS_COLORS,
-  STATUS_LABELS,
+  CancelOrderModal,
+  IssueOrderModal,
+} from "../features/purchase-orders/OrderStatusModals";
+import {
+  canCancel,
+  canIssue,
   orderNumber,
 } from "../features/purchase-orders/orderDisplay";
 import type { PurchaseOrderLineOut } from "../features/purchase-orders/types";
@@ -36,7 +41,8 @@ import { apiErrorMessage } from "../lib/apiError";
 import { formatMoney } from "../lib/format";
 
 /** One purchase order (HU-20): its supplier, its work and its lines, at the
- * prices they froze when the draft was generated.
+ * prices they froze when the draft was generated, and who moved it when
+ * (HU-21).
  *
  * Under the firm and not under the work, like the backend's route: the
  * permissions are firm-scope, so an architect who is not on the work's team
@@ -44,7 +50,9 @@ import { formatMoney } from "../lib/format";
  *
  * While it is a draft, and for whoever holds purchase_order.manage, each line
  * can change its quantity or its supplier, or leave; materials can be added;
- * and the draft can be discarded. Issuing and cancelling are HU-21's. */
+ * and the draft can be discarded. HU-21 adds issuing a draft that has lines,
+ * after which it is read only, and cancelling a draft or an issued order. Only
+ * the moves the order's state allows are offered (ADR-011 section 3). */
 export function PurchaseOrderPage() {
   const { firm, can } = useCurrentFirm();
   const navigate = useNavigate();
@@ -58,6 +66,8 @@ export function PurchaseOrderPage() {
     useState<PurchaseOrderLineOut | null>(null);
   const [addOpened, addModal] = useDisclosure(false);
   const [discardOpened, discardModal] = useDisclosure(false);
+  const [issueOpened, issueModal] = useDisclosure(false);
+  const [cancelOpened, cancelModal] = useDisclosure(false);
 
   if (isLoading) {
     return (
@@ -76,7 +86,10 @@ export function PurchaseOrderPage() {
   }
 
   const comprasPath = `/firms/${firm.id}/projects/${order.project.id}/purchasing`;
-  const editable = order.status === "draft" && can("purchase_order.manage");
+  const canManage = can("purchase_order.manage");
+  const editable = order.status === "draft" && canManage;
+  const issuable = canManage && canIssue(order);
+  const cancellable = canManage && canCancel(order);
 
   const remove = async (line: PurchaseOrderLineOut) => {
     try {
@@ -105,23 +118,35 @@ export function PurchaseOrderPage() {
         title={`${orderNumber(order.number)} · ${order.supplier.name}`}
         description={`Obra: ${order.project.name}. Los precios son los que tenía el proveedor al generar la orden.`}
         action={
-          editable ? (
+          editable || cancellable ? (
             <Group gap="sm">
-              <Button variant="default" onClick={addModal.open}>
-                Agregar material
-              </Button>
-              <Button variant="subtle" color="red" onClick={discardModal.open}>
-                Descartar borrador
-              </Button>
+              {issuable && <Button onClick={issueModal.open}>Emitir</Button>}
+              {editable && (
+                <Button variant="default" onClick={addModal.open}>
+                  Agregar material
+                </Button>
+              )}
+              {editable && (
+                <Button
+                  variant="subtle"
+                  color="red"
+                  onClick={discardModal.open}
+                >
+                  Descartar borrador
+                </Button>
+              )}
+              {cancellable && (
+                <Button variant="subtle" color="red" onClick={cancelModal.open}>
+                  Anular
+                </Button>
+              )}
             </Group>
           ) : undefined
         }
       />
 
       <Group gap="md" align="baseline" wrap="wrap">
-        <Badge color={STATUS_COLORS[order.status]} variant="light">
-          {STATUS_LABELS[order.status]}
-        </Badge>
+        <OrderStatusBadge status={order.status} />
         <Text fw={700} size="lg">
           Total estimado: {formatMoney(order.estimated_total, order.currency)}
         </Text>
@@ -129,7 +154,7 @@ export function PurchaseOrderPage() {
 
       {order.lines.length === 0 ? (
         <Text size="sm" c="dimmed" ta="center" py="md">
-          Este borrador no tiene materiales.
+          Esta orden no tiene materiales.
           {editable && " Agregá alguno, o descartalo si ya no hace falta."}
         </Text>
       ) : (
@@ -145,6 +170,25 @@ export function PurchaseOrderPage() {
                 }
               : undefined
           }
+        />
+      )}
+
+      <OrderHistory history={order.history} />
+
+      {issuable && (
+        <IssueOrderModal
+          firmId={firm.id}
+          order={order}
+          opened={issueOpened}
+          onClose={issueModal.close}
+        />
+      )}
+      {cancellable && (
+        <CancelOrderModal
+          firmId={firm.id}
+          order={order}
+          opened={cancelOpened}
+          onClose={cancelModal.close}
         />
       )}
 

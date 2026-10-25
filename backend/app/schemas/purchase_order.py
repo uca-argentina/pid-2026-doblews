@@ -47,16 +47,38 @@ class PurchaseOrderLineOut(BaseModel):
     estimated_total: Decimal
 
 
+class OrderEvent(BaseModel):
+    """One change of status in an order's history: what, when and who (HU-21).
+
+    Read from the order's own columns (created_*, issued_*, cancelled_*): there
+    is no event table. HU-22 adds the receipts to the same timeline.
+    """
+
+    kind: Literal["created", "issued", "cancelled"]
+    at: datetime
+    by: NamedRef
+
+
 class PurchaseOrderOut(PurchaseOrderSummary):
-    """An order with its lines."""
+    """An order with its lines and its history, oldest event first."""
 
     lines: list[PurchaseOrderLineOut]
+    history: list[OrderEvent]
+
+
+class GenerateItem(BaseModel):
+    """A material of the work's take-off to order, and from whom.
+
+    supplier_id null means the default: the cheapest offer for what the work
+    still needs. A chosen supplier has to offer the material.
+    """
+
+    resource_id: int
+    supplier_id: int | None = None
 
 
 class GenerateOrdersIn(BaseModel):
-    """The materials of the work's take-off to order."""
-
-    resource_ids: list[int] = Field(min_length=1)
+    items: list[GenerateItem] = Field(min_length=1)
 
 
 class SkippedMaterialOut(BaseModel):

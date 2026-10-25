@@ -85,6 +85,7 @@ No son decisiones de este sprint: son lo que los sprints anteriores dejaron fija
 
 - En la pestaña **Compras** de la obra se eligen uno o varios materiales y se toca **"Generar órdenes"**.
 - Se arma **un borrador por proveedor**: cada material va con el **más económico** para la cantidad del cómputo (HU-18). Si hay empate, se usa el primero por nombre y se puede cambiar.
+- Antes de generar se puede **elegir otro proveedor** para cada material, entre los que lo ofrecen. El más económico viene elegido, y cada opción muestra su total para lo que falta pedir. *(Sumado al implementar HU-21.)*
 - En borrador se puede, por renglón, cambiar de proveedor (entre los que ofrecen ese material, y el renglón pasa a la orden de ese proveedor), cambiar la cantidad, quitarlo, y agregar materiales del cómputo.
 - La cantidad es mayor que cero, con hasta 3 decimales, en la unidad del catálogo.
 - El **precio unitario y el envío se congelan** al generar el renglón. Si el proveedor cambia su lista después, la orden no cambia. La pantalla muestra el total estimado de cada renglón y de la orden: `precio × cantidad + envío`, la misma fórmula de ADR-010 §4.
@@ -374,3 +375,12 @@ Dos precisiones respecto del backlog:
 El detalle de lo que se precisó está en ADR-011 §8.
 
 **Falta para cerrar HU-20:** la revisión visual de los criterios y de 375px, y el PR a `dev`. **Queda liberada HU-21** (emitir, anular y el listado del estudio).
+
+**2026-10-25 (noche).** HU-20 mergeada a `dev` (PR #53). **HU-21 implementada** en `feat/hu21-issue-orders`, junto con un cambio pedido sobre HU-20.
+
+- **Elegir el proveedor en Compras:** cada material que se puede pedir tiene un selector con sus proveedores, el más económico ya elegido y el total de cada uno para lo que falta pedir. "Generar órdenes" respeta lo elegido.
+- **Emitir y anular** desde la página de la orden, con una confirmación que explica la consecuencia. Una emitida queda de solo lectura; una anulada es final y devuelve sus cantidades a "sin pedir". El backend responde 409 a cualquier otra transición, y la pantalla solo ofrece las válidas.
+- **Historial** en el detalle: creada, emitida y anulada, con quién y cuándo, leído de las columnas de la orden (sin migración).
+- **Listados:** Compras muestra las órdenes de la obra en todos los estados; la nueva sección **"Órdenes de compra"** del estudio las muestra todas, filtrables por obra, proveedor y estado, con estado vacío. Tabla desde `sm`, tarjetas debajo.
+
+El detalle está en ADR-011 §8. **Queda liberada HU-22** (recepciones).

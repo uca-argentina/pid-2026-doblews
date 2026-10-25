@@ -224,6 +224,14 @@ Las rutas bajo la obra resuelven la obra con `get_visible` como el resto, así q
 - **Rutas exactas de HU-20:** `POST .../projects/{project_id}/purchase-orders/generate` (200, con las órdenes tocadas y los omitidos), `GET .../projects/{project_id}/purchase-orders?order_status=`, `GET /firms/{firm_id}/purchase-orders/{order_id}`, `POST .../lines`, `PATCH .../lines/{line_id}`, `POST .../lines/{line_id}/supplier` (responde con el borrador al que fue el renglón), `POST .../lines/{line_id}/deactivate` y `POST .../{order_id}/discard` (204). Las de editar responden con la orden entera.
 - En el front, los borradores se listan bajo la comparación, en la pestaña Compras, y cada uno abre `/firms/:firmId/purchase-orders/:orderId`.
 
+**Precisado al implementar HU-21** (2026-10-25):
+
+- **Generar acepta un proveedor por material.** El cuerpo pasa de `resource_ids` a `items: [{resource_id, supplier_id}]`. `supplier_id` en `null` es el de siempre, el más económico para lo que falta pedir; uno elegido tiene que ofrecer el material, si no el pedido entero da 422 y no se escribe nada. En Compras, cada material que se puede pedir muestra un selector de proveedor con el más económico ya elegido y el total de cada opción para lo que falta pedir.
+- **Emitir y anular:** `POST /firms/{firm_id}/purchase-orders/{order_id}/issue` y `.../cancel`, con `purchase_order.manage`, responden con la orden entera. Emitir exige un borrador con al menos un renglón activo; anular, un borrador o una emitida. Lo demás es 409: "Solo se puede emitir una orden en borrador", "No se puede emitir una orden sin materiales", "Una orden anulada no cambia de estado", "Una orden con materiales recibidos no se puede anular". Una anulada deja de contar en "Ya pedido".
+- **El historial sale de las columnas de la orden** (`created_*`, `issued_*`, `cancelled_*`): el detalle trae `history: [{kind, at, by}]`, del más viejo al más nuevo. No hay tabla de eventos ni migración; HU-22 suma las recepciones a la misma línea de tiempo.
+- **El listado del estudio** es `GET /firms/{firm_id}/purchase-orders?project_id=&supplier_id=&order_status=` (el parámetro se llama `order_status`, como en el de la obra), con el número más nuevo primero. La pantalla "Órdenes de compra" trae todas y filtra del lado del cliente; las opciones de cada filtro salen de las mismas órdenes.
+- En el front, Compras lista las órdenes de la obra en todos sus estados, y la página de la orden ofrece solo las acciones que su estado permite.
+
 ---
 
 ## Consecuencias

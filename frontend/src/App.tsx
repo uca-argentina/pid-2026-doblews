@@ -20,6 +20,7 @@ import { ProjectTeamPage } from "./pages/ProjectTeamPage";
 import { NoFirmPage } from "./pages/NoFirmPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { PurchaseOrderPage } from "./pages/PurchaseOrderPage";
+import { PurchaseOrdersPage } from "./pages/PurchaseOrdersPage";
 import { SupplierDetailPage } from "./pages/SupplierDetailPage";
 import { SuppliersPage } from "./pages/SuppliersPage";
 import { PlatformLayout } from "./layout/PlatformLayout";
@@ -169,6 +170,18 @@ function App() {
                 message="Tu rol en este estudio no incluye ver los proveedores."
               >
                 <SupplierDetailPage />
+              </RequirePermission>
+            }
+          />
+          {/* HU-21: every order of the firm, with filters. */}
+          <Route
+            path="purchase-orders"
+            element={
+              <RequirePermission
+                code="purchase_order.view"
+                message="Tu rol en este estudio no incluye ver las órdenes de compra."
+              >
+                <PurchaseOrdersPage />
               </RequirePermission>
             }
           />

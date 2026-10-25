@@ -36,6 +36,7 @@ from app.schemas.purchase_order import (
     GenerateOrdersIn,
     GenerateOrdersOut,
     NamedRef,
+    OrderEvent,
     OrderLineCreate,
     OrderLineSupplierChange,
     OrderLineUpdate,
@@ -112,14 +113,33 @@ def _summaries(
     return [_summary(entry, lines.get(entry.order.id, [])) for entry in entries]
 
 
+def _history(db: DbSession, firm_id: int, order) -> list[OrderEvent]:
+    """The order's changes of status, oldest first, from its own columns."""
+    stamps = [
+        ("created", order.created_at, order.created_by),
+        ("issued", order.issued_at, order.issued_by),
+        ("cancelled", order.cancelled_at, order.cancelled_by),
+    ]
+    stamps = [stamp for stamp in stamps if stamp[1] is not None]
+    names = PurchaseOrderRepository(db, firm_id=firm_id).account_names(
+        {account_id for _, _, account_id in stamps}
+    )
+    return [
+        OrderEvent(kind=kind, at=at, by=NamedRef(id=account_id, name=names.get(account_id, "")))
+        for kind, at, account_id in sorted(stamps, key=lambda stamp: stamp[1])
+    ]
+
+
 def _order_out(db: DbSession, firm_id: int, order_id: int) -> PurchaseOrderOut:
-    """An order with its lines, read back as the screen will show it."""
+    """An order with its lines and history, read back as the screen will show it."""
     entry = PurchaseOrderRepository(db, firm_id=firm_id).entry(order_id)
     if entry is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=ORDER_NOT_FOUND)
     lines = PurchaseOrderLineRepository(db, firm_id=firm_id).lines([order_id]).get(order_id, [])
     return PurchaseOrderOut(
-        **_summary(entry, lines).model_dump(), lines=[_line_out(line) for line in lines]
+        **_summary(entry, lines).model_dump(),
+        lines=[_line_out(line) for line in lines],
+        history=_history(db, firm_id, entry.order),
     )
 
 
@@ -158,7 +178,11 @@ def generate_orders(
     project = _visible_project(db, membership, account, granted, project_id)
     with _order_rules():
         result = purchase_orders.generate(
-            db, membership.firm_id, project.id, payload.resource_ids, account.id
+            db,
+            membership.firm_id,
+            project.id,
+            [(item.resource_id, item.supplier_id) for item in payload.items],
+            account.id,
         )
     db.commit()
     entries = PurchaseOrderRepository(db, firm_id=membership.firm_id).entries(result.order_ids)
@@ -193,6 +217,59 @@ def list_project_orders(
 
 
 # --- under the firm -----------------------------------------------------------
+
+
+@router.get(
+    FIRM_PREFIX,
+    response_model=list[PurchaseOrderSummary],
+    dependencies=[Depends(VIEW)],
+)
+def list_firm_orders(
+    db: DbSession,
+    membership: CurrentMembership,
+    project_id: int | None = None,
+    supplier_id: int | None = None,
+    order_status: OrderStatus | None = None,
+) -> list[PurchaseOrderSummary]:
+    """Every order of the firm, newest first, filterable by work, supplier and status.
+
+    Not narrowed to the works the caller is on: the permission is firm-scope, and
+    this listing is how an architect off a work's team reaches its orders.
+    """
+    entries = PurchaseOrderRepository(db, firm_id=membership.firm_id).for_firm(
+        project_id, supplier_id, order_status
+    )
+    return _summaries(db, membership.firm_id, entries)
+
+
+@router.post(
+    f"{FIRM_PREFIX}/{{order_id}}/issue",
+    response_model=PurchaseOrderOut,
+    dependencies=[Depends(MANAGE)],
+)
+def issue_order(
+    order_id: int, account: CurrentAccount, db: DbSession, membership: CurrentMembership
+) -> PurchaseOrderOut:
+    """Issue a draft. From here on it is not edited, only received or cancelled."""
+    with _order_rules():
+        purchase_orders.issue(db, membership.firm_id, order_id, account.id)
+    db.commit()
+    return _order_out(db, membership.firm_id, order_id)
+
+
+@router.post(
+    f"{FIRM_PREFIX}/{{order_id}}/cancel",
+    response_model=PurchaseOrderOut,
+    dependencies=[Depends(MANAGE)],
+)
+def cancel_order(
+    order_id: int, account: CurrentAccount, db: DbSession, membership: CurrentMembership
+) -> PurchaseOrderOut:
+    """Cancel a draft or an issued order. Final, and it stays visible with its status."""
+    with _order_rules():
+        purchase_orders.cancel(db, membership.firm_id, order_id, account.id)
+    db.commit()
+    return _order_out(db, membership.firm_id, order_id)
 
 
 @router.get(
