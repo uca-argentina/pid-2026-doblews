@@ -121,6 +121,8 @@ Uno solo para guardar **y** cargar, mismo argumento que ADR-005 §2 y que ADR-00
 
 Se agrega en la migración de seed, mismo mecanismo que `b97f764e437b_seed_recipe_catalog_permissions.py`.
 
+> **Cambiado por [ADR-013](0013-client-read-access.md) (2026-10-25).** Ver versiones pasa a pedir un permiso propio, `project.budget_version.view` (`lead`, `collaborator`, `client`), o `project.view_all`. El `client` ve las versiones de su obra, en solo lectura. Guardar y cargar siguen con `project.budget.manage`.
+
 ### 5. Reglas que el esquema no puede garantizar
 
 Cada una con su test, mismo formato que ADR-005 §7 y ADR-006 §4:
