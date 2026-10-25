@@ -5,7 +5,9 @@ import {
   Box,
   Button,
   Card,
+  Checkbox,
   Collapse,
+  Group,
   Stack,
   Table,
   Text,
@@ -13,11 +15,20 @@ import {
 import { formatMoney, formatQuantity } from "../../lib/format";
 import { cheapestOffers, joinNames } from "./offerDisplay";
 import { OffersList } from "./OffersList";
-import type { ComparedMaterial } from "./types";
+import { canOrder } from "./orderable";
+import type { ComparedMaterial, ProjectPurchasingItem } from "./types";
+
+/** Picking materials to order (HU-20), for whoever may generate orders. */
+export interface MaterialSelection {
+  selected: Set<number>;
+  toggle: (resourceId: number) => void;
+}
 
 interface ProjectPurchasingTableProps {
-  items: ComparedMaterial[];
+  items: ProjectPurchasingItem[];
   currency: string;
+  /** Present only for whoever holds purchase_order.manage. */
+  selection?: MaterialSelection;
 }
 
 /** HU-18, by work: each material of the take-off at the quantity the work
@@ -27,10 +38,15 @@ interface ProjectPurchasingTableProps {
  * whole purchase: the comparison is material by material, and adding up each
  * material's winner would read as an optimal purchase, which HU-18 leaves out.
  *
+ * HU-20 adds, under each quantity, how much is already on order, and — for
+ * whoever may generate orders — a checkbox to pick the materials to order. A
+ * material nobody sells, or already all on order, cannot be picked.
+ *
  * A table from sm up and cards below it, both rendered and one hidden by CSS. */
 export function ProjectPurchasingTable({
   items,
   currency,
+  selection,
 }: ProjectPurchasingTableProps) {
   const [open, setOpen] = useState<Set<number>>(new Set());
   const toggle = (resourceId: number) =>
@@ -48,6 +64,7 @@ export function ProjectPurchasingTable({
           <Table verticalSpacing="sm">
             <Table.Thead>
               <Table.Tr>
+                {selection && <Table.Th w={40} />}
                 <Table.Th w={40} />
                 <Table.Th>Material</Table.Th>
                 <Table.Th ta="right">Cantidad</Table.Th>
@@ -63,6 +80,11 @@ export function ProjectPurchasingTable({
                 return (
                   <Fragment key={item.resource_id}>
                     <Table.Tr>
+                      {selection && (
+                        <Table.Td>
+                          <SelectBox item={item} selection={selection} />
+                        </Table.Td>
+                      )}
                       <Table.Td>
                         {offered && (
                           <ActionIcon
@@ -81,6 +103,7 @@ export function ProjectPurchasingTable({
                       </Table.Td>
                       <Table.Td ta="right">
                         {formatQuantity(item.quantity)} {item.unit.abbreviation}
+                        <OrderedNote item={item} />
                       </Table.Td>
                       <Table.Td>
                         <Winner item={item} />
@@ -105,7 +128,7 @@ export function ProjectPurchasingTable({
                     </Table.Tr>
                     {expanded && (
                       <Table.Tr>
-                        <Table.Td />
+                        <Table.Td colSpan={selection ? 2 : 1} />
                         <Table.Td colSpan={5}>
                           <OffersList
                             offers={item.offers}
@@ -130,10 +153,14 @@ export function ProjectPurchasingTable({
           return (
             <Card key={item.resource_id} withBorder padding="md" radius="md">
               <Stack gap={6}>
-                <Text fw={600}>{item.name}</Text>
+                <Group justify="space-between" wrap="nowrap" align="flex-start">
+                  <Text fw={600}>{item.name}</Text>
+                  {selection && <SelectBox item={item} selection={selection} />}
+                </Group>
                 <Text size="sm" c="dimmed">
                   {formatQuantity(item.quantity)} {item.unit.abbreviation}
                 </Text>
+                <OrderedNote item={item} />
                 <Winner item={item} />
                 {offered && (
                   <Text size="xl" fw={700}>
@@ -206,5 +233,38 @@ function Winner({ item }: { item: ComparedMaterial }) {
         </Text>
       )}
     </Text>
+  );
+}
+
+/** "Ya pedido: 7.200 u" under the quantity, when something is on order. */
+function OrderedNote({ item }: { item: ProjectPurchasingItem }) {
+  if (Number(item.ordered_quantity) <= 0) return null;
+  return (
+    <Text size="xs" c="dimmed">
+      Ya pedido: {formatQuantity(item.ordered_quantity)}{" "}
+      {item.unit.abbreviation}
+    </Text>
+  );
+}
+
+function SelectBox({
+  item,
+  selection,
+}: {
+  item: ProjectPurchasingItem;
+  selection: MaterialSelection;
+}) {
+  const orderable = canOrder(item);
+  return (
+    <Checkbox
+      checked={orderable && selection.selected.has(item.resource_id)}
+      onChange={() => selection.toggle(item.resource_id)}
+      disabled={!orderable}
+      aria-label={
+        orderable
+          ? `Elegir ${item.name} para la orden`
+          : `${item.name}: ${item.offers.length === 0 ? "sin proveedor" : "ya está todo pedido"}`
+      }
+    />
   );
 }
