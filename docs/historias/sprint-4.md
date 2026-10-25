@@ -4,7 +4,7 @@
 **Duración del sprint:** 2 semanas
 **Equipo:** 3 personas (fullstack)
 
-> **Estado de este documento:** borrador. Las historias quedan firmes cuando estén escritas las tres ADRs de [T-11](#t-11--decisiones-de-diseño-y-adrs-del-sprint): ADR-011 (órdenes de compra), ADR-012 (gamificación) y ADR-013 (acceso del cliente). Los **[D-n]** remiten a las [preguntas de diseño](#preguntas-de-diseño-abiertas).
+> **Estado de este documento:** las historias están firmes. HU-20 a HU-22 las define [ADR-011](../adr/0011-purchase-orders.md); HU-23 y HU-24, [ADR-012](../adr/0012-supplier-loyalty-points.md); HU-25 y HU-26, [ADR-013](../adr/0013-client-read-access.md). Las tres están en estado Propuesta y pasan a Aceptada al implementarse. Los **[D-n]** remiten a las [preguntas de diseño](#preguntas-de-diseño-abiertas), ya cerradas.
 
 ## Requerimientos de la cátedra
 
@@ -54,6 +54,7 @@ No son decisiones de este sprint: son lo que los sprints anteriores dejaron fija
 
 *Tarea de equipo, no historia de usuario. Va primero: órdenes y puntos agregan tablas, y el cliente cambia una regla de permisos.*
 
+- **Hecho:** [ADR-011](../adr/0011-purchase-orders.md), [ADR-012](../adr/0012-supplier-loyalty-points.md) y [ADR-013](../adr/0013-client-read-access.md), el 2026-10-25. Cierran D-19 a D-22.
 - **ADR-011 — Órdenes de compra.**
   - **Tablas:**
     - `purchase_order`: del estudio, de una obra y de un proveedor, con un número legible [D-21] y su estado.
@@ -231,7 +232,7 @@ No son decisiones de este sprint: son lo que los sprints anteriores dejaron fija
 
 - Un usuario que en el estudio es `client` entra a **"Mis obras"**: las obras en las que es cliente.
 - Cada obra muestra el **avance real contra el planificado**, el **fin previsto** y la **última versión del presupuesto** (fecha y total).
-- Dentro de una obra ve solo sus pestañas de lectura: Datos, Avance, Cronograma y Presupuestos. Ninguna tiene botones de edición.
+- Dentro de una obra ve solo sus pestañas de lectura: Datos, Cómputo (cantidades, como ya veía), Planificación con su Gantt (el cronograma), Avance y Presupuestos. Ninguna tiene botones de edición (ADR-013 §2).
 - El menú del estudio, para el `client`, muestra solo lo que puede ver.
 - Estado vacío: "Todavía no tenés obras asignadas".
 - Se usa bien a 375px.
@@ -275,10 +276,7 @@ Cada pregunta se cierra **al arrancar la historia que la necesita**, no antes.
 
 **Se deciden al llegar**
 
-- **D-19.** ¿El costo real de las órdenes entra al dashboard como gasto ejecutado? Recomendación: no en este sprint. El dashboard de HU-19 sigue comparando presupuestos.
-- **D-20.** ¿Cómo se corrige una recepción mal cargada? Opciones: una recepción de ajuste, o permitir anular la última mientras la orden no esté recibida.
-- **D-21.** El número de la orden: ¿correlativo por estudio (OC-0001) o por obra?
-- **D-22.** ¿Con qué permiso se lee la sección "Nivel"? Opciones: `purchase_order.view` o uno propio.
+Ninguna: D-19 a D-22 se cerraron en T-11.
 
 **Pendiente de la cátedra**
 
@@ -286,6 +284,11 @@ Cada pregunta se cierra **al arrancar la historia que la necesita**, no antes.
 - **Cliente e importes.** Confirmar que el cliente ve los importes de las versiones. El pedido dice "versiones de presupuesto", y en el Sprint 2 fijamos que el cliente no ve costos.
 
 **Cerradas** (se registran en ADR-011, ADR-012 y ADR-013)
+
+- **D-19**, en [ADR-011](../adr/0011-purchase-orders.md) (pendientes): el costo real **no** entra al dashboard en este sprint. HU-19 sigue comparando presupuestos.
+- **D-20**, en ADR-011 §3: se corrige **anulando la última recepción** (baja lógica) mientras la orden no esté recibida. Una orden recibida queda cerrada porque ya sumó puntos.
+- **D-21**, en ADR-011 §4: número **correlativo por estudio**, mostrado como `OC-0001`.
+- **D-22**, en [ADR-012](../adr/0012-supplier-loyalty-points.md) §6: el nivel se lee con **`purchase_order.view`**, sin permiso propio.
 
 - Gamificación:
   - El perfil que sube de nivel es **el estudio**, con un nivel general y uno por proveedor.
@@ -350,3 +353,12 @@ Lo que no se recorta: los cuatro estados con las recepciones y el costo real, lo
 ### Dónde estamos
 
 **2026-10-23.** Backlog en borrador, con las decisiones de gamificación, órdenes y cliente ya tomadas por el equipo. Queda liberada **T-11**.
+
+**2026-10-25.** **T-11 terminada.** Escritas [ADR-011](../adr/0011-purchase-orders.md) (órdenes de compra), [ADR-012](../adr/0012-supplier-loyalty-points.md) (gamificación) y [ADR-013](../adr/0013-client-read-access.md) (acceso del cliente). Cierran D-19 a D-22. ADR-003 §8 y ADR-007 §4 llevan una nota que remite a ADR-013.
+
+Dos precisiones respecto del backlog:
+
+- **Las órdenes se gestionan desde el estudio.** Los permisos son de estudio (`purchase_order.*` para owner y architect), así que las rutas de editar, emitir, anular y recibir viven bajo `/firms/{id}/purchase-orders`. Bajo la obra quedan generar y listar.
+- **El cliente sigue viendo el Cómputo** (las cantidades, sin importes), además de lo que pide el enunciado. HU-26 lo lista entre sus pestañas.
+
+**Quedan liberados los tres frentes:** órdenes (HU-20), gamificación (la función de puntos de HU-23) y cliente (HU-25).

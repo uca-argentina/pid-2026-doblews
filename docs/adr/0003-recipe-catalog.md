@@ -217,6 +217,8 @@ Este es el primer módulo que agrega capacidades después de ADR-002, y es la co
 
 Ninguna de estas cuatro filas requiere tocar código de autorización: entran en la migración de seed del catálogo.
 
+> **Acotado por [ADR-013](0013-client-read-access.md) (2026-10-25).** El `client` sigue sin `project.cost.view`, pero ve las **versiones guardadas** del presupuesto, con importes, por un permiso propio (`project.budget_version.view`). Es la única excepción: el presupuesto vivo y el costo de las tareas siguen siendo internos.
+
 **El `owner` lee el cómputo y sus costos por `project.view_all`, y no lo modifica** (precisado al implementar HU-5, 2026-09-14). La tabla no le da ningún permiso de obra, y es correcto: no tiene fila en `project_member` en las obras que no integra. Pero ya puede abrir esas obras (HU-3), y un 403 sobre el cómputo de una obra de su propio estudio no protege nada. Por eso el `GET` del cómputo acepta cualquiera de las dos alturas, `requires_any(("project.recipe.view", "project"), ("project.view_all", "firm"))`, con el mismo argumento que el detalle de la obra en [ADR-002 §9](0002-authorization-model.md). El costo sigue la misma regla: se muestra con `project.cost.view` **o** con `project.view_all`. Las escrituras piden solo `project.recipe.manage`, así que auditar una obra no habilita a editarla. Ninguna fila del seed cambia.
 
 ### 9. Fuera de alcance
