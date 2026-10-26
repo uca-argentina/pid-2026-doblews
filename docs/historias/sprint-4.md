@@ -410,3 +410,17 @@ El detalle de lo que se precisó está en ADR-011 §8.
 El detalle de lo que se precisó está en ADR-012 §9.
 
 **Falta para cerrar HU-23:** correr migración y tests, y el PR a `dev`. **Queda liberada HU-24** (niveles y pantallas).
+
+**2026-10-26 (HU-24).** HU-23 mergeada a `dev`. **HU-24 implementada** en `feat/hu24-loyalty-levels`. **ADR-012 queda Aceptada**: con las rutas de §7 ya rige completa.
+
+- **Niveles:** los cuatro umbrales de ADR-012 §5 y la función que dice nivel actual, siguiente y cuánto falta, pura y en el mismo módulo que la regla de puntos. 14 tests sin base, con cada borde (49/50, 149/150, 399/400) y el techo de Platino.
+- **Ruta nueva:** `GET /firms/{firm_id}/loyalty`, con `purchase_order.view` (D-22), devuelve el nivel del estudio y el historial completo, del más reciente al más viejo, con orden, obra, proveedor, material, cantidad, contra qué se comparó, la regla y los puntos.
+- **Nivel por proveedor:** viaja en el detalle del proveedor, así su ficha no cuesta un request más. **No va en el listado**, aunque §7 lo mencionaba: los criterios de HU-24 piden solo la ficha, y el listado es pantalla de HU-17.
+- **Sección "Nivel" del estudio:** nivel con su barra, los puntos, cuánto falta para el siguiente, y el historial con la regla en palabras ("Mismo material, cantidad similar") y un link a cada orden. Estado vacío con link a Órdenes de compra. Tabla desde `sm`, tarjetas debajo.
+- **En la ficha del proveedor**, el mismo bloque de nivel, arriba de la lista de precios: es sobre la relación, no sobre un precio.
+- **Las órdenes refrescan el nivel:** `useRefresh` de las órdenes invalida también las claves de loyalty y de proveedores, porque recibir una orden es lo que suma puntos.
+- **El cliente no ve nada de esto:** ni la entrada del navbar, ni la ruta (403), ni la sección.
+
+El detalle de lo que se precisó está en ADR-012 §9.
+
+**Falta para cerrar HU-24:** correr los tests, la revisión visual de los criterios y de 375px, y el PR a `dev`. **Quedan HU-25 y HU-26** (el cliente), que no comparten tablas ni pantallas con estos dos frentes, más T-12 y T-13.

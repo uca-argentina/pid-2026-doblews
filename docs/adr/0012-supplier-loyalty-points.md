@@ -1,6 +1,6 @@
 # ADR-012: Gamificación por recurrencia de compra
 
-**Estado:** Aceptada en parte (HU-23). §1 a §6 y §8 rigen; las rutas de §7 entran con HU-24
+**Estado:** Aceptada
 **Fecha:** 2026-10-25
 **Contexto:** Qué premia la gamificación, cómo se calculan los puntos, cómo se guardan y cómo se leen los niveles. Deja firmes HU-23 y HU-24 del [Sprint 4](../historias/sprint-4.md). Se apoya en las órdenes de compra de [ADR-011](0011-purchase-orders.md).
 
@@ -127,7 +127,9 @@ El nivel, los puntos y el historial se leen con **`purchase_order.view`** (ADR-0
 6. Las órdenes de otro estudio no cuentan como compra anterior.
 7. Cambiar las constantes no altera los asientos ya escritos.
 
-### 9. Precisado al implementar HU-23 (2026-10-26)
+### 9. Precisado al implementar (2026-10-26)
+
+**Al implementar HU-23:**
 
 - **"La última compra de ese material" es por material, no por orden.** El texto de §3 —"el renglón de ese material en la orden `received` más reciente"— se podía leer como "solo mirar la última orden", y entonces un material comprado dos órdenes atrás contaría como nunca comprado y `same_material` casi nunca se aplicaría. Se compara contra **la orden recibida más reciente que tenía ese material**, por `received_at` y después por id. La consulta usa `DISTINCT ON (resource_id)`.
 - **`bought_before` es un argumento aparte de la regla**, y no se deduce de si hay compras anteriores de esos materiales: un mapa vacío también describe a un estudio que le compra seguido y nunca le compró ninguno de esos materiales. El primero da `first_purchase` (0) y el segundo `same_supplier` (3).
@@ -135,6 +137,16 @@ El nivel, los puntos y el historial se leen con **`purchase_order.view`** (ADR-0
 - **La cantidad que se guarda y se compara es la recibida**, leída de las recepciones activas (HU-22). En una orden `received` coincide con la pedida, pero la regla está definida sobre la recibida y es esa la que se usa.
 - **Los umbrales de nivel de §5 no entran todavía.** La regla de §3 y sus valores están en `services/loyalty.py`, como pide esta ADR; los cuatro niveles los agrega HU-24 en ese mismo módulo, cuando haya quien los lea. No tiene sentido dejar constantes sin consumidor.
 - **Nombres de constraints cortos a propósito:** `uq_firm_points_entry_purchase_order_line_id` ya mide 43 caracteres, y Postgres guarda 63. Los nombres generados por la convención se verificaron contra ese límite antes de escribir la migración.
+
+**Al implementar HU-24:**
+
+- **El nivel por proveedor va solo en la ficha**, no en el listado de proveedores como decía §7. Los criterios de HU-24 piden "en la ficha de cada proveedor" y nada más, y el listado es una pantalla de HU-17: sumarle una columna por una historia ajena no se justificaba. Si después se quiere ver el nivel de todos de un vistazo, es una consulta agregada más.
+- **El nivel se lee con `supplier.view` en la ficha**, como anticipaba §7, sin chequear además `purchase_order.view`. Hoy los dos permisos los tienen los mismos dos roles; si alguna vez dejan de coincidir, hay que agregar el segundo chequeo y el campo pasa a ser opcional. Está anotado en el esquema.
+- **El nivel lo arma `level_of()` en `schemas/loyalty.py`**, no cada ruta por su lado. Las dos pantallas que muestran un nivel —la del estudio y la del proveedor— lo describen igual, y el esquema se valida directo contra el dataclass del servicio, que tiene los mismos nombres de campo. Evita que una ruta importe de otra, que el proyecto no hacía en ningún lado.
+- **El historial viene entero y sin paginar**, como el listado de órdenes del estudio de HU-21 y por la misma razón: las órdenes recibidas de un estudio son pocas. Ordenado por id descendente y no por `created_at`, porque los asientos escritos en una misma transacción comparten timestamp.
+- **La barra se mide entre el umbral del nivel actual y el del siguiente**, no desde cero: en Plata con 60 puntos muestra cuánto hay de 60 entre 50 y 150, que es lo que significa "cuánto falta para el próximo". En Platino va llena y el texto dice que es el máximo.
+- **`LevelOut` manda `level_from`** además del nivel y los puntos, justamente para que la barra pueda hacer esa cuenta sin conocer la tabla de umbrales.
+- **Las órdenes invalidan también la clave del nivel y la de proveedores.** Recibir una orden es lo que suma puntos, así que `useRefresh` de las órdenes refresca las dos pantallas que muestran un nivel; si no, una entrega registrada en una pestaña dejaba el nivel viejo en otra.
 
 ---
 
