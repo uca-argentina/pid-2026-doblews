@@ -1,6 +1,6 @@
 # ADR-011: Órdenes de compra
 
-**Estado:** Aceptada en parte (HU-20). §1 a §8 rigen; las recepciones de §1 y §3 entran con HU-22
+**Estado:** Aceptada
 **Fecha:** 2026-10-25
 **Contexto:** Modelo de datos, estados, permisos y rutas de las órdenes de compra a proveedores. Deja firmes HU-20, HU-21 y HU-22 del [Sprint 4](../historias/sprint-4.md) y es la base de los puntos de [ADR-012](0012-supplier-loyalty-points.md).
 
@@ -232,6 +232,18 @@ Las rutas bajo la obra resuelven la obra con `get_visible` como el resto, así q
 - **El listado del estudio** es `GET /firms/{firm_id}/purchase-orders?project_id=&supplier_id=&order_status=` (el parámetro se llama `order_status`, como en el de la obra), con el número más nuevo primero. La pantalla "Órdenes de compra" trae todas y filtra del lado del cliente; las opciones de cada filtro salen de las mismas órdenes.
 - En el front, Compras lista las órdenes de la obra en todos sus estados, y la página de la orden ofrece solo las acciones que su estado permite.
 
+**Precisado al implementar HU-22** (2026-10-26):
+
+- **La migración crea `purchase_order_receipt` y `purchase_order_receipt_line`**, las dos que faltaban de §1. La recepción lleva `firm_id` con FK compuesta contra la orden; sus renglones no llevan ni `firm_id` ni `is_active`, como quedó dicho.
+- **El envío real es de la entrega, no del renglón.** `purchase_order_receipt` suma una columna `shipping_cost` nullable, y `actual_cost` del renglón de recepción pasa a ser **solo el material**, sin flete. Lo que §1 decía —"envío incluido si el proveedor lo cobró ahí"— hacía que la diferencia por material absorbiera el flete y mostrara un sobrecosto que no existía. Un remito cobra el flete una vez para todo el camión: repartirlo por material sería inventar una división que el proveedor no hizo. `NULL` es "no cobró envío", distinto de un cero que sí cobró y escribió.
+- **La diferencia por renglón compara solo lo recibido:** `received_estimate` es el precio unitario congelado por la cantidad recibida, y `actual_cost` es lo facturado por esa cantidad. Materiales contra materiales. Mientras no llegó nada la diferencia viaja en `null`, no en cero: no hay nada que comparar, y un cero se leería como "justo lo acordado". El **total real de la orden** sí incluye los fletes de sus recepciones.
+- **La fecha de la entrega no es futura ni anterior al día de emisión**, los dos días medidos en Argentina (`core/clock.py`) y no en el servidor: una orden emitida a las diez de la noche ya es mañana en UTC, y una entrega de ese mismo día no puede quedar rechazada por precederla. Las dos responden 409, como las fechas reales de una tarea.
+- **El estado se deriva en una sola función**, `_apply_received_status`, por la que pasan tanto registrar una entrega como anularla. Es lo que sostiene la regla 8 y es el punto donde HU-23 engancha los puntos de ADR-012 §3.
+- **"La última recepción" es la última cargada**, por `id` y no por `received_on`: lo que §3 protege es que ninguna entrega posterior quede parada sobre un total que ya no existe, y esa base es el orden de carga. El detalle devuelve `can_cancel` en cada recepción, así la pantalla no vuelve a deducir la regla.
+- **Registrar toma un lock sobre la fila de la orden** (`SELECT ... FOR UPDATE`), para que dos entregas simultáneas no pasen las dos el tope de la regla 1.
+- **Rutas exactas de HU-22:** `POST /firms/{firm_id}/purchase-orders/{order_id}/receipts` (201) y `POST .../receipts/{receipt_id}/deactivate` (200), las dos con `purchase_order.manage` y las dos responden con la orden entera. El historial del detalle suma un evento `received` por recepción activa, fechado en cuándo se cargó.
+- **En el front**, la tabla de renglones tiene dos formas: mientras es borrador muestra lo que se está acordando (cantidad, precio, envío, total estimado), y desde que está emitida muestra lo que pasa (pedido, recibido, pendiente, estimado, real, diferencia). Nueve columnas juntas pedirían scroll en un notebook para decir menos, y los dos totales ya están en el encabezado.
+
 ---
 
 ## Consecuencias
@@ -253,6 +265,7 @@ Las rutas bajo la obra resuelven la obra con `get_visible` como el resto, así q
 | Tema | Se revisa cuando |
 |---|---|
 | El costo real de las órdenes como gasto ejecutado en el dashboard (D-19) | Se quiera comparar lo gastado contra lo presupuestado. HU-19 sigue comparando presupuestos |
+| Separar el flete real por material, en vez de por entrega | Un proveedor cobre el flete prorrateado y haga falta compararlo renglón por renglón |
 | Enviar la orden al proveedor (mail, PDF) | Se use la orden fuera del sistema |
 | Devoluciones, remitos, facturas y pagos | Haga falta conciliar con administración |
 | Stock e inventario de obra | Se quiera saber qué hay en obra y no solo qué llegó |
