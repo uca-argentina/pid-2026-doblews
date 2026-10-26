@@ -14,6 +14,7 @@ from pydantic import (
 )
 
 from app.schemas.catalog import UnitRef
+from app.schemas.loyalty import LevelOut
 
 # Same width as supplier.name (String(150)). Stripped, so "   " is empty and refused.
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=150)]
@@ -134,6 +135,13 @@ class SupplierPriceOut(BaseModel):
 
 
 class SupplierDetailOut(SupplierOut):
-    """A supplier with its whole price list."""
+    """A supplier with its whole price list, and the firm's level with them.
+
+    The level travels here rather than behind a route of its own, so the card
+    that shows it costs one request (ADR-012 section 7). It is read with
+    supplier.view, which today the same two roles hold as purchase_order.view;
+    if the two ever stop coinciding, the level needs the second one as well.
+    """
 
     prices: list[SupplierPriceOut]
+    level: LevelOut

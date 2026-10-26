@@ -1,4 +1,4 @@
-"""The points rule of HU-23, without a database (ADR-012 section 3).
+"""The points rule of HU-23 and the levels of HU-24, without a database.
 
 services/loyalty.rate() is pure, like projection.py and purchasing.py beside it:
 it takes the lines of an order and what came last time, and answers with a code
@@ -14,6 +14,7 @@ import pytest
 
 from app.services.loyalty import (
     FIRST_PURCHASE,
+    LEVELS,
     POINTS,
     SAME_MATERIAL,
     SAME_MATERIAL_SIMILAR_QUANTITY,
@@ -21,6 +22,7 @@ from app.services.loyalty import (
     EarnedPoints,
     PurchasedLine,
     is_similar,
+    level_for,
     rate,
 )
 
@@ -155,3 +157,64 @@ def test_the_four_rules_are_worth_what_adr_012_says():
         SAME_SUPPLIER: 3,
         FIRST_PURCHASE: 0,
     }
+
+
+# --- levels (HU-24, ADR-012 section 5) ----------------------------------------
+#
+# Bronce from 0, Plata from 50, Oro from 150, Platino from 400.
+
+
+@pytest.mark.parametrize(
+    ("points", "level"),
+    [
+        (0, "bronze"),
+        (49, "bronze"),
+        (50, "silver"),
+        (149, "silver"),
+        (150, "gold"),
+        (399, "gold"),
+        (400, "platinum"),
+        (10_000, "platinum"),
+    ],
+)
+def test_a_total_reaches_the_level_its_threshold_allows(points, level):
+    assert level_for(points).level == level
+
+
+def test_nothing_earned_is_the_first_level_and_not_none():
+    """A firm that has received no order is Bronce at zero, which is what the
+    empty state of the screen is drawn around."""
+    standing = level_for(0)
+
+    assert (standing.level, standing.points, standing.level_from) == ("bronze", 0, 0)
+
+
+def test_a_level_says_how_far_the_next_one_is():
+    standing = level_for(60)
+
+    assert (standing.level, standing.next_level) == ("silver", "gold")
+    assert (standing.next_level_at, standing.points_to_next) == (150, 90)
+
+
+def test_the_level_a_total_just_reached_needs_nothing_more_to_reach_it():
+    """At exactly the threshold the bar is at the start of the new level, not at
+    the end of the old one."""
+    standing = level_for(150)
+
+    assert (standing.level, standing.level_from) == ("gold", 150)
+    assert standing.points_to_next == 250
+
+
+def test_the_top_level_has_nothing_left_to_reach():
+    standing = level_for(400)
+
+    assert standing.level == "platinum"
+    assert (standing.next_level, standing.next_level_at, standing.points_to_next) == (
+        None,
+        None,
+        None,
+    )
+
+
+def test_the_levels_start_where_adr_012_says():
+    assert LEVELS == (("bronze", 0), ("silver", 50), ("gold", 150), ("platinum", 400))

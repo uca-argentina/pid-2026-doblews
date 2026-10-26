@@ -1,4 +1,7 @@
-"""What buying from the same supplier again is worth (HU-23, ADR-012).
+"""What buying from the same supplier again is worth, and what it adds up to.
+
+HU-23 earns the points, HU-24 turns a total into a level (ADR-012 sections 3
+and 5).
 
 Two halves, like services/purchasing.py. The rule is pure: it takes the lines of
 an order and what was bought from that supplier before, and answers with a code
@@ -174,3 +177,72 @@ def award(db: Session, firm_id: int, order: PurchaseOrder) -> tuple[FirmPointsEn
     db.add_all(written)
     db.flush()
     return written
+
+
+# --- levels (HU-24, ADR-012 section 5) ----------------------------------------
+
+BRONZE = "bronze"
+SILVER = "silver"
+GOLD = "gold"
+PLATINUM = "platinum"
+
+# Where each level starts, lowest first. Four fixed levels, the same for the firm
+# and for each supplier, and not editable from any screen: ADR-012 discarded an
+# administration page for something nobody asked to change. They live here beside
+# the rule for the same reason its values do — one place to adjust.
+LEVELS: tuple[tuple[str, int], ...] = (
+    (BRONZE, 0),
+    (SILVER, 50),
+    (GOLD, 150),
+    (PLATINUM, 400),
+)
+
+
+@dataclass(frozen=True)
+class LevelStanding:
+    """Where a total stands: the level it reached, and what the next one needs.
+
+    The three `next_*` fields are None together, at the top level, where there is
+    nothing left to reach. The screen says so instead of drawing a bar that can
+    never fill.
+    """
+
+    points: int
+    level: str
+    level_from: int
+    next_level: str | None
+    next_level_at: int | None
+    points_to_next: int | None
+
+
+def level_for(points: int) -> LevelStanding:
+    """The level a total of points reaches, and how far the next one is.
+
+    Pure, like the rule above it: the thresholds are constants, so this is
+    tested without a database. A total of zero is Bronce — a firm that has
+    received nothing is at the first level, not at none.
+    """
+    reached = 0
+    for index, (_, threshold) in enumerate(LEVELS):
+        if points >= threshold:
+            reached = index
+    level, level_from = LEVELS[reached]
+
+    if reached + 1 == len(LEVELS):
+        return LevelStanding(
+            points=points,
+            level=level,
+            level_from=level_from,
+            next_level=None,
+            next_level_at=None,
+            points_to_next=None,
+        )
+    next_level, next_level_at = LEVELS[reached + 1]
+    return LevelStanding(
+        points=points,
+        level=level,
+        level_from=level_from,
+        next_level=next_level,
+        next_level_at=next_level_at,
+        points_to_next=next_level_at - points,
+    )

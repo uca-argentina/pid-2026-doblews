@@ -15,6 +15,7 @@ from contextlib import contextmanager
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import CurrentMembership, DbSession, requires
+from app.repositories.loyalty import FirmPointsEntryRepository
 from app.repositories.supplier import (
     PriceEntry,
     SupplierEntry,
@@ -22,6 +23,7 @@ from app.repositories.supplier import (
     SupplierRepository,
 )
 from app.schemas.catalog import UnitRef
+from app.schemas.loyalty import level_of
 from app.schemas.supplier import (
     PricedResource,
     SupplierCreate,
@@ -101,7 +103,10 @@ def _list_out(db: DbSession, membership: CurrentMembership, supplier_id: int) ->
     entries = SupplierPriceRepository(db, firm_id=firm_id).entries(supplier.id)
     prices = [_price_out(entry) for entry in entries]
     base = _supplier_out(SupplierEntry(supplier=supplier, price_count=len(prices)))
-    return SupplierDetailOut(**base.model_dump(), prices=prices)
+    # What the firm has earned buying from them (HU-24): a supplier it never
+    # bought from is Bronce at zero, like the firm itself starts.
+    points = FirmPointsEntryRepository(db, firm_id=firm_id).total_with(supplier.id)
+    return SupplierDetailOut(**base.model_dump(), prices=prices, level=level_of(points))
 
 
 @router.get("", response_model=list[SupplierOut], dependencies=[Depends(VIEW)])
