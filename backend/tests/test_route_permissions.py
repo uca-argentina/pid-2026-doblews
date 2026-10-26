@@ -321,8 +321,9 @@ def test_the_suppliers_prefix_offers_no_way_to_delete_anything():
 
 
 def test_the_purchase_order_prefixes_offer_no_way_to_delete_anything():
-    """ADR-011 section 7, rule 9: a draft is discarded and a line deactivated, both
-    with a POST. Nothing under either prefix of the orders erases a row."""
+    """ADR-011 section 7, rule 9: a draft is discarded, a line deactivated and a
+    receipt cancelled, all three with a POST. Nothing under either prefix of the
+    orders erases a row."""
     methods = {endpoint.method for endpoint in ENDPOINTS if "/purchase-orders" in endpoint.path}
 
     assert methods == {"GET", "POST", "PATCH"}

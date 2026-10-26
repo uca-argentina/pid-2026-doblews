@@ -1,4 +1,4 @@
-"""The rules for generating and editing purchase order drafts (HU-20, ADR-011).
+"""The rules of a purchase order's life: drafts, issuing and receipts (ADR-011).
 
 Plain functions that flush and never commit, raising their own exceptions so the
 route maps them to status codes in one place, the way suppliers.py does.
@@ -15,18 +15,36 @@ formula the comparison ranks suppliers by (ADR-010 section 4).
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Firm, PurchaseOrder, PurchaseOrderLine
+from app.core.clock import LOCAL_ZONE, today
+from app.models import (
+    Firm,
+    PurchaseOrder,
+    PurchaseOrderLine,
+    PurchaseOrderReceipt,
+    PurchaseOrderReceiptLine,
+)
 from app.repositories.project_recipe import ProjectRecipeRepository, TakeoffMaterialEntry
-from app.repositories.purchase_order import PurchaseOrderLineRepository, PurchaseOrderRepository
+from app.repositories.purchase_order import (
+    PurchaseOrderLineRepository,
+    PurchaseOrderReceiptRepository,
+    PurchaseOrderRepository,
+)
 from app.repositories.supplier import OfferEntry, SupplierPriceRepository
 from app.services.purchasing import CURRENCY, offer_total, rank
 
 DRAFT = "draft"
+ISSUED = "issued"
+PARTIALLY_RECEIVED = "partially_received"
+RECEIVED = "received"
+CANCELLED = "cancelled"
+# The two statuses a delivery may be registered against (ADR-011 section 3).
+RECEIVABLE = (ISSUED, PARTIALLY_RECEIVED)
 
 NOT_A_DRAFT = "Solo se puede modificar una orden en borrador"
 NOT_IN_TAKEOFF = "El material no está en el cómputo de la obra"
@@ -36,11 +54,24 @@ ISSUE_ONLY_DRAFT = "Solo se puede emitir una orden en borrador"
 EMPTY_ORDER = "No se puede emitir una orden sin materiales"
 CANCELLED_IS_FINAL = "Una orden anulada no cambia de estado"
 RECEIVED_NOT_CANCELLABLE = "Una orden con materiales recibidos no se puede anular"
+RECEIVE_ONLY_ISSUED = "Solo se puede recibir una orden emitida o recibida parcialmente"
+EMPTY_RECEIPT = "Una recepción tiene que registrar al menos un material"
+OVER_ORDERED = "No se puede recibir más de lo pedido"
+FUTURE_RECEIPT = "Una recepción no puede ser posterior a hoy"
+RECEIPT_BEFORE_ISSUE = "Una recepción no puede ser anterior a la emisión de la orden"
+NOT_LAST_RECEIPT = "Solo se puede anular la última recepción de la orden"
+NO_RECEIPTS = "La orden no tiene recepciones para anular"
+REPEATED_RECEIPT_LINE = "Una recepción registra cada material una sola vez"
+RECEIVED_IS_CLOSED = "Una orden recibida queda cerrada: no se anulan sus recepciones"
 
 # Why a material asked for was left out of the generated drafts. Codes, not
 # sentences: the screen words them.
 SKIPPED_ALREADY_ORDERED = "already_ordered"
 SKIPPED_NO_SUPPLIER = "no_supplier"
+
+# received_estimate() compares materials only, so it asks offer_total() for a
+# total with no freight in it. The freight of a delivery is the receipt's.
+_NO_SHIPPING = Decimal("0.00")
 
 
 class PurchaseOrderNotFoundError(Exception):
@@ -49,6 +80,10 @@ class PurchaseOrderNotFoundError(Exception):
 
 class PurchaseOrderLineNotFoundError(Exception):
     """No live line of that order has this id. → 404."""
+
+
+class PurchaseOrderReceiptNotFoundError(Exception):
+    """No live receipt of that order has this id. → 404."""
 
 
 class PurchaseOrderStateError(Exception):
@@ -99,6 +134,20 @@ def line_total(line: PurchaseOrderLine) -> Decimal:
 
 def order_total(lines: Iterable[PurchaseOrderLine]) -> Decimal:
     return sum((line_total(line) for line in lines), start=Decimal("0.00"))
+
+
+def received_estimate(line: PurchaseOrderLine, quantity: Decimal) -> Decimal:
+    """What the frozen price says this much of the line should have cost (HU-22).
+
+    The material alone. The shipping the line froze is left out on purpose: the
+    freight of a delivery belongs to the receipt, which carries it once for the
+    whole truck, so charging a share of it to each material would invent a split
+    the supplier never made (ADR-011 section 8).
+
+    Expressed through offer_total() with no shipping rather than multiplying
+    here, so there is one rounding rule in the project and not two.
+    """
+    return offer_total(line.unit_price, _NO_SHIPPING, quantity)
 
 
 def ordered_quantities(db: Session, firm_id: int, project_id: int) -> dict[int, Decimal]:
@@ -348,13 +397,13 @@ def issue(db: Session, firm_id: int, order_id: int, issued_by: int) -> PurchaseO
     why: already issued, cancelled, or empty.
     """
     order = get_order(db, firm_id, order_id)
-    if order.status == "cancelled":
+    if order.status == CANCELLED:
         raise PurchaseOrderStateError(CANCELLED_IS_FINAL)
     if order.status != DRAFT:
         raise PurchaseOrderStateError(ISSUE_ONLY_DRAFT)
     if not PurchaseOrderLineRepository(db, firm_id=firm_id).lines([order.id]):
         raise PurchaseOrderStateError(EMPTY_ORDER)
-    order.status = "issued"
+    order.status = ISSUED
     order.issued_at = func.now()
     order.issued_by = issued_by
     db.flush()
@@ -366,19 +415,205 @@ def cancel(db: Session, firm_id: int, order_id: int, cancelled_by: int) -> Purch
     """Cancel a draft or an issued order. Final: a cancelled order never moves again.
 
     An order that already received something cannot be cancelled (ADR-011
-    section 3). Today that is its status, partially_received or received; HU-22
-    adds the receipts, and with them the check on an issued order's deliveries.
-    The order stays visible with its status, unlike a discarded draft, and its
-    quantities stop counting as ordered.
+    section 3, rule 4). The status check below is that rule: a delivery always
+    leaves the order partially_received or received, so an order still issued is
+    one nothing arrived for. The order stays visible with its status, unlike a
+    discarded draft, and its quantities stop counting as ordered.
     """
     order = get_order(db, firm_id, order_id)
-    if order.status == "cancelled":
+    if order.status == CANCELLED:
         raise PurchaseOrderStateError(CANCELLED_IS_FINAL)
-    if order.status not in (DRAFT, "issued"):
+    if order.status not in (DRAFT, ISSUED):
         raise PurchaseOrderStateError(RECEIVED_NOT_CANCELLABLE)
-    order.status = "cancelled"
+    order.status = CANCELLED
     order.cancelled_at = func.now()
     order.cancelled_by = cancelled_by
     db.flush()
     db.refresh(order)
     return order
+
+
+# --- receipts (HU-22) ---------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ReceiptLineIn:
+    """One material of a delivery as the request gives it: how much, and what it cost."""
+
+    line_id: int
+    quantity: Decimal
+    actual_cost: Decimal
+
+
+def _lock_order(db: Session, firm_id: int, order_id: int) -> None:
+    """Hold the order's row for the rest of the transaction.
+
+    Two deliveries registered at the same moment would otherwise both read the
+    same "received so far", both pass the ceiling of rule 1, and together leave
+    the order with more received than it ever ordered. The lock is on the order
+    and not on the receipts because what has to be serialised is the decision
+    the whole order's rows are read for.
+    """
+    db.execute(
+        select(PurchaseOrder.id)
+        .where(PurchaseOrder.id == order_id, PurchaseOrder.firm_id == firm_id)
+        .with_for_update()
+    )
+
+
+def _check_receipt_date(received_on: date, order: PurchaseOrder) -> None:
+    """When a delivery may say it arrived.
+
+    Not in the future, measured in Argentina and not on the server
+    (core/clock.py), like a task's actual dates. And not before the day the
+    order was placed: a delivery of an order that did not exist yet is a typo.
+
+    The issue date is read as the day it was in Argentina for the same reason:
+    an order issued at ten at night is already tomorrow in UTC, and a delivery
+    that arrived that same day must not be refused for preceding it.
+    """
+    if received_on > today():
+        raise PurchaseOrderError(FUTURE_RECEIPT)
+    # Not None for a receivable order: the schema's issued_has_date says so.
+    if received_on < order.issued_at.astimezone(LOCAL_ZONE).date():
+        raise PurchaseOrderError(RECEIPT_BEFORE_ISSUE)
+
+
+def _apply_received_status(db: Session, firm_id: int, order: PurchaseOrder) -> PurchaseOrder:
+    """Set the order's status from what its live receipts say (ADR-011 section 3).
+
+    The two received statuses are never chosen by anyone: they are derived here,
+    after every write that can change what arrived, which is what keeps rule 8
+    true. Registering a delivery and cancelling one both end in this function, so
+    an order that loses its last receipt walks back to issued by the same path it
+    walked forward.
+
+    It is also the one place the step to received happens, and so the place
+    HU-23 hangs the points of ADR-012 section 3 off.
+    """
+    lines = PurchaseOrderLineRepository(db, firm_id=firm_id).lines([order.id]).get(order.id, [])
+    received = PurchaseOrderReceiptRepository(db, firm_id=firm_id).received_by_line(order.id)
+
+    def delivered(line: PurchaseOrderLine) -> Decimal:
+        totals = received.get(line.id)
+        return totals.quantity if totals is not None else Decimal("0")
+
+    anything = any(delivered(entry.line) > 0 for entry in lines)
+    everything = bool(lines) and all(
+        delivered(entry.line) >= entry.line.quantity for entry in lines
+    )
+
+    if everything:
+        order.status = RECEIVED
+        order.received_at = func.now()
+    else:
+        order.status = PARTIALLY_RECEIVED if anything else ISSUED
+        order.received_at = None
+    db.flush()
+    db.refresh(order)
+    return order
+
+
+def register_receipt(
+    db: Session,
+    firm_id: int,
+    order_id: int,
+    *,
+    received_on: date,
+    note: str | None,
+    shipping_cost: Decimal | None,
+    lines: Iterable[ReceiptLineIn],
+    created_by: int,
+) -> PurchaseOrder:
+    """Register what arrived of an order on one day, and what was paid for it (HU-22).
+
+    Only against an order that was issued and is not complete. Nothing may exceed
+    what was ordered, counting what earlier live receipts already brought (rule
+    1), and a material appears once per delivery.
+
+    The order's status is not given: it is derived from the receipts once this one
+    is written, so the caller cannot leave an order saying something its
+    deliveries do not.
+    """
+    _lock_order(db, firm_id, order_id)
+    order = get_order(db, firm_id, order_id)
+    if order.status not in RECEIVABLE:
+        raise PurchaseOrderStateError(RECEIVE_ONLY_ISSUED)
+    _check_receipt_date(received_on, order)
+
+    requested = list(lines)
+    if not requested:
+        raise PurchaseOrderError(EMPTY_RECEIPT)
+
+    ordered = {
+        entry.line.id: entry.line
+        for entry in PurchaseOrderLineRepository(db, firm_id=firm_id)
+        .lines([order.id])
+        .get(order.id, [])
+    }
+    seen: set[int] = set()
+    for item in requested:
+        if item.line_id in seen:
+            raise PurchaseOrderError(REPEATED_RECEIPT_LINE)
+        seen.add(item.line_id)
+        if item.line_id not in ordered:
+            raise PurchaseOrderLineNotFoundError
+
+    already = PurchaseOrderReceiptRepository(db, firm_id=firm_id).received_by_line(order.id)
+    for item in requested:
+        totals = already.get(item.line_id)
+        delivered = totals.quantity if totals is not None else Decimal("0")
+        if delivered + item.quantity > ordered[item.line_id].quantity:
+            raise PurchaseOrderError(OVER_ORDERED)
+
+    receipt = PurchaseOrderReceipt(
+        purchase_order_id=order.id,
+        firm_id=firm_id,
+        received_on=received_on,
+        note=note,
+        shipping_cost=shipping_cost,
+        created_by=created_by,
+    )
+    db.add(receipt)
+    db.flush()
+    for item in requested:
+        db.add(
+            PurchaseOrderReceiptLine(
+                receipt_id=receipt.id,
+                purchase_order_line_id=item.line_id,
+                quantity=item.quantity,
+                actual_cost=item.actual_cost,
+            )
+        )
+    db.flush()
+    return _apply_received_status(db, firm_id, order)
+
+
+def cancel_last_receipt(db: Session, firm_id: int, order_id: int, receipt_id: int) -> PurchaseOrder:
+    """Cancel the order's last receipt: the only correction a receipt allows (D-20).
+
+    A receipt is never edited. What is wrong is undone and loaded again, and only
+    the last one, so that no later delivery is left standing on a total that no
+    longer exists (ADR-011 section 3).
+
+    A received order is closed: it already earned its points (ADR-012 section 2),
+    and giving them back is not something this does.
+    """
+    _lock_order(db, firm_id, order_id)
+    order = get_order(db, firm_id, order_id)
+    if order.status == RECEIVED:
+        raise PurchaseOrderStateError(RECEIVED_IS_CLOSED)
+    if order.status != PARTIALLY_RECEIVED:
+        raise PurchaseOrderStateError(NO_RECEIPTS)
+
+    receipts = PurchaseOrderReceiptRepository(db, firm_id=firm_id)
+    receipt = receipts.get(order.id, receipt_id)
+    if receipt is None:
+        raise PurchaseOrderReceiptNotFoundError
+    last = receipts.last(order.id)
+    if last is None or last.id != receipt.id:
+        raise PurchaseOrderStateError(NOT_LAST_RECEIPT)
+
+    receipt.is_active = False
+    db.flush()
+    return _apply_received_status(db, firm_id, order)

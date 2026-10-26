@@ -1147,3 +1147,112 @@ def test_a_removed_line_frees_its_material(db: Connection, world) -> None:
     db.execute(text("UPDATE purchase_order_line SET is_active = false WHERE id = :l"), {"l": line})
 
     new_order_line(db, order, world.firm_a, resource)
+
+
+# --- purchase order receipts ---------------------------------------------------
+#
+# ADR-011's last two tables, the ones HU-22 writes. What the schema promises on
+# its own: a delivery belongs to its order's firm, its freight and the amounts
+# cannot be negative, a quantity is positive, and a line appears once per
+# delivery. What the service decides — nothing over what was ordered, only the
+# last receipt is cancelled, which statuses may receive — is tested there.
+
+INSERT_RECEIPT = (
+    "INSERT INTO purchase_order_receipt"
+    " (purchase_order_id, firm_id, received_on, note, created_by, shipping_cost)"
+    " VALUES (:order, :firm, :received_on, :note, :by, :shipping) RETURNING id"
+)
+
+INSERT_RECEIPT_LINE = (
+    "INSERT INTO purchase_order_receipt_line"
+    " (receipt_id, purchase_order_line_id, quantity, actual_cost)"
+    " VALUES (:receipt, :line, :quantity, :cost) RETURNING id"
+)
+
+
+def new_receipt(db: Connection, order: int, world, **overrides) -> int:
+    row = {
+        "order": order,
+        "firm": world.firm_a,
+        "received_on": "2026-10-26",
+        "note": None,
+        "by": world.account_a,
+        "shipping": None,
+    } | overrides
+    return db.execute(text(INSERT_RECEIPT), row).scalar_one()
+
+
+def new_receipt_line(db: Connection, receipt: int, line: int, **overrides) -> int:
+    row = {"receipt": receipt, "line": line, "quantity": 10, "cost": 2300} | overrides
+    return db.execute(text(INSERT_RECEIPT_LINE), row).scalar_one()
+
+
+def issued_order_with_a_line(db: Connection, world) -> tuple[int, int]:
+    """An order that may be delivered, and the line a delivery would fill."""
+    order = new_order(db, world, status="issued", issued_at="2026-10-25", issued_by=world.account_a)
+    return order, new_order_line(db, order, world.firm_a, new_resource(db))
+
+
+def test_a_receipt_belongs_to_its_orders_firm(db: Connection, world) -> None:
+    order, _ = issued_order_with_a_line(db, world)
+
+    with pytest.raises(IntegrityError, match="fk_purchase_order_receipt_purchase_order_id"):
+        new_receipt(db, order, world, firm=world.firm_b)
+
+
+def test_a_receipt_freight_cannot_be_negative(db: Connection, world) -> None:
+    order, _ = issued_order_with_a_line(db, world)
+
+    constraint = "ck_purchase_order_receipt_shipping_cost_not_negative"
+
+    with pytest.raises(IntegrityError, match=constraint):
+        new_receipt(db, order, world, shipping=-1)
+
+
+def test_a_receipt_may_carry_no_freight_at_all(db: Connection, world) -> None:
+    """NULL is "the supplier charged none", and it is the ordinary case."""
+    order, line = issued_order_with_a_line(db, world)
+
+    new_receipt_line(db, new_receipt(db, order, world, shipping=None), line)
+
+
+def test_a_received_quantity_must_be_positive(db: Connection, world) -> None:
+    order, line = issued_order_with_a_line(db, world)
+    receipt = new_receipt(db, order, world)
+
+    with pytest.raises(IntegrityError, match="ck_purchase_order_receipt_line_quantity_positive"):
+        new_receipt_line(db, receipt, line, quantity=0)
+
+
+def test_an_actual_cost_cannot_be_negative(db: Connection, world) -> None:
+    order, line = issued_order_with_a_line(db, world)
+    receipt = new_receipt(db, order, world)
+
+    with pytest.raises(
+        IntegrityError, match="ck_purchase_order_receipt_line_actual_cost_not_negative"
+    ):
+        new_receipt_line(db, receipt, line, cost=-1)
+
+
+def test_an_actual_cost_of_zero_is_allowed(db: Connection, world) -> None:
+    """A delivery the supplier did not charge for is a real answer, not a mistake."""
+    order, line = issued_order_with_a_line(db, world)
+
+    new_receipt_line(db, new_receipt(db, order, world), line, cost=0)
+
+
+def test_a_line_appears_once_per_delivery(db: Connection, world) -> None:
+    order, line = issued_order_with_a_line(db, world)
+    receipt = new_receipt(db, order, world)
+    new_receipt_line(db, receipt, line)
+
+    with pytest.raises(IntegrityError, match="uq_purchase_order_receipt_line_once"):
+        new_receipt_line(db, receipt, line)
+
+
+def test_the_same_line_may_arrive_in_two_deliveries(db: Connection, world) -> None:
+    """Which is what partial delivery is: 400 bricks today, the other 600 later."""
+    order, line = issued_order_with_a_line(db, world)
+    new_receipt_line(db, new_receipt(db, order, world), line, quantity=4)
+
+    new_receipt_line(db, new_receipt(db, order, world, received_on="2026-10-27"), line, quantity=6)
