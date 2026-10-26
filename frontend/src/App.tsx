@@ -20,6 +20,7 @@ import { ProjectTeamPage } from "./pages/ProjectTeamPage";
 import { NoFirmPage } from "./pages/NoFirmPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { PurchaseOrderPage } from "./pages/PurchaseOrderPage";
+import { FirmLoyaltyPage } from "./pages/FirmLoyaltyPage";
 import { PurchaseOrdersPage } from "./pages/PurchaseOrdersPage";
 import { SupplierDetailPage } from "./pages/SupplierDetailPage";
 import { SuppliersPage } from "./pages/SuppliersPage";
@@ -170,6 +171,20 @@ function App() {
                 message="Tu rol en este estudio no incluye ver los proveedores."
               >
                 <SupplierDetailPage />
+              </RequirePermission>
+            }
+          />
+          {/* HU-24: the firm's level and the entries behind it. Behind
+              purchase_order.view and not a permission of its own: the points
+              come from the orders (ADR-012 section 6). */}
+          <Route
+            path="loyalty"
+            element={
+              <RequirePermission
+                code="purchase_order.view"
+                message="Tu rol en este estudio no incluye ver el nivel del estudio."
+              >
+                <FirmLoyaltyPage />
               </RequirePermission>
             }
           />

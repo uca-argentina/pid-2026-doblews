@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { loyaltyKeys } from "../loyalty/useLoyalty";
 import { projectKeys } from "../projects/useProjects";
+import { supplierKeys } from "../suppliers/useSuppliers";
 import {
   addLine,
   cancelOrder,
@@ -57,10 +59,13 @@ export function useOrder(firmId: number, orderId: number) {
   });
 }
 
-/** Every write refreshes the firm's orders and the firm's works: the latter
- * holds each work's comparison, whose "ya pedido" follows the drafts. Returning
- * the invalidation keeps the mutation pending until the refetch is done, so a
- * modal closes onto a screen that already shows the change. */
+/** Every write refreshes four things: the firm's orders; the firm's works,
+ * which hold each work's comparison, whose "ya pedido" follows the drafts; the
+ * firm's level, because an order that becomes received earns points (HU-23);
+ * and the suppliers, since each one's card carries the level with it (HU-24).
+ *
+ * Returning the invalidation keeps the mutation pending until the refetch is
+ * done, so a modal closes onto a screen that already shows the change. */
 function useRefresh(firmId: number) {
   const queryClient = useQueryClient();
   return () =>
@@ -69,6 +74,8 @@ function useRefresh(firmId: number) {
         queryKey: purchaseOrderKeys.all(firmId),
       }),
       queryClient.invalidateQueries({ queryKey: projectKeys.all(firmId) }),
+      queryClient.invalidateQueries({ queryKey: loyaltyKeys.all(firmId) }),
+      queryClient.invalidateQueries({ queryKey: supplierKeys.all(firmId) }),
     ]);
 }
 

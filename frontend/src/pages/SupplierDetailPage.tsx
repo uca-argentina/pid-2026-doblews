@@ -14,6 +14,7 @@ import { useDisclosure } from "@mantine/hooks";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { useCurrentFirm } from "../features/firms/firmContext";
+import { LevelCard } from "../features/loyalty/LevelCard";
 import { DeactivateSupplierModal } from "../features/suppliers/DeactivateSupplierModal";
 import { PriceCard } from "../features/suppliers/PriceCard";
 import { PriceFormModal } from "../features/suppliers/PriceFormModal";
@@ -133,6 +134,14 @@ export function SupplierDetailPage() {
         supplierId={supplier.id}
         price={removeTarget}
         onClose={() => setRemoveTarget(null)}
+      />
+
+      {/* HU-24: what the firm has earned buying from them. Above the price
+          list, because it is about the relationship and not about one price. */}
+      <LevelCard
+        level={supplier.level}
+        title={`Nivel con ${supplier.name}`}
+        description="Los puntos se suman cuando una orden a este proveedor queda recibida."
       />
 
       <Group justify="space-between" align="flex-end" wrap="wrap" gap="sm">

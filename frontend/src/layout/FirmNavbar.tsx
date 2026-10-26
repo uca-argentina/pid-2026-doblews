@@ -32,6 +32,11 @@ export function FirmNavbar({ onNavigate }: FirmNavbarProps) {
       label: "Órdenes de compra",
       visible: can("purchase_order.view"),
     },
+    {
+      to: `${base}/loyalty`,
+      label: "Nivel",
+      visible: can("purchase_order.view"),
+    },
     { to: `${base}/members`, label: "Padrón", visible: can("member.add") },
   ];
 
