@@ -5,15 +5,17 @@ import {
   cancelOrder,
   changeLineSupplier,
   deactivateLine,
+  deactivateReceipt,
   discardOrder,
   fetchFirmOrders,
   fetchOrder,
   fetchProjectOrders,
   generateOrders,
   issueOrder,
+  registerReceipt,
   updateLine,
 } from "./purchaseOrderService";
-import type { GenerateItem, OrderStatus } from "./types";
+import type { GenerateItem, OrderStatus, ReceiptIn } from "./types";
 
 /** Query keys for a firm's orders, under ["firm", firmId] like everything a
  * firm screen reads, so one invalidation of `all` refreshes every listing and
@@ -139,6 +141,24 @@ export function useCancelOrder(firmId: number) {
   const refresh = useRefresh(firmId);
   return useMutation({
     mutationFn: (orderId: number) => cancelOrder(firmId, orderId),
+    onSuccess: refresh,
+  });
+}
+
+export function useRegisterReceipt(firmId: number, orderId: number) {
+  const refresh = useRefresh(firmId);
+  return useMutation({
+    mutationFn: (payload: ReceiptIn) =>
+      registerReceipt(firmId, orderId, payload),
+    onSuccess: refresh,
+  });
+}
+
+export function useDeactivateReceipt(firmId: number, orderId: number) {
+  const refresh = useRefresh(firmId);
+  return useMutation({
+    mutationFn: (receiptId: number) =>
+      deactivateReceipt(firmId, orderId, receiptId),
     onSuccess: refresh,
   });
 }

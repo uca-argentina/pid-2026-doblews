@@ -2,12 +2,17 @@ import { type FormEvent, useState } from "react";
 import { Alert, Button, Group, Modal, Stack, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { apiErrorMessage } from "../../lib/apiError";
-import { orderNumber } from "./orderDisplay";
-import type { PurchaseOrderSummary } from "./types";
-import { useCancelOrder, useIssueOrder } from "./usePurchaseOrders";
+import { formatDay, orderNumber } from "./orderDisplay";
+import type { PurchaseOrderSummary, ReceiptOut } from "./types";
+import {
+  useCancelOrder,
+  useDeactivateReceipt,
+  useIssueOrder,
+} from "./usePurchaseOrders";
 
-/** The two moves of an order HU-21 adds, each confirmed with what it means:
- * neither is undone. */
+/** The moves of an order that are confirmed before they happen, because none
+ * of them is undone: issuing a draft, cancelling an order, and letting go of
+ * the last delivery registered (HU-22). */
 
 interface StatusModalProps {
   firmId: number;
@@ -130,6 +135,36 @@ export function CancelOrderModal({
         notifications.show({
           title: "Orden anulada",
           message: `${orderNumber(order.number)} quedó anulada.`,
+          color: "obra",
+        });
+      }}
+    />
+  );
+}
+
+export function CancelReceiptModal({
+  firmId,
+  order,
+  receipt,
+  opened,
+  onClose,
+}: StatusModalProps & { receipt: ReceiptOut }) {
+  const drop = useDeactivateReceipt(firmId, order.id);
+  return (
+    <ConfirmModal
+      title="Anular la última recepción"
+      explanation={`La entrega del ${formatDay(receipt.received_on)} deja de contar: sus cantidades vuelven a quedar pendientes y el costo real de la orden se recalcula. Se puede volver a cargar.`}
+      submitLabel="Anular recepción"
+      color="red"
+      pending={drop.isPending}
+      opened={opened}
+      onClose={onClose}
+      failure="No pudimos anular la recepción."
+      onConfirm={async () => {
+        await drop.mutateAsync(receipt.id);
+        notifications.show({
+          title: "Recepción anulada",
+          message: `La entrega del ${formatDay(receipt.received_on)} salió de ${orderNumber(order.number)}.`,
           color: "obra",
         });
       }}

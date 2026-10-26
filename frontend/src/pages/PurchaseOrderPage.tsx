@@ -25,14 +25,22 @@ import { OrderLinesView } from "../features/purchase-orders/OrderLinesView";
 import { OrderStatusBadge } from "../features/purchase-orders/OrderStatusBadge";
 import {
   CancelOrderModal,
+  CancelReceiptModal,
   IssueOrderModal,
 } from "../features/purchase-orders/OrderStatusModals";
+import { ReceiptModal } from "../features/purchase-orders/ReceiptModal";
+import { ReceiptsList } from "../features/purchase-orders/ReceiptsList";
 import {
   canCancel,
   canIssue,
+  canReceive,
   orderNumber,
+  tracksDeliveries,
 } from "../features/purchase-orders/orderDisplay";
-import type { PurchaseOrderLineOut } from "../features/purchase-orders/types";
+import type {
+  PurchaseOrderLineOut,
+  ReceiptOut,
+} from "../features/purchase-orders/types";
 import {
   useDeactivateLine,
   useOrder,
@@ -52,7 +60,12 @@ import { formatMoney } from "../lib/format";
  * can change its quantity or its supplier, or leave; materials can be added;
  * and the draft can be discarded. HU-21 adds issuing a draft that has lines,
  * after which it is read only, and cancelling a draft or an issued order. Only
- * the moves the order's state allows are offered (ADR-011 section 3). */
+ * the moves the order's state allows are offered (ADR-011 section 3).
+ *
+ * Once it is issued, HU-22 adds its deliveries: what arrived of each line, what
+ * it really cost, and the one correction a receipt allows — letting go of the
+ * last one. Which receipt that is comes answered from the backend, so the rule
+ * is not written twice. */
 export function PurchaseOrderPage() {
   const { firm, can } = useCurrentFirm();
   const navigate = useNavigate();
@@ -68,6 +81,8 @@ export function PurchaseOrderPage() {
   const [discardOpened, discardModal] = useDisclosure(false);
   const [issueOpened, issueModal] = useDisclosure(false);
   const [cancelOpened, cancelModal] = useDisclosure(false);
+  const [receiptOpened, receiptModal] = useDisclosure(false);
+  const [dropTarget, setDropTarget] = useState<ReceiptOut | null>(null);
 
   if (isLoading) {
     return (
@@ -90,6 +105,8 @@ export function PurchaseOrderPage() {
   const editable = order.status === "draft" && canManage;
   const issuable = canManage && canIssue(order);
   const cancellable = canManage && canCancel(order);
+  const receivable = canManage && canReceive(order);
+  const delivering = tracksDeliveries(order);
 
   const remove = async (line: PurchaseOrderLineOut) => {
     try {
@@ -118,9 +135,12 @@ export function PurchaseOrderPage() {
         title={`${orderNumber(order.number)} · ${order.supplier.name}`}
         description={`Obra: ${order.project.name}. Los precios son los que tenía el proveedor al generar la orden.`}
         action={
-          editable || cancellable ? (
+          editable || cancellable || receivable ? (
             <Group gap="sm">
               {issuable && <Button onClick={issueModal.open}>Emitir</Button>}
+              {receivable && (
+                <Button onClick={receiptModal.open}>Registrar recepción</Button>
+              )}
               {editable && (
                 <Button variant="default" onClick={addModal.open}>
                   Agregar material
@@ -150,6 +170,11 @@ export function PurchaseOrderPage() {
         <Text fw={700} size="lg">
           Total estimado: {formatMoney(order.estimated_total, order.currency)}
         </Text>
+        {delivering && (
+          <Text fw={700} size="lg">
+            Total real: {formatMoney(order.actual_total, order.currency)}
+          </Text>
+        )}
       </Group>
 
       {order.lines.length === 0 ? (
@@ -161,6 +186,7 @@ export function PurchaseOrderPage() {
         <OrderLinesView
           lines={order.lines}
           currency={order.currency}
+          deliveries={delivering}
           actions={
             editable
               ? {
@@ -168,6 +194,27 @@ export function PurchaseOrderPage() {
                   onSupplier: setSupplierTarget,
                   onRemove: remove,
                 }
+              : undefined
+          }
+        />
+      )}
+
+      {delivering && (
+        <ReceiptsList
+          receipts={order.receipts}
+          currency={order.currency}
+          cancelAction={
+            canManage
+              ? (receipt) => (
+                  <Button
+                    variant="subtle"
+                    color="red"
+                    size="compact-sm"
+                    onClick={() => setDropTarget(receipt)}
+                  >
+                    Anular última recepción
+                  </Button>
+                )
               : undefined
           }
         />
@@ -189,6 +236,25 @@ export function PurchaseOrderPage() {
           order={order}
           opened={cancelOpened}
           onClose={cancelModal.close}
+        />
+      )}
+      {/* Mounted per opening, like the draft's modals, so the form starts from
+          what is pending right now and not from what it was two deliveries ago. */}
+      {receivable && receiptOpened && (
+        <ReceiptModal
+          firmId={firm.id}
+          order={order}
+          opened
+          onClose={receiptModal.close}
+        />
+      )}
+      {canManage && dropTarget && (
+        <CancelReceiptModal
+          firmId={firm.id}
+          order={order}
+          receipt={dropTarget}
+          opened
+          onClose={() => setDropTarget(null)}
         />
       )}
 
