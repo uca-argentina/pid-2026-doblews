@@ -398,3 +398,15 @@ El detalle está en ADR-011 §8. **Queda liberada HU-22** (recepciones).
 El detalle de lo que se precisó está en ADR-011 §8.
 
 **Falta para cerrar HU-22:** correr migración y tests, la revisión visual de los criterios y de 375px, y el PR a `dev`. **Queda liberada HU-23** (puntos).
+
+**2026-10-26 (HU-23).** HU-22 mergeada a `dev`. **HU-23 implementada** en `feat/hu23-loyalty-points`, **solo backend**: todo lo visible —la sección "Nivel", la barra, el historial en pantalla y el nivel por proveedor— está en los criterios de HU-24, igual que la ruta `GET /firms/{firm_id}/loyalty` de ADR-012 §7.
+
+- **Una tabla, `firm_points_entry`**, inmutable como `budget_version`: sin `is_active` y sin `updated_at`, porque ningún flujo da de baja un asiento ni lo edita. Guarda la orden, el renglón, el proveedor, el material, la regla, los puntos, la cantidad recibida y contra qué se comparó. El nivel no se guarda: es la suma, calculada al leer.
+- **La regla es una función pura** en `services/loyalty.py`, con los cuatro casos y los valores 10/6/3/0 y el 0,5 en un solo lugar. Trece tests sin base de datos, incluidos los bordes del ±50% (adentro) y apenas afuera.
+- **Se precisó qué es "la última compra de ese material":** la orden recibida más reciente **que tenía ese material**, no la última orden sin más. Si no, comprar otro material en el medio haría que el primero contara como nunca comprado. Está registrado en ADR-012 §9.
+- **El enganche** va en `_apply_received_status`, que es la única función que escribe el estado recibido, en la misma transacción que la recepción que completa la orden. Suma solo cuando la orden **entra** en `received`, y no vuelve a sumar si ya tiene asientos.
+- **Catorce tests más contra base:** los cuatro casos por el camino real (generar, emitir, recibir), la compra anterior por material y la más reciente, una compra de otra obra del mismo estudio, una de otro estudio que no cuenta, la anulada y la parcial que no suman, y que anular una recepción y volver a completar no duplica.
+
+El detalle de lo que se precisó está en ADR-012 §9.
+
+**Falta para cerrar HU-23:** correr migración y tests, y el PR a `dev`. **Queda liberada HU-24** (niveles y pantallas).
