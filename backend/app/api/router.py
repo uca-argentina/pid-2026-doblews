@@ -10,6 +10,7 @@ from app.api.routes import (
     catalog_admin,
     dashboard,
     firms,
+    loyalty,
     members,
     platform,
     project_members,
@@ -30,6 +31,7 @@ api_router.include_router(catalog.router)
 api_router.include_router(catalog_admin.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(firms.router)
+api_router.include_router(loyalty.router)
 api_router.include_router(members.router)
 api_router.include_router(platform.router)
 api_router.include_router(project_members.router)

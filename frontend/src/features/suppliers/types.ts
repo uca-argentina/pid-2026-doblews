@@ -4,6 +4,7 @@
 // lib/format.ts prints it.
 
 import type { UnitRef } from "../catalog/types";
+import type { LevelOut } from "../loyalty/types";
 
 /** One supplier of the listing, with how long its price list is. */
 export interface SupplierOut {
@@ -52,6 +53,9 @@ export interface SupplierPriceOut {
 /** A supplier with its whole price list. */
 export interface SupplierDetailOut extends SupplierOut {
   prices: SupplierPriceOut[];
+  /** What the firm has earned buying from them (HU-24). It travels here rather
+   * than behind a route of its own, so the card costs one request. */
+  level: LevelOut;
 }
 
 export interface SupplierPriceCreate {

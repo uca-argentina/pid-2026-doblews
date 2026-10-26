@@ -393,3 +393,144 @@ def test_the_entry_keeps_the_order_the_line_and_the_supplier(
     assert row["purchase_order_line_id"] == order["lines"][0]["id"]
     assert row["supplier_id"] == norte
     assert row["quantity"] == 1000
+
+
+class TestLoyaltyEndpoint:
+    """The firm's level and history over HTTP (HU-24, ADR-012 section 7).
+
+    The levels themselves are tested without a database in test_loyalty.py. This
+    is about what the screen receives: the total, the history with everything it
+    has to explain, who gets in, and what an untouched firm answers.
+    """
+
+    def url(self, world) -> str:
+        return f"/firms/{world.firm_a}/loyalty"
+
+    def read(self, client, world, headers) -> dict:
+        response = client.get(self.url(world), headers=headers)
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    def test_a_firm_that_received_nothing_is_bronze_at_zero(self, client, world, owner):
+        body = self.read(client, world, owner)
+
+        assert body["firm"]["points"] == 0
+        assert body["firm"]["level"] == "bronze"
+        assert body["firm"]["next_level"] == "silver"
+        assert body["history"] == []
+
+    def test_the_points_are_the_sum_of_the_entries(
+        self, client, world, wall, norte, owner, resource_id
+    ):
+        """A first order earns nothing, and buying the same material again in a
+        similar quantity earns ten: the total is 10, which is still Bronce."""
+        buy(client, world, owner, resource_id, {BRICK: "1000"})
+        buy(client, world, owner, resource_id, {BRICK: "1200"})
+
+        body = self.read(client, world, owner)
+
+        assert body["firm"]["points"] == 10
+        assert body["firm"]["level"] == "bronze"
+        assert body["firm"]["points_to_next"] == 40
+
+    def test_the_history_explains_every_entry(self, client, world, wall, norte, owner, resource_id):
+        buy(client, world, owner, resource_id, {BRICK: "1000"})
+        order = buy(client, world, owner, resource_id, {BRICK: "1200"})
+
+        newest, _ = self.read(client, world, owner)["history"]
+
+        assert newest["rule"] == "same_material_similar_quantity"
+        assert newest["points"] == 10
+        assert newest["order"] == {"id": order["id"], "number": order["number"]}
+        assert newest["project"]["name"] == "Casa Norte"
+        assert newest["supplier"]["name"] == "Corralón Norte"
+        assert newest["resource"]["name"] == BRICK
+        assert newest["unit"]["abbreviation"] != ""
+        assert (newest["quantity"], newest["previous_quantity"]) == ("1200.000", "1000.000")
+
+    def test_the_history_is_newest_first(self, client, world, wall, norte, owner, resource_id):
+        buy(client, world, owner, resource_id, {BRICK: "1000"})
+        buy(client, world, owner, resource_id, {CEMENT: "30"})
+
+        history = self.read(client, world, owner)["history"]
+
+        assert [entry["resource"]["name"] for entry in history] == [CEMENT, BRICK]
+
+    def test_an_entry_that_compared_nothing_says_so(
+        self, client, world, wall, norte, owner, resource_id
+    ):
+        buy(client, world, owner, resource_id, {BRICK: "1000"})
+
+        (only,) = self.read(client, world, owner)["history"]
+
+        assert only["rule"] == "first_purchase"
+        assert only["previous_quantity"] is None
+
+    def test_an_architect_reads_the_level(
+        self, client, world, wall, norte, owner, resource_id, auth_header
+    ):
+        buy(client, world, owner, resource_id, {BRICK: "1000"})
+
+        body = self.read(client, world, auth_header(world.account_a2))
+
+        assert len(body["history"]) == 1
+
+    def test_the_client_does_not_see_this_section(self, client, world, new_member, auth_header):
+        headers = auth_header(new_member(world.firm_a, "clara@test.com", "client"))
+
+        assert client.get(self.url(world), headers=headers).status_code == 403
+
+    def test_another_firm_reads_only_its_own(
+        self, client, world, wall, norte, owner, resource_id, auth_header
+    ):
+        buy(client, world, owner, resource_id, {BRICK: "1000"})
+        buy(client, world, owner, resource_id, {BRICK: "1200"})
+
+        response = client.get(
+            f"/firms/{world.firm_b}/loyalty", headers=auth_header(world.account_b)
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "firm": {
+                "points": 0,
+                "level": "bronze",
+                "level_from": 0,
+                "next_level": "silver",
+                "next_level_at": 50,
+                "points_to_next": 50,
+            },
+            "history": [],
+        }
+
+
+class TestSupplierLevel:
+    """The firm's level with one supplier, on its card (HU-24)."""
+
+    def card(self, client, world, headers, supplier_id: int) -> dict:
+        response = client.get(f"/firms/{world.firm_a}/suppliers/{supplier_id}", headers=headers)
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    def test_a_supplier_never_bought_from_is_bronze_at_zero(self, client, world, norte, owner):
+        assert self.card(client, world, owner, norte)["level"] == {
+            "points": 0,
+            "level": "bronze",
+            "level_from": 0,
+            "next_level": "silver",
+            "next_level_at": 50,
+            "points_to_next": 50,
+        }
+
+    def test_the_level_counts_only_what_was_earned_with_that_supplier(
+        self, client, world, wall, norte, owner, resource_id, add_supplier, add_price
+    ):
+        """Sur is on the firm's books too and has never been bought from, so
+        what the orders to Norte earned does not show on Sur's card."""
+        sur = add_supplier(world.firm_a, "Corralón Sur")
+        add_price(world.firm_a, sur, CEMENT, "15000.00")
+        buy(client, world, owner, resource_id, {BRICK: "1000"})
+        buy(client, world, owner, resource_id, {BRICK: "1200"})
+
+        assert self.card(client, world, owner, norte)["level"]["points"] == 10
+        assert self.card(client, world, owner, sur)["level"]["points"] == 0
