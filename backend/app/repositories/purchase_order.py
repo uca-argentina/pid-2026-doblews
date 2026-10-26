@@ -11,7 +11,7 @@ from collections.abc import Collection
 from dataclasses import dataclass
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select
 
 from app.models import (
     Account,
@@ -133,6 +133,28 @@ class PurchaseOrderRepository(FirmScopedRepository[PurchaseOrder]):
             )
         ).first()
 
+    def received_from(self, supplier_id: int, *, besides: int) -> bool:
+        """Whether this firm ever completed another order from this supplier.
+
+        What separates the two zero-history cases of ADR-012 section 3: a firm
+        that never bought from them (first_purchase) from one that buys often
+        and never bought this material (same_supplier). `besides` leaves out the
+        order being rated, which has just become received itself.
+        """
+        return bool(
+            self.db.scalar(
+                select(
+                    exists(
+                        self.select().where(
+                            PurchaseOrder.supplier_id == supplier_id,
+                            PurchaseOrder.status == "received",
+                            PurchaseOrder.id != besides,
+                        )
+                    )
+                )
+            )
+        )
+
     def highest_number(self) -> int:
         """The highest number this firm ever gave an order, discarded drafts included.
 
@@ -206,6 +228,62 @@ class PurchaseOrderLineRepository(FirmScopedRepository[PurchaseOrderLine]):
                 PurchaseOrder.status != "cancelled",
             )
             .group_by(PurchaseOrderLine.resource_id)
+        ).all()
+        return {resource_id: quantity for resource_id, quantity in rows}
+
+    def last_received_quantities(self, supplier_id: int, *, besides: int) -> dict[int, Decimal]:
+        """Per material, how much of it came the last time it was bought here.
+
+        "The last time" is per material and not per order (ADR-012 section 3, as
+        read when HU-23 was built): the most recent completed order that had that
+        material, which may not be the most recent order at all. Otherwise a
+        material bought two orders ago would count as never bought, and the
+        same_material rule would only ever fire on consecutive orders.
+
+        Built by hand rather than from self.select(), like ordered_by_resource
+        above and for the same reason: the row this answers about is an order's,
+        so the firm is pinned on purchase_order, where the tenant of the whole
+        shape lives.
+        """
+        per_order = (
+            select(
+                PurchaseOrder.id.label("order_id"),
+                PurchaseOrder.received_at.label("received_at"),
+                PurchaseOrderLine.resource_id.label("resource_id"),
+                func.sum(PurchaseOrderReceiptLine.quantity).label("quantity"),
+            )
+            .join(PurchaseOrderLine, PurchaseOrderLine.purchase_order_id == PurchaseOrder.id)
+            .join(
+                PurchaseOrderReceipt,
+                PurchaseOrderReceipt.purchase_order_id == PurchaseOrder.id,
+            )
+            .join(
+                PurchaseOrderReceiptLine,
+                (PurchaseOrderReceiptLine.receipt_id == PurchaseOrderReceipt.id)
+                & (PurchaseOrderReceiptLine.purchase_order_line_id == PurchaseOrderLine.id),
+            )
+            .where(
+                PurchaseOrder.firm_id == self.firm_id,
+                PurchaseOrder.is_active,
+                PurchaseOrder.status == "received",
+                PurchaseOrder.supplier_id == supplier_id,
+                PurchaseOrder.id != besides,
+                PurchaseOrderLine.is_active,
+                PurchaseOrderReceipt.is_active,
+            )
+            .group_by(PurchaseOrder.id, PurchaseOrder.received_at, PurchaseOrderLine.resource_id)
+            .subquery()
+        )
+        # DISTINCT ON keeps one row per material: the one from the order that
+        # completed last, by received_at and then by id, as ADR-012 section 3 says.
+        rows = self.db.execute(
+            select(per_order.c.resource_id, per_order.c.quantity)
+            .distinct(per_order.c.resource_id)
+            .order_by(
+                per_order.c.resource_id,
+                per_order.c.received_at.desc(),
+                per_order.c.order_id.desc(),
+            )
         ).all()
         return {resource_id: quantity for resource_id, quantity in rows}
 
