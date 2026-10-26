@@ -36,6 +36,7 @@ from app.repositories.purchase_order import (
     PurchaseOrderRepository,
 )
 from app.repositories.supplier import OfferEntry, SupplierPriceRepository
+from app.services import loyalty
 from app.services.purchasing import CURRENCY, offer_total, rank
 
 DRAFT = "draft"
@@ -488,8 +489,10 @@ def _apply_received_status(db: Session, firm_id: int, order: PurchaseOrder) -> P
     an order that loses its last receipt walks back to issued by the same path it
     walked forward.
 
-    It is also the one place the step to received happens, and so the place
-    HU-23 hangs the points of ADR-012 section 3 off.
+    It is also the one place an order steps into received, which is where the
+    points of ADR-012 section 2 are earned: in this same transaction, so the
+    receipt that completed the order and the points it earned either both happen
+    or neither does.
     """
     lines = PurchaseOrderLineRepository(db, firm_id=firm_id).lines([order.id]).get(order.id, [])
     received = PurchaseOrderReceiptRepository(db, firm_id=firm_id).received_by_line(order.id)
@@ -502,6 +505,9 @@ def _apply_received_status(db: Session, firm_id: int, order: PurchaseOrder) -> P
     everything = bool(lines) and all(
         delivered(entry.line) >= entry.line.quantity for entry in lines
     )
+    # Before the status is written over, so the points are awarded on the step
+    # into received and not again on a later write that finds it already there.
+    stepping_in = everything and order.status != RECEIVED
 
     if everything:
         order.status = RECEIVED
@@ -511,6 +517,9 @@ def _apply_received_status(db: Session, firm_id: int, order: PurchaseOrder) -> P
         order.received_at = None
     db.flush()
     db.refresh(order)
+
+    if stepping_in:
+        loyalty.award(db, firm_id, order)
     return order
 
 

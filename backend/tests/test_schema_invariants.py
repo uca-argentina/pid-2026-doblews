@@ -1256,3 +1256,100 @@ def test_the_same_line_may_arrive_in_two_deliveries(db: Connection, world) -> No
     new_receipt_line(db, new_receipt(db, order, world), line, quantity=4)
 
     new_receipt_line(db, new_receipt(db, order, world, received_on="2026-10-27"), line, quantity=6)
+
+
+# --- firm points entries -------------------------------------------------------
+#
+# ADR-012's one table. What the schema promises on its own: the rule is one of
+# the four, the points are not negative, a line earns once, and the supplier is
+# the entry's firm's. What the service decides — which rule applies, when an
+# order earns at all — is tested in test_loyalty.py and test_loyalty_points.py.
+
+INSERT_POINTS_ENTRY = (
+    "INSERT INTO firm_points_entry"
+    " (firm_id, supplier_id, purchase_order_id, purchase_order_line_id, resource_id,"
+    "  rule, points, quantity, previous_quantity)"
+    " VALUES (:firm, :supplier, :order, :line, :resource,"
+    "  :rule, :points, :quantity, :previous) RETURNING id"
+)
+
+
+def new_points_entry(db: Connection, world, **overrides) -> int:
+    """A valid entry of firm A, plus whatever the caller wants wrong about it."""
+    if "order" not in overrides:
+        order = new_order(
+            db,
+            world,
+            status="received",
+            issued_at="2026-10-25",
+            issued_by=world.account_a,
+            received_at="2026-10-26",
+        )
+        overrides["order"] = order
+        overrides.setdefault("line", new_order_line(db, order, world.firm_a, new_resource(db)))
+    if "supplier" not in overrides:
+        overrides["supplier"] = db.execute(
+            text("SELECT supplier_id FROM purchase_order WHERE id = :o"),
+            {"o": overrides["order"]},
+        ).scalar_one()
+    if "resource" not in overrides:
+        overrides["resource"] = db.execute(
+            text("SELECT resource_id FROM purchase_order_line WHERE id = :l"),
+            {"l": overrides["line"]},
+        ).scalar_one()
+    row = {
+        "firm": world.firm_a,
+        "rule": "first_purchase",
+        "points": 0,
+        "quantity": 1000,
+        "previous": None,
+    } | overrides
+    return db.execute(text(INSERT_POINTS_ENTRY), row).scalar_one()
+
+
+def test_a_points_rule_is_one_of_the_four(db: Connection, world) -> None:
+    with pytest.raises(IntegrityError, match="ck_firm_points_entry_rule_valid"):
+        new_points_entry(db, world, rule="loyal_customer")
+
+
+def test_points_cannot_be_negative(db: Connection, world) -> None:
+    """Nothing in the system subtracts points (ADR-012, out of scope)."""
+    with pytest.raises(IntegrityError, match="ck_firm_points_entry_points_not_negative"):
+        new_points_entry(db, world, points=-1)
+
+
+def test_points_of_zero_are_allowed(db: Connection, world) -> None:
+    """A first purchase earns nothing and is still recorded, with its reason."""
+    new_points_entry(db, world, rule="first_purchase", points=0)
+
+
+def test_a_points_entry_carries_a_positive_quantity(db: Connection, world) -> None:
+    with pytest.raises(IntegrityError, match="ck_firm_points_entry_quantity_positive"):
+        new_points_entry(db, world, quantity=0)
+
+
+def test_a_compared_quantity_is_positive_when_there_is_one(db: Connection, world) -> None:
+    with pytest.raises(IntegrityError, match="ck_firm_points_entry_previous_quantity_positive"):
+        new_points_entry(db, world, rule="same_material", points=6, previous=0)
+
+
+def test_an_order_line_earns_only_once(db: Connection, world) -> None:
+    """ADR-012 section 4: UNIQUE (purchase_order_line_id), whatever the caller does."""
+    order = new_order(
+        db,
+        world,
+        status="received",
+        issued_at="2026-10-25",
+        issued_by=world.account_a,
+        received_at="2026-10-26",
+    )
+    line = new_order_line(db, order, world.firm_a, new_resource(db))
+    new_points_entry(db, world, order=order, line=line)
+
+    with pytest.raises(IntegrityError, match="uq_firm_points_entry_purchase_order_line_id"):
+        new_points_entry(db, world, order=order, line=line)
+
+
+def test_a_points_entry_cannot_name_another_firms_supplier(db: Connection, world) -> None:
+    with pytest.raises(IntegrityError, match="fk_firm_points_entry_supplier_id"):
+        new_points_entry(db, world, supplier=new_supplier(db, world.firm_b))

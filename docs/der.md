@@ -9,7 +9,7 @@
 >
 > El CI falla si este archivo no coincide con los modelos.
 
-Es el estado **actual** del esquema: 25 tablas. Lo que todavía se está
+Es el estado **actual** del esquema: 26 tablas. Lo que todavía se está
 diseñando no aparece acá sino en la ADR que lo propone. El porqué de cada tabla está en
 las ADR que cita cada área, y las convenciones en
 [modelo-datos-sprint-1.md](modelo-datos-sprint-1.md).
@@ -85,6 +85,19 @@ erDiagram
         varchar(20) role_scope FK
         boolean is_active
         timestamptz joined_at
+    }
+    firm_points_entry {
+        bigint id PK
+        bigint firm_id FK
+        bigint supplier_id FK
+        bigint purchase_order_id FK
+        bigint purchase_order_line_id FK, UK
+        bigint resource_id FK
+        varchar(40) rule
+        integer points
+        numeric quantity "14,3"
+        numeric previous_quantity "14,3 · NULL"
+        timestamptz created_at
     }
     permission {
         bigint id PK
@@ -288,6 +301,11 @@ erDiagram
     account ||--o{ firm_member : "account_id"
     firm ||--o{ firm_member : "firm_id"
     role ||--o{ firm_member : "role_id, role_scope"
+    firm ||--o{ firm_points_entry : "firm_id"
+    purchase_order ||--o{ firm_points_entry : "purchase_order_id"
+    purchase_order_line ||--o| firm_points_entry : "purchase_order_line_id"
+    resource ||--o{ firm_points_entry : "resource_id"
+    supplier ||--o{ firm_points_entry : "supplier_id, firm_id"
     account ||--o{ platform_member : "account_id"
     role ||--o{ platform_member : "role_id, role_scope"
     account ||--o{ project : "created_by"
@@ -706,6 +724,42 @@ erDiagram
 | `supplier_price` | CHECK | `unit_price >= 0` |
 | `supplier_price` | FK compuesta | `(supplier_id, firm_id) → supplier (id, firm_id)` |
 | `supplier_price` | UNIQUE parcial | `(supplier_id, resource_id) WHERE is_active` |
+
+## loyalty
+
+Definida en: sin ADR asignada.
+
+```mermaid
+erDiagram
+    firm_points_entry {
+        bigint id PK
+        bigint firm_id FK
+        bigint supplier_id FK
+        bigint purchase_order_id FK
+        bigint purchase_order_line_id FK, UK
+        bigint resource_id FK
+        varchar(40) rule
+        integer points
+        numeric quantity "14,3"
+        numeric previous_quantity "14,3 · NULL"
+        timestamptz created_at
+    }
+
+    firm ||--o{ firm_points_entry : "firm_id"
+    purchase_order ||--o{ firm_points_entry : "purchase_order_id"
+    purchase_order_line ||--o| firm_points_entry : "purchase_order_line_id"
+    resource ||--o{ firm_points_entry : "resource_id"
+    supplier ||--o{ firm_points_entry : "supplier_id, firm_id"
+```
+
+| Tabla | Regla | Definición |
+|---|---|---|
+| `firm_points_entry` | CHECK | `points >= 0` |
+| `firm_points_entry` | CHECK | `previous_quantity IS NULL OR previous_quantity > 0` |
+| `firm_points_entry` | CHECK | `quantity > 0` |
+| `firm_points_entry` | CHECK | `rule IN ('same_material_similar_quantity', 'same_material', 'same_supplier', 'first_purchase')` |
+| `firm_points_entry` | FK compuesta | `(supplier_id, firm_id) → supplier (id, firm_id)` |
+| `firm_points_entry` | UNIQUE | `(purchase_order_line_id)` |
 
 ## purchase_order
 

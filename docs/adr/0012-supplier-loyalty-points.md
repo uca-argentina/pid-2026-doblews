@@ -1,6 +1,6 @@
 # ADR-012: Gamificación por recurrencia de compra
 
-**Estado:** Propuesta
+**Estado:** Aceptada en parte (HU-23). §1 a §6 y §8 rigen; las rutas de §7 entran con HU-24
 **Fecha:** 2026-10-25
 **Contexto:** Qué premia la gamificación, cómo se calculan los puntos, cómo se guardan y cómo se leen los niveles. Deja firmes HU-23 y HU-24 del [Sprint 4](../historias/sprint-4.md). Se apoya en las órdenes de compra de [ADR-011](0011-purchase-orders.md).
 
@@ -126,6 +126,15 @@ El nivel, los puntos y el historial se leen con **`purchase_order.view`** (ADR-0
 5. Completar la misma orden dos veces no duplica asientos (`UNIQUE`).
 6. Las órdenes de otro estudio no cuentan como compra anterior.
 7. Cambiar las constantes no altera los asientos ya escritos.
+
+### 9. Precisado al implementar HU-23 (2026-10-26)
+
+- **"La última compra de ese material" es por material, no por orden.** El texto de §3 —"el renglón de ese material en la orden `received` más reciente"— se podía leer como "solo mirar la última orden", y entonces un material comprado dos órdenes atrás contaría como nunca comprado y `same_material` casi nunca se aplicaría. Se compara contra **la orden recibida más reciente que tenía ese material**, por `received_at` y después por id. La consulta usa `DISTINCT ON (resource_id)`.
+- **`bought_before` es un argumento aparte de la regla**, y no se deduce de si hay compras anteriores de esos materiales: un mapa vacío también describe a un estudio que le compra seguido y nunca le compró ninguno de esos materiales. El primero da `first_purchase` (0) y el segundo `same_supplier` (3).
+- **El enganche es `_apply_received_status`** (ADR-011 §8), la única función que escribe el estado recibido. Se calcula antes de sobrescribir el estado si la orden **está entrando** en `received`, así una escritura posterior que la encuentre ya recibida no vuelve a sumar. Además el servicio no suma si la orden ya tiene asientos, y el `UNIQUE` lo sostiene un nivel más abajo.
+- **La cantidad que se guarda y se compara es la recibida**, leída de las recepciones activas (HU-22). En una orden `received` coincide con la pedida, pero la regla está definida sobre la recibida y es esa la que se usa.
+- **Los umbrales de nivel de §5 no entran todavía.** La regla de §3 y sus valores están en `services/loyalty.py`, como pide esta ADR; los cuatro niveles los agrega HU-24 en ese mismo módulo, cuando haya quien los lea. No tiene sentido dejar constantes sin consumidor.
+- **Nombres de constraints cortos a propósito:** `uq_firm_points_entry_purchase_order_line_id` ya mide 43 caracteres, y Postgres guarda 63. Los nombres generados por la convención se verificaron contra ese límite antes de escribir la migración.
 
 ---
 

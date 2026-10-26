@@ -12,6 +12,7 @@ from app.models.budget_version import (
 )
 from app.models.catalog import Recipe, RecipeResource, Resource
 from app.models.firm import Firm
+from app.models.loyalty import FirmPointsEntry
 from app.models.membership import FirmMember, PlatformMember
 from app.models.project import Project, ProjectMember
 from app.models.project_recipe import ProjectRecipe
@@ -34,6 +35,7 @@ __all__ = [
     "BudgetVersionItem",
     "BudgetVersionLine",
     "Firm",
+    "FirmPointsEntry",
     "FirmMember",
     "Permission",
     "PlatformMember",
