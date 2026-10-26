@@ -5,19 +5,21 @@ at the quantity the work still needs. What it adds over the comparison is
 commitment — the price and the shipping are copied when the line is made and
 stay as they were, whatever the supplier's list says later (ADR-011 section 2).
 
-The receipts of ADR-011 section 1 arrive with HU-22, which is the story that
-writes them. The columns that only make sense once an order is issued, cancelled
-or received are here already, so the status and its dates are pinned by the
-schema from the first migration.
+The receipts of ADR-011 section 1 are the last two tables here (HU-22): what
+arrived of a line on a day, and what was paid for it. The columns that only make
+sense once an order is issued, cancelled or received were there from the first
+migration, so the status and its dates are pinned by the schema rather than by
+whichever story got around to writing them.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
@@ -157,3 +159,87 @@ Index(
     unique=True,
     postgresql_where=text("is_active"),
 )
+
+
+class PurchaseOrderReceipt(Base):
+    """One delivery of an order: what arrived on a day, and what it was paid for."""
+
+    __tablename__ = "purchase_order_receipt"
+    __table_args__ = (
+        # The freight of this delivery, which a remito charges once for the whole
+        # truck and not per material (ADR-011 section 8). NULL is "none charged",
+        # which is not the same as zero: the supplier may simply not have said.
+        CheckConstraint(
+            "shipping_cost IS NULL OR shipping_cost >= 0", name="shipping_cost_not_negative"
+        ),
+        ForeignKeyConstraint(
+            ["purchase_order_id", "firm_id"],
+            ["purchase_order.id", "purchase_order.firm_id"],
+        ),
+        Index("ix_purchase_order_receipt_purchase_order_id", "purchase_order_id"),
+        Index("ix_purchase_order_receipt_firm_id", "firm_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+
+    purchase_order_id: Mapped[int] = mapped_column(BigInteger)
+    # Redundant with its order's, like the line's: the composite FK above keeps the
+    # two from diverging, and it is what the repository narrows every read by.
+    firm_id: Mapped[int] = mapped_column(BigInteger)
+
+    # The day the delivery arrived, in Argentina (core/clock.py). A date and not a
+    # timestamp, because a remito is dated by the day.
+    received_on: Mapped[date] = mapped_column(Date)
+    note: Mapped[str | None] = mapped_column(String(150))
+
+    created_by: Mapped[int] = mapped_column(BigInteger, ForeignKey("account.id"))
+    shipping_cost: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+
+    # The one correction an order allows: cancelling its last receipt (ADR-011
+    # section 3). A cancelled receipt stops counting towards everything derived.
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class PurchaseOrderReceiptLine(Base):
+    """How much of one line arrived in one delivery, and what was paid for it.
+
+    Pure composition of its receipt, the way budget_version_item is of its version
+    (ADR-007 section 1): no firm_id and no is_active of
+    its own, because it is only ever reached through receipt_id — already tied to a
+    firm — and it goes out of use with the receipt that holds it.
+    """
+
+    __tablename__ = "purchase_order_receipt_line"
+    __table_args__ = (
+        CheckConstraint("quantity > 0", name="quantity_positive"),
+        CheckConstraint("actual_cost >= 0", name="actual_cost_not_negative"),
+        # A line appears once per delivery: two rows for the same one would be the
+        # same material arriving twice in a single delivery.
+        #
+        # Named by hand, against the convention: uq_<table>_<columns> would come
+        # to 64 characters here and Postgres keeps 63, so the name would reach
+        # the database truncated with a hash on the end and nothing could refer
+        # to it by the name it was written with.
+        UniqueConstraint(
+            "receipt_id",
+            "purchase_order_line_id",
+            name="uq_purchase_order_receipt_line_once",
+        ),
+        Index("ix_purchase_order_receipt_line_receipt_id", "receipt_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+
+    receipt_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("purchase_order_receipt.id"))
+    purchase_order_line_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("purchase_order_line.id")
+    )
+
+    quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3))
+    # What the invoice charged for this material in this delivery, freight aside:
+    # the receipt carries that once (ADR-011 section 8). An amount and not a unit
+    # price, because what the architect has in hand is the remito, not a division.
+    actual_cost: Mapped[Decimal] = mapped_column(Numeric(14, 2))

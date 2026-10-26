@@ -9,7 +9,7 @@
 >
 > El CI falla si este archivo no coincide con los modelos.
 
-Es el estado **actual** del esquema: 23 tablas. Lo que todavía se está
+Es el estado **actual** del esquema: 25 tablas. Lo que todavía se está
 diseñando no aparece acá sino en la ADR que lo propone. El porqué de cada tabla está en
 las ADR que cita cada área, y las convenciones en
 [modelo-datos-sprint-1.md](modelo-datos-sprint-1.md).
@@ -187,6 +187,25 @@ erDiagram
         timestamptz created_at
         timestamptz updated_at
     }
+    purchase_order_receipt {
+        bigint id PK
+        bigint purchase_order_id FK
+        bigint firm_id FK
+        date received_on
+        varchar(150) note "NULL"
+        bigint created_by FK
+        numeric shipping_cost "14,2 · NULL"
+        boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    purchase_order_receipt_line {
+        bigint id PK
+        bigint receipt_id FK
+        bigint purchase_order_line_id FK
+        numeric quantity "14,3"
+        numeric actual_cost "14,2"
+    }
     recipe {
         bigint id PK
         bigint firm_id FK "NULL"
@@ -291,6 +310,10 @@ erDiagram
     supplier ||--o{ purchase_order : "supplier_id, firm_id"
     purchase_order ||--o{ purchase_order_line : "purchase_order_id, firm_id"
     resource ||--o{ purchase_order_line : "resource_id"
+    account ||--o{ purchase_order_receipt : "created_by"
+    purchase_order ||--o{ purchase_order_receipt : "purchase_order_id, firm_id"
+    purchase_order_line ||--o{ purchase_order_receipt_line : "purchase_order_line_id"
+    purchase_order_receipt ||--o{ purchase_order_receipt_line : "receipt_id"
     firm |o--o{ recipe : "firm_id"
     unit_of_measure ||--o{ recipe : "unit_of_measure_id"
     recipe ||--o{ recipe_resource : "recipe_id"
@@ -720,6 +743,25 @@ erDiagram
         timestamptz created_at
         timestamptz updated_at
     }
+    purchase_order_receipt {
+        bigint id PK
+        bigint purchase_order_id FK
+        bigint firm_id FK
+        date received_on
+        varchar(150) note "NULL"
+        bigint created_by FK
+        numeric shipping_cost "14,2 · NULL"
+        boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    purchase_order_receipt_line {
+        bigint id PK
+        bigint receipt_id FK
+        bigint purchase_order_line_id FK
+        numeric quantity "14,3"
+        numeric actual_cost "14,2"
+    }
 
     account |o--o{ purchase_order : "cancelled_by"
     account ||--o{ purchase_order : "created_by"
@@ -729,6 +771,10 @@ erDiagram
     supplier ||--o{ purchase_order : "supplier_id, firm_id"
     purchase_order ||--o{ purchase_order_line : "purchase_order_id, firm_id"
     resource ||--o{ purchase_order_line : "resource_id"
+    account ||--o{ purchase_order_receipt : "created_by"
+    purchase_order ||--o{ purchase_order_receipt : "purchase_order_id, firm_id"
+    purchase_order_line ||--o{ purchase_order_receipt_line : "purchase_order_line_id"
+    purchase_order_receipt ||--o{ purchase_order_receipt_line : "receipt_id"
 ```
 
 | Tabla | Regla | Definición |
@@ -751,3 +797,8 @@ erDiagram
 | `purchase_order_line` | CHECK | `unit_price >= 0` |
 | `purchase_order_line` | FK compuesta | `(purchase_order_id, firm_id) → purchase_order (id, firm_id)` |
 | `purchase_order_line` | UNIQUE parcial | `(purchase_order_id, resource_id) WHERE is_active` |
+| `purchase_order_receipt` | CHECK | `shipping_cost IS NULL OR shipping_cost >= 0` |
+| `purchase_order_receipt` | FK compuesta | `(purchase_order_id, firm_id) → purchase_order (id, firm_id)` |
+| `purchase_order_receipt_line` | CHECK | `actual_cost >= 0` |
+| `purchase_order_receipt_line` | CHECK | `quantity > 0` |
+| `purchase_order_receipt_line` | UNIQUE | `(receipt_id, purchase_order_line_id)` |
