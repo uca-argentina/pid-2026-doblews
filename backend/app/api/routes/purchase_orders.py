@@ -1,4 +1,4 @@
-"""Purchase orders over HTTP (HU-20, ADR-011 section 8).
+"""Purchase orders over HTTP (ADR-011 section 8).
 
 Two prefixes, for two reasons. Under the work live the two things that are born
 there: generating drafts from its comparison, and listing its orders. Those
@@ -13,6 +13,7 @@ by owner and architect. The client holds neither: an order is the firm's costs.
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -29,7 +30,10 @@ from app.repositories.purchase_order import (
     OrderEntry,
     OrderLineEntry,
     PurchaseOrderLineRepository,
+    PurchaseOrderReceiptRepository,
     PurchaseOrderRepository,
+    ReceiptEntry,
+    ReceivedTotals,
 )
 from app.schemas.catalog import UnitRef
 from app.schemas.purchase_order import (
@@ -44,6 +48,9 @@ from app.schemas.purchase_order import (
     PurchaseOrderLineOut,
     PurchaseOrderOut,
     PurchaseOrderSummary,
+    ReceiptIn,
+    ReceiptLineOut,
+    ReceiptOut,
     SkippedMaterialOut,
 )
 from app.services import purchase_orders
@@ -53,6 +60,7 @@ router = APIRouter(tags=["purchase-orders"])
 
 ORDER_NOT_FOUND = "Orden de compra no encontrada"
 LINE_NOT_FOUND = "Renglón no encontrado en la orden"
+RECEIPT_NOT_FOUND = "Recepción no encontrada en la orden"
 
 VIEW = requires("purchase_order.view", "firm")
 MANAGE = requires("purchase_order.manage", "firm")
@@ -70,14 +78,24 @@ def _order_rules() -> Iterator[None]:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=ORDER_NOT_FOUND) from None
     except purchase_orders.PurchaseOrderLineNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=LINE_NOT_FOUND) from None
+    except purchase_orders.PurchaseOrderReceiptNotFoundError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=RECEIPT_NOT_FOUND) from None
     except purchase_orders.InvalidPurchaseLineError as error:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=error.detail) from None
     except (purchase_orders.PurchaseOrderStateError, purchase_orders.PurchaseOrderError) as error:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=error.detail) from None
 
 
-def _line_out(entry: OrderLineEntry) -> PurchaseOrderLineOut:
+def _line_out(entry: OrderLineEntry, received: ReceivedTotals | None) -> PurchaseOrderLineOut:
+    """One line as the detail shows it: what was ordered, and what has arrived.
+
+    With nothing delivered there is nothing to compare, so the difference is
+    None rather than a zero that would read as "right on the money" (HU-22).
+    """
     line = entry.line
+    arrived = received.quantity if received is not None else Decimal("0.000")
+    paid = received.actual_cost if received is not None else Decimal("0.00")
+    estimate = purchase_orders.received_estimate(line, arrived)
     return PurchaseOrderLineOut(
         id=line.id,
         resource=NamedRef(id=line.resource_id, name=entry.resource_name),
@@ -86,6 +104,11 @@ def _line_out(entry: OrderLineEntry) -> PurchaseOrderLineOut:
         unit_price=line.unit_price,
         shipping_cost=line.shipping_cost,
         estimated_total=purchase_orders.line_total(line),
+        received_quantity=arrived,
+        pending_quantity=max(line.quantity - arrived, Decimal("0.000")),
+        received_estimate=estimate,
+        actual_cost=paid,
+        cost_difference=paid - estimate if arrived > 0 else None,
     )
 
 
@@ -113,12 +136,19 @@ def _summaries(
     return [_summary(entry, lines.get(entry.order.id, [])) for entry in entries]
 
 
-def _history(db: DbSession, firm_id: int, order) -> list[OrderEvent]:
-    """The order's changes of status, oldest first, from its own columns."""
+def _history(db: DbSession, firm_id: int, order, receipts: list[ReceiptEntry]) -> list[OrderEvent]:
+    """The order's timeline, oldest first, from its own columns and its receipts.
+
+    A delivery is placed by when it was loaded and not by the day it arrived, so
+    the timeline reads in the order things actually happened in the system — the
+    same order that decides which receipt may be cancelled. The day it arrived is
+    what the receipts section shows.
+    """
     stamps = [
         ("created", order.created_at, order.created_by),
         ("issued", order.issued_at, order.issued_by),
         ("cancelled", order.cancelled_at, order.cancelled_by),
+        *(("received", entry.receipt.created_at, entry.receipt.created_by) for entry in receipts),
     ]
     stamps = [stamp for stamp in stamps if stamp[1] is not None]
     names = PurchaseOrderRepository(db, firm_id=firm_id).account_names(
@@ -130,16 +160,76 @@ def _history(db: DbSession, firm_id: int, order) -> list[OrderEvent]:
     ]
 
 
+def _receipt_total(entry: ReceiptEntry) -> Decimal:
+    """What one delivery cost in all: its materials, plus its freight if it had any."""
+    materials = sum((line.actual_cost for line in entry.lines), start=Decimal("0.00"))
+    return materials + (entry.receipt.shipping_cost or Decimal("0.00"))
+
+
+def _receipt_out(
+    entry: ReceiptEntry, lines: dict[int, OrderLineEntry], *, cancellable_id: int | None
+) -> ReceiptOut:
+    receipt = entry.receipt
+    return ReceiptOut(
+        id=receipt.id,
+        received_on=receipt.received_on,
+        note=receipt.note,
+        shipping_cost=receipt.shipping_cost,
+        created_by=NamedRef(id=receipt.created_by, name=entry.created_by_name),
+        created_at=receipt.created_at,
+        lines=[
+            ReceiptLineOut(
+                purchase_order_line_id=line.purchase_order_line_id,
+                resource=NamedRef(
+                    id=lines[line.purchase_order_line_id].line.resource_id,
+                    name=lines[line.purchase_order_line_id].resource_name,
+                ),
+                unit=UnitRef(
+                    code=lines[line.purchase_order_line_id].unit_code,
+                    abbreviation=lines[line.purchase_order_line_id].unit_abbreviation,
+                ),
+                quantity=line.quantity,
+                actual_cost=line.actual_cost,
+            )
+            for line in entry.lines
+            if line.purchase_order_line_id in lines
+        ],
+        total=_receipt_total(entry),
+        can_cancel=receipt.id == cancellable_id,
+    )
+
+
+def _cancellable_receipt_id(order, receipts: list[ReceiptEntry]) -> int | None:
+    """Which receipt, if any, the order would let go of (ADR-011 section 3).
+
+    The last one loaded, and only while the order is not complete: a received
+    order is closed because it already earned its points. Answered here so the
+    screen never has to work the rule out a second time.
+    """
+    if order.status != purchase_orders.PARTIALLY_RECEIVED or not receipts:
+        return None
+    return max(entry.receipt.id for entry in receipts)
+
+
 def _order_out(db: DbSession, firm_id: int, order_id: int) -> PurchaseOrderOut:
-    """An order with its lines and history, read back as the screen will show it."""
+    """An order with its lines, deliveries and history, as the screen will show it."""
     entry = PurchaseOrderRepository(db, firm_id=firm_id).entry(order_id)
     if entry is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=ORDER_NOT_FOUND)
     lines = PurchaseOrderLineRepository(db, firm_id=firm_id).lines([order_id]).get(order_id, [])
+    receipt_repository = PurchaseOrderReceiptRepository(db, firm_id=firm_id)
+    received = receipt_repository.received_by_line(order_id)
+    receipts = receipt_repository.for_order(order_id)
+    by_line = {line.line.id: line for line in lines}
+    cancellable_id = _cancellable_receipt_id(entry.order, receipts)
     return PurchaseOrderOut(
         **_summary(entry, lines).model_dump(),
-        lines=[_line_out(line) for line in lines],
-        history=_history(db, firm_id, entry.order),
+        lines=[_line_out(line, received.get(line.line.id)) for line in lines],
+        receipts=[
+            _receipt_out(receipt, by_line, cancellable_id=cancellable_id) for receipt in receipts
+        ],
+        history=_history(db, firm_id, entry.order, receipts),
+        actual_total=sum((_receipt_total(receipt) for receipt in receipts), start=Decimal("0.00")),
     )
 
 
@@ -365,3 +455,58 @@ def discard_order(order_id: int, db: DbSession, membership: CurrentMembership) -
     with _order_rules():
         purchase_orders.discard(db, membership.firm_id, order_id)
     db.commit()
+
+
+@router.post(
+    f"{FIRM_PREFIX}/{{order_id}}/receipts",
+    response_model=PurchaseOrderOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(MANAGE)],
+)
+def register_receipt(
+    order_id: int,
+    payload: ReceiptIn,
+    account: CurrentAccount,
+    db: DbSession,
+    membership: CurrentMembership,
+) -> PurchaseOrderOut:
+    """Register what arrived of an order on a day, and what was paid for it (HU-22).
+
+    201: a delivery is a new row of its own. The order comes back entire because
+    the delivery may have moved its status, and the screen shows both.
+    """
+    with _order_rules():
+        purchase_orders.register_receipt(
+            db,
+            membership.firm_id,
+            order_id,
+            received_on=payload.received_on,
+            note=payload.note,
+            shipping_cost=payload.shipping_cost,
+            lines=[
+                purchase_orders.ReceiptLineIn(
+                    line_id=item.line_id,
+                    quantity=item.quantity,
+                    actual_cost=item.actual_cost,
+                )
+                for item in payload.lines
+            ],
+            created_by=account.id,
+        )
+    db.commit()
+    return _order_out(db, membership.firm_id, order_id)
+
+
+@router.post(
+    f"{FIRM_PREFIX}/{{order_id}}/receipts/{{receipt_id}}/deactivate",
+    response_model=PurchaseOrderOut,
+    dependencies=[Depends(MANAGE)],
+)
+def deactivate_receipt(
+    order_id: int, receipt_id: int, db: DbSession, membership: CurrentMembership
+) -> PurchaseOrderOut:
+    """Cancel the order's last delivery. A POST and not a DELETE: nothing is erased."""
+    with _order_rules():
+        purchase_orders.cancel_last_receipt(db, membership.firm_id, order_id, receipt_id)
+    db.commit()
+    return _order_out(db, membership.firm_id, order_id)

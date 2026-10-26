@@ -384,3 +384,17 @@ El detalle de lo que se precisó está en ADR-011 §8.
 - **Listados:** Compras muestra las órdenes de la obra en todos los estados; la nueva sección **"Órdenes de compra"** del estudio las muestra todas, filtrables por obra, proveedor y estado, con estado vacío. Tabla desde `sm`, tarjetas debajo.
 
 El detalle está en ADR-011 §8. **Queda liberada HU-22** (recepciones).
+
+**2026-10-26 (HU-22).** **HU-22 implementada** en una sola rama, `feat/hu22-receptions`. **ADR-011 queda Aceptada**: entran sus dos tablas que faltaban, y con eso rige completa.
+
+- **Recepciones:** sobre una orden emitida o recibida parcialmente se registra una entrega con su fecha, su nota y, por cada renglón que llegó, la cantidad y el costo real. Una orden puede tener varias. No se recibe más de lo pedido, contando lo que ya trajeron las recepciones activas.
+- **El estado no se elige, se deriva:** la orden pasa sola a *recibida parcialmente* cuando llegó algo y a *recibida* cuando llegó todo. Una sola función lo decide, después de registrar y después de anular, y es donde HU-23 va a enganchar los puntos.
+- **El envío real cambió de lugar respecto del backlog:** va en la recepción y no en el renglón, porque el remito lo cobra una sola vez para toda la entrega. Así la diferencia por material compara materiales contra materiales y no muestra un sobrecosto que es flete. El total real de la orden sí lo incluye.
+- **La diferencia es sobre lo recibido:** precio congelado por la cantidad que llegó, contra lo facturado por esa cantidad. Mientras no llegó nada va un guion y no un cero.
+- **Fechas:** ni futura ni anterior al día de emisión, las dos medidas en hora argentina.
+- **Corregir:** no se editan. Se anula la última cargada, con una confirmación que explica la consecuencia, y vuelve a quedar pendiente. Una orden recibida queda cerrada. El backend devuelve `can_cancel` por recepción, así la pantalla no deduce la regla de nuevo.
+- **En la pantalla de la orden:** botón "Registrar recepción", el total real al lado del estimado, la tabla de renglones con pedido/recibido/pendiente/estimado/real/diferencia desde que la orden está emitida, la sección "Recepciones" con fecha, quién la cargó y la nota, y el historial con un evento por entrega. Tabla desde `sm`, tarjetas debajo.
+
+El detalle de lo que se precisó está en ADR-011 §8.
+
+**Falta para cerrar HU-22:** correr migración y tests, la revisión visual de los criterios y de 375px, y el PR a `dev`. **Queda liberada HU-23** (puntos).

@@ -11,8 +11,12 @@ bricks Norte wins (1,589,000 against 1,620,000), for 2,200 it still does
 (489,000 against 495,000).
 """
 
+from datetime import timedelta
+
 import pytest
 from sqlalchemy import text
+
+from app.core.clock import today
 
 WALL = "Pared de ladrillo común 15cm"
 BRICK = "Ladrillo común"
@@ -614,3 +618,370 @@ class TestFirmListing:
 
         assert response.status_code == 200
         assert response.json() == []
+
+
+class TestReceipts:
+    """Registering what arrived of an order, and correcting it (HU-22).
+
+    The order under test is always the same one: 7,200 bricks at 220, with
+    Norte's 5,000 of shipping frozen on the line. So 2,000 bricks are worth
+    440,000 at the agreed price, and the 5,200 left 1,144,000.
+    """
+
+    @pytest.fixture
+    def issued(self, client, world, wall, yards, lead, resource_id) -> dict:
+        (summary,) = generate(client, world, lead, resource_id, BRICK)["orders"]
+        return issue(client, world, lead, summary["id"]).json()
+
+    @pytest.fixture
+    def bricks(self, issued) -> int:
+        return issued["lines"][0]["id"]
+
+    def receive(self, client, world, headers, order: dict, lines_in, **extra) -> object:
+        """Register a delivery dated today, which is also the day it was issued."""
+        body = {"received_on": str(today()), "lines": lines_in} | extra
+        return client.post(f"{order_url(world, order['id'])}/receipts", json=body, headers=headers)
+
+    def some(self, line_id: int, quantity: str, cost: str) -> list[dict]:
+        return [{"line_id": line_id, "quantity": quantity, "actual_cost": cost}]
+
+    def drop(self, client, world, headers, order: dict, receipt_id: int) -> object:
+        return client.post(
+            f"{order_url(world, order['id'])}/receipts/{receipt_id}/deactivate", headers=headers
+        )
+
+    # --- what a delivery does to the order ------------------------------------
+
+    def test_a_partial_delivery_leaves_the_order_partially_received(
+        self, client, world, issued, bricks, lead
+    ):
+        response = self.receive(client, world, lead, issued, self.some(bricks, "2000", "450000"))
+
+        assert response.status_code == 201, response.text
+        order = response.json()
+        assert order["status"] == "partially_received"
+        (line,) = order["lines"]
+        assert (line["received_quantity"], line["pending_quantity"]) == ("2000.000", "5200.000")
+
+    def test_the_difference_compares_the_agreed_price_of_what_arrived(
+        self, client, world, issued, bricks, lead
+    ):
+        """440,000 agreed for 2,000 bricks against 450,000 invoiced: 10,000 over."""
+        order = self.receive(
+            client, world, lead, issued, self.some(bricks, "2000", "450000")
+        ).json()
+
+        (line,) = order["lines"]
+        assert (line["received_estimate"], line["actual_cost"]) == ("440000.00", "450000.00")
+        assert line["cost_difference"] == "10000.00"
+
+    def test_nothing_delivered_is_nothing_to_compare(self, client, world, issued, lead):
+        (line,) = issued["lines"]
+
+        assert line["received_quantity"] == "0.000"
+        assert line["cost_difference"] is None
+        assert issued["actual_total"] == "0.00"
+
+    def test_the_last_delivery_completes_the_order(self, client, world, issued, bricks, lead):
+        self.receive(client, world, lead, issued, self.some(bricks, "2000", "450000"))
+
+        order = self.receive(
+            client, world, lead, issued, self.some(bricks, "5200", "1144000")
+        ).json()
+
+        assert order["status"] == "received"
+        (line,) = order["lines"]
+        assert (line["pending_quantity"], line["cost_difference"]) == ("0.000", "10000.00")
+        assert order["actual_total"] == "1594000.00"
+
+    def test_the_freight_of_a_delivery_is_counted_once_and_not_per_material(
+        self, client, world, issued, bricks, lead
+    ):
+        """It lands on the order's real total, never inside a material's difference."""
+        order = self.receive(
+            client,
+            world,
+            lead,
+            issued,
+            self.some(bricks, "2000", "440000"),
+            shipping_cost="5000",
+        ).json()
+
+        (line,) = order["lines"]
+        assert line["cost_difference"] == "0.00"
+        (receipt,) = order["receipts"]
+        assert (receipt["shipping_cost"], receipt["total"]) == ("5000.00", "445000.00")
+        assert order["actual_total"] == "445000.00"
+
+    def test_a_delivery_may_carry_no_freight(self, client, world, issued, bricks, lead):
+        order = self.receive(
+            client, world, lead, issued, self.some(bricks, "2000", "440000")
+        ).json()
+
+        (receipt,) = order["receipts"]
+        assert receipt["shipping_cost"] is None
+        assert receipt["total"] == "440000.00"
+
+    def test_a_delivery_is_listed_with_its_day_and_who_loaded_it(
+        self, client, world, issued, bricks, lead
+    ):
+        order = self.receive(
+            client,
+            world,
+            lead,
+            issued,
+            self.some(bricks, "2000", "440000"),
+            note="Remito 0001-00004512",
+        ).json()
+
+        (receipt,) = order["receipts"]
+        assert receipt["received_on"] == str(today())
+        assert receipt["note"] == "Remito 0001-00004512"
+        assert receipt["created_by"]["name"] != ""
+        assert receipt["lines"][0]["resource"]["name"] == BRICK
+
+    def test_the_history_records_every_delivery(self, client, world, issued, bricks, lead):
+        self.receive(client, world, lead, issued, self.some(bricks, "2000", "440000"))
+
+        order = self.receive(
+            client, world, lead, issued, self.some(bricks, "1000", "220000")
+        ).json()
+
+        assert [event["kind"] for event in order["history"]] == [
+            "created",
+            "issued",
+            "received",
+            "received",
+        ]
+
+    # --- what a delivery may not do -------------------------------------------
+
+    def test_more_than_was_ordered_is_refused(self, client, world, issued, bricks, lead):
+        response = self.receive(client, world, lead, issued, self.some(bricks, "7201", "1"))
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == "No se puede recibir más de lo pedido"
+
+    def test_the_ceiling_counts_what_already_arrived(self, client, world, issued, bricks, lead):
+        """7,000 fit, and so do 200 more; 201 do not."""
+        self.receive(client, world, lead, issued, self.some(bricks, "7000", "1540000"))
+
+        assert (
+            self.receive(client, world, lead, issued, self.some(bricks, "201", "44220")).status_code
+            == 409
+        )
+        assert (
+            self.receive(client, world, lead, issued, self.some(bricks, "200", "44000")).status_code
+            == 201
+        )
+
+    def test_a_draft_takes_no_delivery(self, client, world, lead, resource_id, issued):
+        (draft,) = generate(client, world, lead, resource_id, CEMENT)["orders"]
+        detail = client.get(order_url(world, draft["id"]), headers=lead).json()
+
+        response = self.receive(
+            client, world, lead, draft, self.some(detail["lines"][0]["id"], "1", "100")
+        )
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == (
+            "Solo se puede recibir una orden emitida o recibida parcialmente"
+        )
+
+    def test_a_cancelled_order_takes_no_delivery(self, client, world, issued, bricks, lead):
+        cancel(client, world, lead, issued["id"])
+
+        response = self.receive(client, world, lead, issued, self.some(bricks, "1", "100"))
+
+        assert response.status_code == 409
+
+    def test_a_complete_order_takes_no_more(self, client, world, issued, bricks, lead):
+        self.receive(client, world, lead, issued, self.some(bricks, "7200", "1584000"))
+
+        response = self.receive(client, world, lead, issued, self.some(bricks, "1", "100"))
+
+        assert response.status_code == 409
+
+    def test_a_delivery_is_not_dated_in_the_future(self, client, world, issued, bricks, lead):
+        response = self.receive(
+            client,
+            world,
+            lead,
+            issued,
+            self.some(bricks, "100", "22000"),
+            received_on=str(today() + timedelta(days=1)),
+        )
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == "Una recepción no puede ser posterior a hoy"
+
+    def test_a_delivery_is_not_dated_before_the_order_was_placed(
+        self, client, world, issued, bricks, lead
+    ):
+        response = self.receive(
+            client,
+            world,
+            lead,
+            issued,
+            self.some(bricks, "100", "22000"),
+            received_on=str(today() - timedelta(days=1)),
+        )
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == (
+            "Una recepción no puede ser anterior a la emisión de la orden"
+        )
+
+    def test_a_delivery_registers_each_material_once(self, client, world, issued, bricks, lead):
+        response = self.receive(
+            client,
+            world,
+            lead,
+            issued,
+            [
+                {"line_id": bricks, "quantity": "100", "actual_cost": "22000"},
+                {"line_id": bricks, "quantity": "200", "actual_cost": "44000"},
+            ],
+        )
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == "Una recepción registra cada material una sola vez"
+
+    def test_a_delivery_only_fills_lines_of_its_own_order(
+        self, client, world, wall, yards, lead, resource_id, issued
+    ):
+        (other,) = generate(client, world, lead, resource_id, CEMENT)["orders"]
+        elsewhere = client.get(order_url(world, other["id"]), headers=lead).json()["lines"][0]["id"]
+
+        response = self.receive(client, world, lead, issued, self.some(elsewhere, "1", "100"))
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Renglón no encontrado en la orden"
+
+    def test_an_empty_delivery_is_refused(self, client, world, issued, lead):
+        assert self.receive(client, world, lead, issued, []).status_code == 422
+
+    # --- correcting a delivery ------------------------------------------------
+
+    def test_cancelling_the_last_delivery_walks_the_order_back(
+        self, client, world, issued, bricks, lead
+    ):
+        self.receive(client, world, lead, issued, self.some(bricks, "2000", "440000"))
+        second = self.receive(
+            client, world, lead, issued, self.some(bricks, "1000", "220000")
+        ).json()["receipts"][-1]
+
+        order = self.drop(client, world, lead, issued, second["id"]).json()
+
+        assert order["status"] == "partially_received"
+        assert order["lines"][0]["received_quantity"] == "2000.000"
+        assert len(order["receipts"]) == 1
+
+    def test_cancelling_the_only_delivery_leaves_the_order_issued_again(
+        self, client, world, issued, bricks, lead
+    ):
+        receipt = self.receive(
+            client, world, lead, issued, self.some(bricks, "2000", "440000")
+        ).json()["receipts"][0]
+
+        order = self.drop(client, world, lead, issued, receipt["id"]).json()
+
+        assert order["status"] == "issued"
+        assert order["receipts"] == []
+        assert (order["lines"][0]["cost_difference"], order["actual_total"]) == (None, "0.00")
+
+    def test_only_the_last_delivery_may_be_cancelled(self, client, world, issued, bricks, lead):
+        first = self.receive(
+            client, world, lead, issued, self.some(bricks, "2000", "440000")
+        ).json()["receipts"][0]
+        self.receive(client, world, lead, issued, self.some(bricks, "1000", "220000"))
+
+        response = self.drop(client, world, lead, issued, first["id"])
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == "Solo se puede anular la última recepción de la orden"
+
+    def test_can_cancel_names_the_one_delivery_that_may_go(
+        self, client, world, issued, bricks, lead
+    ):
+        self.receive(client, world, lead, issued, self.some(bricks, "2000", "440000"))
+
+        order = self.receive(
+            client, world, lead, issued, self.some(bricks, "1000", "220000")
+        ).json()
+
+        assert [receipt["can_cancel"] for receipt in order["receipts"]] == [False, True]
+
+    def test_a_received_order_is_closed_to_corrections(self, client, world, issued, bricks, lead):
+        order = self.receive(
+            client, world, lead, issued, self.some(bricks, "7200", "1584000")
+        ).json()
+        (receipt,) = order["receipts"]
+
+        assert receipt["can_cancel"] is False
+        response = self.drop(client, world, lead, issued, receipt["id"])
+        assert response.status_code == 409
+        assert response.json()["detail"] == (
+            "Una orden recibida queda cerrada: no se anulan sus recepciones"
+        )
+
+    def test_an_order_with_nothing_delivered_has_nothing_to_cancel(
+        self, client, world, issued, bricks, lead
+    ):
+        receipt = self.receive(
+            client, world, lead, issued, self.some(bricks, "2000", "440000")
+        ).json()["receipts"][0]
+        self.drop(client, world, lead, issued, receipt["id"])
+
+        response = self.drop(client, world, lead, issued, receipt["id"])
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == "La orden no tiene recepciones para anular"
+
+    def test_a_cancelled_delivery_frees_the_quantity_it_had_brought(
+        self, client, world, issued, bricks, lead
+    ):
+        """What it brought stops counting against the ceiling, so it fits again."""
+        receipt = self.receive(
+            client, world, lead, issued, self.some(bricks, "2000", "440000")
+        ).json()["receipts"][0]
+        self.drop(client, world, lead, issued, receipt["id"])
+
+        order = self.receive(
+            client, world, lead, issued, self.some(bricks, "7200", "1584000")
+        ).json()
+
+        assert order["status"] == "received"
+        assert order["lines"][0]["received_quantity"] == "7200.000"
+
+    # --- who may do any of this -----------------------------------------------
+
+    def test_the_client_registers_nothing(self, client, world, issued, bricks, team, auth_header):
+        headers = auth_header(team["client"])
+
+        response = self.receive(client, world, headers, issued, self.some(bricks, "1", "100"))
+
+        assert response.status_code == 403
+
+    def test_an_architect_off_the_work_registers_a_delivery(
+        self, client, world, issued, bricks, team, auth_header
+    ):
+        headers = auth_header(team["bystander"])
+
+        response = self.receive(client, world, headers, issued, self.some(bricks, "100", "22000"))
+
+        assert response.status_code == 201
+
+    def test_another_firm_does_not_find_the_order(
+        self, client, world, issued, bricks, team, auth_header
+    ):
+        response = client.post(
+            f"/firms/{world.firm_b}/purchase-orders/{issued['id']}/receipts",
+            json={
+                "received_on": str(today()),
+                "lines": self.some(bricks, "1", "100"),
+            },
+            headers=auth_header(team["stranger"]),
+        )
+
+        assert response.status_code == 404

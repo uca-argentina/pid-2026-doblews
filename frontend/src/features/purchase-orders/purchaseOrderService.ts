@@ -5,6 +5,7 @@ import type {
   OrderStatus,
   PurchaseOrderOut,
   PurchaseOrderSummary,
+  ReceiptIn,
 } from "./types";
 
 /** Every call the purchase order screens make (ADR-011 section 8).
@@ -148,6 +149,34 @@ export async function cancelOrder(
 ): Promise<PurchaseOrderOut> {
   const { data } = await api.post<PurchaseOrderOut>(
     `${firmOrdersUrl(firmId)}/${orderId}/cancel`,
+  );
+  return data;
+}
+
+/** Registers what arrived of an order on a day, and what was paid for it
+ * (HU-22). Answers with the order entire, because the delivery may have moved
+ * its status. 409 over the quantity ordered, or from a state that takes none. */
+export async function registerReceipt(
+  firmId: number,
+  orderId: number,
+  payload: ReceiptIn,
+): Promise<PurchaseOrderOut> {
+  const { data } = await api.post<PurchaseOrderOut>(
+    `${firmOrdersUrl(firmId)}/${orderId}/receipts`,
+    payload,
+  );
+  return data;
+}
+
+/** Cancels the order's last delivery, the one correction a receipt allows
+ * (ADR-011 section 3). A POST and not a DELETE: nothing is erased. */
+export async function deactivateReceipt(
+  firmId: number,
+  orderId: number,
+  receiptId: number,
+): Promise<PurchaseOrderOut> {
+  const { data } = await api.post<PurchaseOrderOut>(
+    `${firmOrdersUrl(firmId)}/${orderId}/receipts/${receiptId}/deactivate`,
   );
   return data;
 }

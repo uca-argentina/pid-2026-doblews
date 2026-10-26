@@ -1,6 +1,6 @@
-"""Reaching a firm's purchase orders and their lines, and only those (ADR-011).
+"""Reaching a firm's purchase orders, their lines and their receipts (ADR-011).
 
-Both repositories start from FirmScopedRepository.select(), so a read already
+The three repositories start from FirmScopedRepository.select(), so a read already
 carries firm_id = :firm and is_active before any method narrows it further. An
 order of another firm, a discarded draft and an id that never existed are the
 same None here, and the route answers all three with the same 404.
@@ -18,6 +18,8 @@ from app.models import (
     Project,
     PurchaseOrder,
     PurchaseOrderLine,
+    PurchaseOrderReceipt,
+    PurchaseOrderReceiptLine,
     Resource,
     Supplier,
     UnitOfMeasure,
@@ -206,3 +208,132 @@ class PurchaseOrderLineRepository(FirmScopedRepository[PurchaseOrderLine]):
             .group_by(PurchaseOrderLine.resource_id)
         ).all()
         return {resource_id: quantity for resource_id, quantity in rows}
+
+
+@dataclass(frozen=True)
+class ReceiptLineEntry:
+    """How much of one order line arrived in one delivery, and what it was paid."""
+
+    purchase_order_line_id: int
+    quantity: Decimal
+    actual_cost: Decimal
+
+
+@dataclass(frozen=True)
+class ReceiptEntry:
+    """One delivery of an order, with its lines and the name of whoever loaded it."""
+
+    receipt: PurchaseOrderReceipt
+    created_by_name: str
+    lines: tuple[ReceiptLineEntry, ...]
+
+
+@dataclass(frozen=True)
+class ReceivedTotals:
+    """What one order line has received in all, across the order's live receipts."""
+
+    quantity: Decimal
+    actual_cost: Decimal
+
+
+class PurchaseOrderReceiptRepository(FirmScopedRepository[PurchaseOrderReceipt]):
+    """This firm's live receipts. A cancelled one is simply not here (ADR-011 section 3)."""
+
+    model = PurchaseOrderReceipt
+
+    def get(self, order_id: int, receipt_id: int) -> PurchaseOrderReceipt | None:
+        """A live receipt of this order. Never reachable through an order it is not on."""
+        return self.db.scalars(
+            self.select().where(
+                PurchaseOrderReceipt.purchase_order_id == order_id,
+                PurchaseOrderReceipt.id == receipt_id,
+            )
+        ).first()
+
+    def last(self, order_id: int) -> PurchaseOrderReceipt | None:
+        """The last receipt loaded on this order: the only one that may be cancelled.
+
+        By id and not by received_on. ADR-011 section 3 allows cancelling the last
+        one so that no later receipt is left standing on a base that no longer
+        exists, and that base is the order of loading: a delivery entered today
+        was computed over everything entered before it, whatever day it arrived.
+        """
+        return self.db.scalars(
+            self.select()
+            .where(PurchaseOrderReceipt.purchase_order_id == order_id)
+            .order_by(PurchaseOrderReceipt.id.desc())
+            .limit(1)
+        ).first()
+
+    def for_order(self, order_id: int) -> list[ReceiptEntry]:
+        """The order's live receipts, oldest delivery first, each with its lines."""
+        rows = self.db.execute(
+            self.select()
+            .join(Account, Account.id == PurchaseOrderReceipt.created_by)
+            .add_columns(Account.name)
+            .where(PurchaseOrderReceipt.purchase_order_id == order_id)
+            .order_by(PurchaseOrderReceipt.received_on, PurchaseOrderReceipt.id)
+        ).all()
+        lines = self._lines([receipt.id for receipt, _ in rows])
+        return [
+            ReceiptEntry(
+                receipt=receipt,
+                created_by_name=author,
+                lines=tuple(lines.get(receipt.id, ())),
+            )
+            for receipt, author in rows
+        ]
+
+    def _lines(self, receipt_ids: Collection[int]) -> dict[int, list[ReceiptLineEntry]]:
+        """The lines of these receipts, by receipt.
+
+        A plain read by receipt_id: the rows carry no firm of their own, and the
+        ids come from receipts this repository already narrowed to one firm.
+        """
+        if not receipt_ids:
+            return {}
+        rows = self.db.execute(
+            select(
+                PurchaseOrderReceiptLine.receipt_id,
+                PurchaseOrderReceiptLine.purchase_order_line_id,
+                PurchaseOrderReceiptLine.quantity,
+                PurchaseOrderReceiptLine.actual_cost,
+            ).where(PurchaseOrderReceiptLine.receipt_id.in_(receipt_ids))
+        ).all()
+        by_receipt: dict[int, list[ReceiptLineEntry]] = defaultdict(list)
+        for receipt_id, line_id, quantity, actual_cost in rows:
+            by_receipt[receipt_id].append(
+                ReceiptLineEntry(
+                    purchase_order_line_id=line_id, quantity=quantity, actual_cost=actual_cost
+                )
+            )
+        return by_receipt
+
+    def received_by_line(self, order_id: int) -> dict[int, ReceivedTotals]:
+        """Per line of this order, what its live receipts add up to.
+
+        The one number the ceiling of ADR-011 section 7 rule 1 is measured against,
+        and the one the two received statuses are derived from. Cancelled
+        receipts are out by the join: self.select() already drops them.
+        """
+        rows = self.db.execute(
+            select(
+                PurchaseOrderReceiptLine.purchase_order_line_id,
+                func.sum(PurchaseOrderReceiptLine.quantity),
+                func.sum(PurchaseOrderReceiptLine.actual_cost),
+            )
+            .join(
+                PurchaseOrderReceipt,
+                PurchaseOrderReceipt.id == PurchaseOrderReceiptLine.receipt_id,
+            )
+            .where(
+                PurchaseOrderReceipt.firm_id == self.firm_id,
+                PurchaseOrderReceipt.is_active,
+                PurchaseOrderReceipt.purchase_order_id == order_id,
+            )
+            .group_by(PurchaseOrderReceiptLine.purchase_order_line_id)
+        ).all()
+        return {
+            line_id: ReceivedTotals(quantity=quantity, actual_cost=actual_cost)
+            for line_id, quantity, actual_cost in rows
+        }
