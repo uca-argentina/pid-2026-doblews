@@ -18,8 +18,10 @@ services:
     # Render waits for this to answer before routing traffic to a new deploy.
     # Migrations run on start, so a failing one keeps the previous deploy live.
     healthCheckPath: /health
-    # Deploy only once ci.yml passed on the commit, never on the push alone.
-    autoDeployTrigger: checksPass
+    # Every push to main deploys. Not checksPass: ci.yml runs on pull requests
+    # only, so the merge commit on main never has checks and Render would wait
+    # forever. Nothing reaches main without a PR that passed ci.yml.
+    autoDeployTrigger: commit
     envVars:
       # Neon's direct (non-pooler) connection string, with the scheme changed
       # to postgresql+psycopg://. Set by hand in the dashboard, never in git.
@@ -41,7 +43,8 @@ services:
     rootDir: frontend
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
-    autoDeployTrigger: checksPass
+    # Same as the API: see the comment there.
+    autoDeployTrigger: commit
     envVars:
       # Vite inlines it at build time; the deployed bundle cannot read it at
       # runtime, so changing it needs a redeploy of this site.
