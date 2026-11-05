@@ -51,8 +51,9 @@ Toda la configuración de Render está versionada en **`render.yaml`** (Blueprin
 
 ### CD
 
-- **Render deploya solo** cada push a `main`, con `autoDeployTrigger: commit`. No hace falta esperar al CI: `main` está protegida y no le llega nada sin un PR que pasó `ci.yml`, el mismo razonamiento que tenía `deploy.yml`. Se borra `.github/workflows/deploy.yml`.
-  > **Corregido (2026-11-05):** primero era `checksPass`, que espera checks de GitHub sobre el commit. Pero `ci.yml` corre solo en `pull_request`, así que el merge commit que queda en `main` nunca tiene checks y Render no deployaba. Se descartó sumar `push: [main]` a `ci.yml`, porque repetía el CI en cada promoción sin cubrir nada que el PR no hubiera cubierto.
+- **`.github/workflows/deploy.yml` deploya cada push a `main`.** Primero corre `ci.yml` completo sobre ese commit (lo llama con `workflow_call`). Si pasa, le pide a Render el deploy del backend por API, espera a que quede `live` y prueba `/health`. Después hace lo mismo con el frontend. El script es `.github/scripts/render-deploy.sh`, y usa el secret `RENDER_API_KEY`.
+- **El auto-deploy de Render está apagado** (`autoDeployTrigger: "off"`), así un commit no se deploya dos veces.
+  > **Corregido (2026-11-05):** primero se usó el auto-deploy de Render, con `checksPass`, que espera checks de GitHub sobre el commit. Pero `ci.yml` corre solo en `pull_request`, así que el merge commit que queda en `main` nunca tenía checks y Render no deployaba. Con `commit` tampoco: el Blueprint sincronizaba, pero Render nunca disparó el deploy de un push. Por eso el deploy volvió a un workflow de GitHub Actions, que además corre los tests sobre el commit exacto que se deploya.
 - Con `rootDir` en cada servicio, un cambio solo en `frontend/` no redeploya el backend, ni al revés.
 
 ### Datos de demo
@@ -75,8 +76,9 @@ Si se pasa un límite, el servicio se suspende hasta el mes siguiente. No se cob
 
 - **El ambiente sigue siendo `main`**, como en ADR-008, y el punto 4 de la Definition of Done se prueba acá.
 - **Arranque en frío más lento.** Después de 15 minutos sin tráfico, el primer request tarda ≈ 30–60 s: Render levanta el contenedor, corre `alembic upgrade` y Neon despierta la compute. Con 0,1 CPU, bcrypt hace que cada login tarde unos segundos. Para una demo se abre `/health` unos minutos antes. En el plan Free no hay forma de dejar una instancia siempre prendida.
-- **El backend y el front deployan en paralelo.** ADR-008 deployaba el front recién después del backend. Ahora, durante un par de minutos, un front nuevo puede llamar a un endpoint que todavía no está. Es aceptable para un ambiente de demo; si molesta, conviene mergear el cambio de backend en un PR anterior.
-- **Sin smoke test propio.** Lo cubre `healthCheckPath`, pero solo valida que la app arranca, no un flujo. La verificación funcional sigue siendo manual (DoD punto 4).
+- **El front deploya después del backend**, como en ADR-008, así un front nuevo nunca llama a un endpoint que todavía no está.
+- **Un merge a `main` tarda unos minutos más en llegar al ambiente:** el CI corre de nuevo sobre el commit antes del deploy. El smoke test (`/health`) solo valida que la app arranca, no un flujo; la verificación funcional sigue siendo manual (DoD punto 4).
+- **`RENDER_API_KEY` es un secret de GitHub.** Da acceso a toda la cuenta de Render, así que no se usa fuera del workflow.
 - **Se van las fechas de ADR-008.** La del token de GHCR (31/12/2026) y la de los 12 meses de PostgreSQL (septiembre de 2027) ya no aplican. Tampoco queda nada atado a la cuenta de la UCA.
 - **Azure queda vacío.** El resource group `rg-warchitecture`, el presupuesto y la suscripción se borran, y en GitHub se van los secrets de Azure, la variable `VITE_API_URL` y el paquete de GHCR.
 
@@ -90,4 +92,4 @@ Si se pasa un límite, el servicio se suspende hasta el mes siguiente. No se cob
 
 **Vercel para el front, como decía ADR-001.** Tiene buenos previews por PR, pero agrega una cuenta, un `vercel.json` y un tercer dashboard. Render Static Site hace lo mismo para este caso y queda en el mismo `render.yaml`.
 
-**Mantener `deploy.yml` llamando a deploy hooks de Render.** Conserva el orden backend → frontend y el smoke test, pero suma YAML y dos secrets más para algo que el autodeploy de Render y `healthCheckPath` ya cubren casi entero.
+**El auto-deploy de Render, sin workflow propio.** Era lo más simple y fue lo primero que se usó, pero nunca deployó un push (ver la nota en CD).
