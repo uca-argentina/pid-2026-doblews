@@ -264,7 +264,7 @@ No son decisiones de este sprint: son lo que los sprints anteriores dejaron fija
 
 *Cierra la Definition of Done de todas las historias del sprint ([reglas-de-trabajo §3](../reglas-de-trabajo.md)).*
 
-- PR `dev → main` con merge commit. Render deploya cada push a `main` ([ADR-014](../adr/0014-render-neon-deploy.md); hasta el 2026-11-05 era `deploy.yml` contra Azure).
+- PR `dev → main` con merge commit. `deploy.yml` corre el CI y deploya en Render cada push a `main` ([ADR-014](../adr/0014-render-neon-deploy.md); hasta el 2026-11-05 era `deploy.yml` contra Azure).
 - Recorrida de las siete historias en el ambiente, con las cuentas de demo.
 
 **Depende de:** todas las historias.
@@ -448,7 +448,7 @@ El detalle de lo que se precisó está en ADR-013 §5.
 
 El detalle de lo que se precisó está en ADR-013 §6.
 
-**2026-11-05 (deploy).** La prueba de Azure venció y el ambiente quedó caído. **El deploy pasó a Render y Neon** ([ADR-014](../adr/0014-render-neon-deploy.md), que reemplaza a ADR-008): `render.yaml` versiona los dos servicios, Render deploya cada push a `main`, y se borró `deploy.yml`. `dev` se promocionó a `main` (PR #61) con todas las historias del sprint.
+**2026-11-05 (deploy).** La prueba de Azure venció y el ambiente quedó caído. **El deploy pasó a Render y Neon** ([ADR-014](../adr/0014-render-neon-deploy.md), que reemplaza a ADR-008): `render.yaml` versiona los dos servicios, y `deploy.yml` corre el CI y deploya en Render por API cada push a `main`. `dev` se promocionó a `main` (PR #61) con todas las historias del sprint.
 
 **2026-11-05 (T-12).** **T-12 implementada** en `chore/t12-demo-data`.
 

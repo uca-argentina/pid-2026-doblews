@@ -3,9 +3,12 @@ name: CI
 # Every pull request, whichever protected branch it targets. No path filters on
 # purpose: once this workflow is a required status check, a PR that skipped the
 # job would wait forever for a check that never runs.
+# workflow_call: deploy.yml runs this same CI on the commit that reached main,
+# before deploying it.
 on:
   pull_request:
     branches: [dev, main]
+  workflow_call:
 
 permissions:
   contents: read
