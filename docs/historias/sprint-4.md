@@ -424,3 +424,15 @@ El detalle de lo que se precisó está en ADR-012 §9.
 El detalle de lo que se precisó está en ADR-012 §9.
 
 **Falta para cerrar HU-24:** correr los tests, la revisión visual de los criterios y de 375px, y el PR a `dev`. **Quedan HU-25 y HU-26** (el cliente), que no comparten tablas ni pantallas con estos dos frentes, más T-12 y T-13.
+
+**2026-11-04 (HU-25).** HU-24 mergeada a `dev`. **HU-25 implementada** en `feat/hu25-client-read`. **ADR-013 queda Aceptada en parte**: §1, §2 y §4 rigen; §3 ("Mis obras") entra con HU-26.
+
+- **Un permiso nuevo y nada más:** `project.budget_version.view`, de obra, para `lead`, `collaborator` y `client`. No se le dio `project.cost.view` al cliente, que le abriría el presupuesto vivo, el costo de las tareas, el dashboard y compras.
+- **El guard de lectura de versiones** pasó a pedirlo; guardar y cargar siguen pidiendo `project.budget.manage`, que el cliente no tiene. En el front, `useBudgetAccess` se partió en dos y la pestaña "Presupuestos" mira el permiso nuevo.
+- **No hubo controles que sacar.** Planificación y Avance ya tenían cada botón detrás de `project.task.manage` o `project.edit`. Se verificó uno por uno y quedó como test.
+- **Las puertas cerradas tienen su test, en un archivo propio:** presupuesto vivo, dashboard, compras y órdenes de la obra dan 403; proveedores, órdenes del estudio y nivel dan 403; y una obra en la que el cliente no está da 404, que el sistema ya resolvía en `get_project_permissions`.
+- **El test de RBAC que fija "el cliente no ve costos" se mantiene**, y se sumó el que fija la excepción.
+
+El detalle de lo que se precisó está en ADR-013 §5.
+
+**Falta para cerrar HU-25:** correr migración y tests, la revisión visual con la cuenta del cliente, y el PR a `dev`. **Queda liberada HU-26** ("Mis obras").

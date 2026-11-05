@@ -1,8 +1,15 @@
 """Pins the budget-version endpoints at the border: who gets which status code.
 The rules and the numbers are pinned in the service tests; here it is the two
-permissions of ADR-007 section 4, the 404s that keep other works invisible, and
-the shape of the answers the screen reads.
+permissions that guard them, the 404s that keep other works invisible, and the
+shape of the answers the screen reads.
+
+Reading and writing stopped asking the same thing in HU-25: saving and loading
+still want project.budget.manage (ADR-007 section 4), while reading moved to
+project.budget_version.view, which the client of the work holds (ADR-013
+section 1). The pair of tests below is where that shows.
 """
+
+from decimal import Decimal
 
 import pytest
 from sqlalchemy import text
@@ -125,10 +132,15 @@ class TestSave:
 
 
 class TestRead:
-    @pytest.mark.parametrize("role", ["lead", "collaborator", "owner"])
+    @pytest.mark.parametrize("role", ["lead", "collaborator", "owner", "client"])
     def test_these_roles_read_the_versions(self, client, world, team, version, auth_header, role):
-        """The same four who may see the cost: reading a version adds no
-        permission of its own (ADR-007 section 4)."""
+        """Whoever holds project.budget_version.view on the work, plus the owner
+        through project.view_all (ADR-013 section 1).
+
+        The client is in this list since HU-25 and was refused before it: a
+        saved version is what the studio froze in order to present it, which is
+        the one piece of money they are meant to see.
+        """
         listing = client.get(versions_url(world), headers=auth_header(team[role]))
         detail = client.get(
             versions_url(world, version_id=version["id"]), headers=auth_header(team[role])
@@ -137,18 +149,40 @@ class TestRead:
         assert (listing.status_code, detail.status_code) == (200, 200)
         assert [row["version_number"] for row in listing.json()] == [1]
 
-    @pytest.mark.parametrize("path", ["listing", "detail"])
-    def test_the_client_does_not_see_the_versions(
-        self, client, world, team, version, auth_header, path
-    ):
-        """HU-12, like HU-11: 403 and not 404, because they may see the work."""
-        url = (
-            versions_url(world)
-            if path == "listing"
-            else versions_url(world, version_id=version["id"])
+    def test_the_client_reads_a_version_whole(self, client, world, team, version, auth_header):
+        """With its amounts, not a stripped version of it: the team decided the
+        client sees what was presented to them, which is the detail and not a
+        total (ADR-013, alternatives)."""
+        body = client.get(
+            versions_url(world, version_id=version["id"]),
+            headers=auth_header(team["client"]),
+        ).json()
+
+        assert body["version_number"] == 1
+        assert Decimal(body["total"]) > 0
+        assert any(
+            Decimal(item["subtotal"]) > 0 for found in body["groups"] for item in found["items"]
         )
 
-        assert client.get(url, headers=auth_header(team["client"])).status_code == 403
+    @pytest.mark.parametrize("action", ["save", "load"])
+    def test_the_client_reads_but_does_not_write(
+        self, client, world, team, version, wall, auth_header, action
+    ):
+        """ADR-013 section 4, rule 1. Reading moved to its own permission;
+        saving and loading did not move at all, and the client holds neither.
+
+        403 and not 404, because they may see the work.
+        """
+        headers = auth_header(team["client"])
+        response = (
+            client.post(versions_url(world), json={"note": "mía"}, headers=headers)
+            if action == "save"
+            else client.post(
+                f"{versions_url(world, version_id=version['id'])}/load", headers=headers
+            )
+        )
+
+        assert response.status_code == 403
 
     def test_the_listing_is_newest_first(self, client, world, team, wall, auth_header):
         """By version number, which is what a person says out loud ("la v3")."""

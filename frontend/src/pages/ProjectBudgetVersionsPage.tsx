@@ -14,7 +14,7 @@ import { LoadVersionModal } from "../features/budget-versions/LoadVersionModal";
 import { VersionsList } from "../features/budget-versions/VersionsList";
 import type { BudgetVersionSummary } from "../features/budget-versions/types";
 import { useBudgetVersions } from "../features/budget-versions/useBudgetVersions";
-import { useBudgetAccess } from "../features/budget/useBudgetAccess";
+import { useBudgetVersionAccess } from "../features/budget/useBudgetAccess";
 import { useCurrentFirm } from "../features/firms/firmContext";
 import { useCurrentProject } from "../features/projects/projectContext";
 
@@ -22,18 +22,20 @@ import { useCurrentProject } from "../features/projects/projectContext";
  * "Presupuestos" tab opens on: the live budget is on the take-off, and this is
  * what was frozen from it.
  *
- * Reading them asks exactly what reading the cost asks — no permission of its
- * own — so useBudgetAccess is reused rather than copied. Loading one back is
- * the write, and that is the permission checked per row. */
+ * Reading them asks for project.budget_version.view since HU-25, which is what
+ * opens this tab to the client of the work: a saved budget is what the studio
+ * presented, not the internal cost that moves while the take-off is edited
+ * (ADR-013 section 1). Loading one back is the write, and that is the
+ * permission checked per row — the client does not hold it. */
 export function ProjectBudgetVersionsPage() {
   const { firm } = useCurrentFirm();
   const { project, can } = useCurrentProject();
-  const canView = useBudgetAccess();
+  const canView = useBudgetVersionAccess();
 
   if (!canView) {
     return (
       <Alert color="red" variant="light" title="No tenés permiso">
-        Tu rol en esta obra no incluye ver los costos.
+        Tu rol en esta obra no incluye ver los presupuestos guardados.
       </Alert>
     );
   }

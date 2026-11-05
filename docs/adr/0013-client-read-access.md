@@ -1,6 +1,6 @@
 # ADR-013: Acceso de lectura del cliente a sus obras
 
-**Estado:** Propuesta
+**Estado:** Aceptada en parte (HU-25). §1, §2 y §4 rigen; §3 ("Mis obras" y su endpoint) entra con HU-26
 **Fecha:** 2026-10-25
 **Contexto:** Qué ve el cliente de una obra y cómo entra a sus obras. Deja firmes HU-25 y HU-26 del [Sprint 4](../historias/sprint-4.md). **Reemplaza en parte** la regla "el cliente no ve costos" de [ADR-003](0003-recipe-catalog.md) §8 y el permiso de lectura de versiones de [ADR-007](0007-budget-versions.md) §4. El resto de esas dos secciones sigue vigente.
 
@@ -102,6 +102,14 @@ Dentro de una obra, el cliente navega las pestañas de la tabla de §2 que le co
 3. Un `client` no ve versiones de una obra que no es suya (404).
 4. `lead`, `collaborator` y `owner` siguen viendo versiones como antes.
 5. `overview` devuelve solo las obras visibles, y la última versión vacía para quien no puede verla.
+
+### 5. Precisado al implementar HU-25 (2026-11-04)
+
+- **El 404 de la regla 3 ya lo daba el sistema**, sin código nuevo: `get_project_permissions` levanta 404 cuando el que pide no tiene **ningún** permiso en esa obra y tampoco `project.view_all`. Un cliente pidiendo una obra que no es suya cae justo ahí. Las puertas cerradas de su propia obra, en cambio, son 403, porque sí tiene permisos en ella: la distinción es la que HU-3 y HU-6 ya habían fijado.
+- **Ningún control de edición había que sacar.** Se recorrieron Planificación y Avance: "Nueva tarea", el menú de cada tarea y los estados dependen de `project.task.manage`; "Registrar avance" se dibuja solo si la pantalla recibe el handler (`onRecord={canManage ? ... : undefined}`), y "Fijar planificación" de lo mismo; "Cargar fecha de inicio" depende de `project.edit`. El cliente no tiene ninguno de los tres, así que el criterio se cumplía ya. Queda como test y como revisión visual, no como cambio.
+- **`useBudgetAccess` se partió en dos.** El hook seguía respondiendo una sola pregunta para dos cosas que ahora piden permisos distintos: queda para el presupuesto vivo del cómputo, y `useBudgetVersionAccess` es el de las versiones. La pestaña "Presupuestos" pasa a mirar el permiso nuevo.
+- **El estado vacío de Presupuestos ya contemplaba a quien no puede guardar** ("Vas a ver acá los presupuestos que se guarden de esta obra"), así que no hubo que escribir copy nuevo para el cliente.
+- **Los mensajes de permiso de las dos pantallas de versiones** dejaron de decir "no incluye ver los costos" y dicen "no incluye ver los presupuestos guardados", que es lo que ahora se chequea.
 
 ---
 
