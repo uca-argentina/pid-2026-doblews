@@ -51,7 +51,8 @@ Toda la configuración de Render está versionada en **`render.yaml`** (Blueprin
 
 ### CD
 
-- **Render deploya solo** cada push a `main`, con `autoDeployTrigger: checksPass`: espera a que pase `ci.yml` en ese commit. Se borra `.github/workflows/deploy.yml`.
+- **Render deploya solo** cada push a `main`, con `autoDeployTrigger: commit`. No hace falta esperar al CI: `main` está protegida y no le llega nada sin un PR que pasó `ci.yml`, el mismo razonamiento que tenía `deploy.yml`. Se borra `.github/workflows/deploy.yml`.
+  > **Corregido (2026-11-05):** primero era `checksPass`, que espera checks de GitHub sobre el commit. Pero `ci.yml` corre solo en `pull_request`, así que el merge commit que queda en `main` nunca tiene checks y Render no deployaba. Se descartó sumar `push: [main]` a `ci.yml`, porque repetía el CI en cada promoción sin cubrir nada que el PR no hubiera cubierto.
 - Con `rootDir` en cada servicio, un cambio solo en `frontend/` no redeploya el backend, ni al revés.
 
 ### Datos de demo
@@ -89,4 +90,4 @@ Si se pasa un límite, el servicio se suspende hasta el mes siguiente. No se cob
 
 **Vercel para el front, como decía ADR-001.** Tiene buenos previews por PR, pero agrega una cuenta, un `vercel.json` y un tercer dashboard. Render Static Site hace lo mismo para este caso y queda en el mismo `render.yaml`.
 
-**Mantener `deploy.yml` llamando a deploy hooks de Render.** Conserva el orden backend → frontend y el smoke test, pero suma YAML y dos secrets más para algo que `checksPass` y `healthCheckPath` ya cubren casi entero.
+**Mantener `deploy.yml` llamando a deploy hooks de Render.** Conserva el orden backend → frontend y el smoke test, pero suma YAML y dos secrets más para algo que el autodeploy de Render y `healthCheckPath` ya cubren casi entero.
