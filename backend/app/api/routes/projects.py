@@ -15,15 +15,20 @@ from app.api.deps import (
     requires,
     requires_any,
 )
+from app.api.planning_read import planning_out
 from app.models import Project
+from app.repositories.budget_version import BudgetVersionRepository
 from app.repositories.project import ProjectEntry, ProjectRepository
 from app.schemas.project import (
+    LatestVersionOut,
     ProjectClientOut,
     ProjectDetail,
     ProjectOut,
+    ProjectOverviewOut,
     ProjectSummary,
     ProjectWrite,
 )
+from app.services.authz import VIEW_ALL, project_permissions
 from app.services.project import ProjectError, archive_project, create_project, update_project
 
 router = APIRouter(prefix="/firms/{firm_id}/projects", tags=["projects"])
@@ -150,6 +155,70 @@ def list_projects(
     """
     entries = _projects(db, membership).list_entries(account.id, granted)
     return [_to_summary(entry) for entry in entries]
+
+
+# Before "/{project_id}": a literal segment has to be registered ahead of the
+# parameter, or "overview" would reach read_project and fail as a bad id.
+@router.get(
+    "/overview",
+    response_model=list[ProjectOverviewOut],
+    dependencies=[Depends(requires("firm.view", "firm"))],
+)
+def projects_overview(
+    account: CurrentAccount,
+    membership: CurrentMembership,
+    granted: FirmPermissions,
+    db: DbSession,
+) -> list[ProjectOverviewOut]:
+    """The caller's works at a glance, for the client's "Mis obras" (HU-26).
+
+    The listing's guard and the listing's works: firm.view, narrowed by the
+    repository to the ones the caller may see (ADR-013 section 3). For each,
+    the planning exactly as the Avance tab reads it — without costs, which a
+    client may not see — and the latest saved budget.
+
+    With no project_id in the path there is no project permission set to
+    resolve up front, so the versions' rule is asked work by work: the latest
+    version travels only to whoever holds project.budget_version.view on that
+    work, or project.view_all on the firm.
+
+    Several queries per work, since the planning is computed whole (ADR-009
+    section 2). A client is on a handful of works, which is who this is for.
+    """
+    versions = BudgetVersionRepository(db, firm_id=membership.firm_id)
+    overview = []
+    for entry in _projects(db, membership).list_entries(account.id, granted):
+        project = entry.project
+        planning = planning_out(db, membership, project, sees_cost=False)
+        reads_versions = VIEW_ALL in granted or "project.budget_version.view" in (
+            project_permissions(db, account.id, project.id, membership.firm_id)
+        )
+        latest = versions.latest(project.id) if reads_versions else None
+        overview.append(
+            ProjectOverviewOut(
+                id=project.id,
+                name=project.name,
+                address=project.address,
+                client=_client_out(entry),
+                has_tasks=bool(planning.tasks),
+                project_start_date=planning.project_start_date,
+                planned_end_date=planning.planned_end_date,
+                baseline_end_date=planning.baseline_end_date,
+                progress=planning.progress,
+                latest_version=(
+                    None
+                    if latest is None
+                    else LatestVersionOut(
+                        id=latest.id,
+                        version_number=latest.version_number,
+                        created_at=latest.created_at,
+                        total=latest.total,
+                        currency=latest.currency,
+                    )
+                ),
+            )
+        )
+    return overview
 
 
 @router.post(

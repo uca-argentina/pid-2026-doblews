@@ -81,6 +81,20 @@ class BudgetVersionRepository:
             .limit(1)
         ).first()
 
+    def latest(self, project_id: int) -> BudgetVersion | None:
+        """The work's most recent version, or None while it has no saved budget.
+
+        What the client's "Mis obras" shows (HU-26): the last budget the studio
+        froze, usually the last one presented. By version_number, as in the
+        listing, so it is the one the screen calls the highest "v".
+        """
+        return self.db.scalars(
+            self.select()
+            .where(BudgetVersion.project_id == project_id)
+            .order_by(BudgetVersion.version_number.desc())
+            .limit(1)
+        ).first()
+
     def summaries(self, project_id: int) -> list[VersionSummary]:
         """The versions of one work, newest first.
 
