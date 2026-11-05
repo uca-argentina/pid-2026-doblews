@@ -11,7 +11,9 @@ import {
 import { useDisclosure } from "@mantine/hooks";
 import { PageHeader } from "../components/PageHeader";
 import { useCurrentFirm } from "../features/firms/firmContext";
+import { MyProjectsView } from "../features/projects/MyProjectsView";
 import { ProjectCard } from "../features/projects/ProjectCard";
+import { seesOnlyOwnProjects } from "../features/projects/projectAccess";
 import { ProjectFormModal } from "../features/projects/ProjectFormModal";
 import { ProjectsTable } from "../features/projects/ProjectsTable";
 import { useProjects } from "../features/projects/useProjects";
@@ -23,8 +25,20 @@ import { useProjects } from "../features/projects/useProjects";
  * firm because they hold project.view_all. Neither ever sees another firm's.
  *
  * The firm comes already resolved from FirmLayout, which also answers a
- * foreign firm id with "not found" before this ever renders. */
+ * foreign firm id with "not found" before this ever renders.
+ *
+ * HU-26: whoever only follows works (no project.create, no project.view_all,
+ * which today is the client) gets "Mis obras" at this same URL instead, so
+ * every link back to the works keeps landing in the right place. */
 export function ProjectsPage() {
+  const { firm, can } = useCurrentFirm();
+  if (seesOnlyOwnProjects(can)) {
+    return <MyProjectsView firmId={firm.id} firmName={firm.name} />;
+  }
+  return <ProjectsListing />;
+}
+
+function ProjectsListing() {
   const { firm, can } = useCurrentFirm();
   const { data: projects, isLoading, isError } = useProjects(firm.id);
   const [formOpened, form] = useDisclosure(false);
@@ -42,7 +56,9 @@ export function ProjectsPage() {
         title="Obras"
         description={`Las obras de ${firm.name} en las que participás.`}
         action={
-          mayCreate ? <Button onClick={form.open}>Nueva obra</Button> : undefined
+          mayCreate ? (
+            <Button onClick={form.open}>Nueva obra</Button>
+          ) : undefined
         }
       />
 

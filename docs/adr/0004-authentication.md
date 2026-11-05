@@ -20,6 +20,8 @@ Las restricciones del proyecto que pesan en la decisión:
 - **Front y backend viven en dominios distintos**: Vercel el front, Render/Railway el backend ([ADR-001](0001-stack.md)). No es una app servida desde el mismo origen.
 
   > **Actualización (2026-09-30):** [ADR-008](0008-azure-deploy.md) movió el deploy a Azure Static Web Apps (front) y Container Apps (backend). Siguen siendo orígenes distintos, así que el razonamiento de esta ADR vale igual; donde dice Vercel y Render, léase Static Web Apps y Container Apps.
+  >
+  > **Actualización (2026-11-05):** [ADR-011](0011-render-neon-deploy.md) movió el deploy a Render (static site y web service, en orígenes distintos). El razonamiento sigue igual.
 - **El sprint son 2 semanas y HU-1 está estimada en 2 días**, siendo la historia que bloquea a todas las demás.
 - **No hay datos reales de clientes.** Son dos estudios semilla con contraseña conocida, para una defensa de materia.
 

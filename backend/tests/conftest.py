@@ -451,6 +451,56 @@ def add_task(db: Connection):
     return _add
 
 
+@pytest.fixture
+def add_supplier(db):
+    """Insert a supplier of a firm, behind the API's back like add_takeoff_line.
+
+    For the tests that read suppliers (HU-18's comparison, HU-20's orders) and
+    must not depend on HU-17's write path.
+    """
+
+    def _add(firm: int, name: str, is_active: bool = True) -> int:
+        return db.execute(
+            text(
+                "INSERT INTO supplier (firm_id, name, is_active) VALUES (:f, :n, :a) RETURNING id"
+            ),
+            {"f": firm, "n": name, "a": is_active},
+        ).scalar_one()
+
+    return _add
+
+
+@pytest.fixture
+def add_price(db, resource_id):
+    """Insert one row of a supplier's price list, by material name."""
+
+    def _add(
+        firm: int,
+        supplier: int,
+        material: str,
+        unit_price: str,
+        shipping: str = "0.00",
+        is_active: bool = True,
+    ) -> int:
+        return db.execute(
+            text(
+                "INSERT INTO supplier_price"
+                " (supplier_id, firm_id, resource_id, unit_price, shipping_cost, is_active)"
+                " VALUES (:s, :f, :r, :p, :c, :a) RETURNING id"
+            ),
+            {
+                "s": supplier,
+                "f": firm,
+                "r": resource_id[material],
+                "p": unit_price,
+                "c": shipping,
+                "a": is_active,
+            },
+        ).scalar_one()
+
+    return _add
+
+
 # The password every account in the API tests answers to.
 TEST_PASSWORD = "test-password"
 

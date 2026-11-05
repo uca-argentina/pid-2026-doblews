@@ -12,10 +12,17 @@ from app.models.budget_version import (
 )
 from app.models.catalog import Recipe, RecipeResource, Resource
 from app.models.firm import Firm
+from app.models.loyalty import FirmPointsEntry
 from app.models.membership import FirmMember, PlatformMember
 from app.models.project import Project, ProjectMember
 from app.models.project_recipe import ProjectRecipe
 from app.models.project_task import ProjectTask, ProjectTaskDependency
+from app.models.purchase_order import (
+    PurchaseOrder,
+    PurchaseOrderLine,
+    PurchaseOrderReceipt,
+    PurchaseOrderReceiptLine,
+)
 from app.models.role import Permission, Role, RolePermission
 from app.models.supplier import Supplier, SupplierPrice
 from app.models.unit_of_measure import UnitOfMeasure
@@ -28,6 +35,7 @@ __all__ = [
     "BudgetVersionItem",
     "BudgetVersionLine",
     "Firm",
+    "FirmPointsEntry",
     "FirmMember",
     "Permission",
     "PlatformMember",
@@ -36,6 +44,10 @@ __all__ = [
     "ProjectRecipe",
     "ProjectTask",
     "ProjectTaskDependency",
+    "PurchaseOrder",
+    "PurchaseOrderLine",
+    "PurchaseOrderReceipt",
+    "PurchaseOrderReceiptLine",
     "Recipe",
     "RecipeResource",
     "Resource",

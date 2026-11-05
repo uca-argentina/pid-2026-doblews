@@ -19,6 +19,9 @@ import { ProjectTakeoffPage } from "./pages/ProjectTakeoffPage";
 import { ProjectTeamPage } from "./pages/ProjectTeamPage";
 import { NoFirmPage } from "./pages/NoFirmPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
+import { PurchaseOrderPage } from "./pages/PurchaseOrderPage";
+import { FirmLoyaltyPage } from "./pages/FirmLoyaltyPage";
+import { PurchaseOrdersPage } from "./pages/PurchaseOrdersPage";
 import { SupplierDetailPage } from "./pages/SupplierDetailPage";
 import { SuppliersPage } from "./pages/SuppliersPage";
 import { PlatformLayout } from "./layout/PlatformLayout";
@@ -168,6 +171,46 @@ function App() {
                 message="Tu rol en este estudio no incluye ver los proveedores."
               >
                 <SupplierDetailPage />
+              </RequirePermission>
+            }
+          />
+          {/* HU-24: the firm's level and the entries behind it. Behind
+              purchase_order.view and not a permission of its own: the points
+              come from the orders (ADR-012 section 6). */}
+          <Route
+            path="loyalty"
+            element={
+              <RequirePermission
+                code="purchase_order.view"
+                message="Tu rol en este estudio no incluye ver el nivel del estudio."
+              >
+                <FirmLoyaltyPage />
+              </RequirePermission>
+            }
+          />
+          {/* HU-21: every order of the firm, with filters. */}
+          <Route
+            path="purchase-orders"
+            element={
+              <RequirePermission
+                code="purchase_order.view"
+                message="Tu rol en este estudio no incluye ver las órdenes de compra."
+              >
+                <PurchaseOrdersPage />
+              </RequirePermission>
+            }
+          />
+          {/* HU-20: one purchase order. Under the firm, like its API: the
+              permissions are firm-scope, so an architect who is not on the
+              work's team manages it too (ADR-011 section 6). */}
+          <Route
+            path="purchase-orders/:orderId"
+            element={
+              <RequirePermission
+                code="purchase_order.view"
+                message="Tu rol en este estudio no incluye ver las órdenes de compra."
+              >
+                <PurchaseOrderPage />
               </RequirePermission>
             }
           />

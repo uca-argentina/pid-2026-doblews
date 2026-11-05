@@ -10,13 +10,13 @@ settings = get_settings()
 
 app = FastAPI(title="warchitecture API")
 
-# The frontend is served from another origin (Static Web Apps) than the API
-# (Container Apps), so every call from the browser is cross-origin and
+# The frontend is served from another origin (Render's static site) than the
+# API (Render's web service), so every call from the browser is cross-origin and
 # preflighted.
 app.add_middleware(
     CORSMiddleware,
-    # An allowlist read from CORS_ORIGINS. It takes no wildcards, so Static Web
-    # Apps preview environments would each need adding, or allow_origin_regex.
+    # An allowlist read from CORS_ORIGINS. It takes no wildcards, so any extra
+    # frontend origin (a preview deploy) would need adding, or allow_origin_regex.
     allow_origins=settings.cors_origins_list,
     # The token travels in an Authorization header, not a cookie, so the browser
     # never needs to attach credentials. Saying so here documents ADR-004 in

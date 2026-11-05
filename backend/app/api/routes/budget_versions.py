@@ -4,6 +4,10 @@ Four routes, and the list is as interesting for what it leaves out: there is no
 PUT, no PATCH and no DELETE under this prefix. ADR-007 section 5, rule 2, is not
 an authorization check — it is the shape of this module, and a test over the
 route table is what keeps it that way.
+
+Reading and writing part company here (HU-25): the two reads opened to whoever
+could see the work's costs and now open to whoever may see its saved versions,
+which includes the client. The two writes did not move.
 """
 
 from collections.abc import Iterator
@@ -49,9 +53,16 @@ _ZERO = Decimal("0.00")
 # (ADR-007 section 4). Declared once, used by the two routes that write.
 MANAGE = requires("project.budget.manage", "project")
 
-# Reading a version asks exactly what reading the cost asks, and adds no
-# permission of its own — which is also what keeps the client out (HU-12).
-READ = requires_any(("project.cost.view", "project"), ("project.view_all", "firm"))
+# Reading a version asks for a permission of its own since HU-25, and no longer
+# for project.cost.view (ADR-013 section 1).
+#
+# A saved version is not an internal cost: it is the budget the studio froze in
+# order to present it, so the client of the work reads it, while the live budget
+# on the take-off, the cost of each task, the dashboard and the purchasing
+# comparison stay behind project.cost.view and stay closed to them. lead and
+# collaborator hold the new permission too, so this guard still opens for
+# everyone it opened for before; the owner keeps entering through view_all.
+READ = requires_any(("project.budget_version.view", "project"), ("project.view_all", "firm"))
 
 
 @contextmanager

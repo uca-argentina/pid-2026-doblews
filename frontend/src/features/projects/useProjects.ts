@@ -4,6 +4,7 @@ import {
   createProject,
   fetchProject,
   fetchProjects,
+  fetchProjectsOverview,
   updateProject,
 } from "./projectService";
 import type { ProjectWrite } from "./types";
@@ -17,6 +18,8 @@ export const projectKeys = {
   all: (firmId: number) => ["firm", firmId, "projects"] as const,
   one: (firmId: number, projectId: number) =>
     ["firm", firmId, "projects", projectId] as const,
+  overview: (firmId: number) =>
+    ["firm", firmId, "projects", "overview"] as const,
 };
 
 /** The works of the active firm that the caller may see. */
@@ -24,6 +27,15 @@ export function useProjects(firmId: number) {
   return useQuery({
     queryKey: projectKeys.all(firmId),
     queryFn: () => fetchProjects(firmId),
+  });
+}
+
+/** "Mis obras" (HU-26). Under the listing's key, so every write that already
+ * refreshes the works refreshes this too. */
+export function useProjectsOverview(firmId: number) {
+  return useQuery({
+    queryKey: projectKeys.overview(firmId),
+    queryFn: () => fetchProjectsOverview(firmId),
   });
 }
 

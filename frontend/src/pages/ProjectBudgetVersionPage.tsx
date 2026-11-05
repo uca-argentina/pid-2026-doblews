@@ -16,7 +16,7 @@ import { PageHeader } from "../components/PageHeader";
 import type { BudgetVersionOut } from "../features/budget-versions/types";
 import { useBudgetVersion } from "../features/budget-versions/useBudgetVersions";
 import { BudgetGroupSection } from "../features/budget/BudgetGroupSection";
-import { useBudgetAccess } from "../features/budget/useBudgetAccess";
+import { useBudgetVersionAccess } from "../features/budget/useBudgetAccess";
 import { useCurrentFirm } from "../features/firms/firmContext";
 import { useCurrentProject } from "../features/projects/projectContext";
 import { formatMoney, formatQuantity } from "../lib/format";
@@ -31,7 +31,7 @@ export function ProjectBudgetVersionPage() {
   const { firm } = useCurrentFirm();
   const { project } = useCurrentProject();
   const { versionId: param = "" } = useParams<{ versionId: string }>();
-  const canView = useBudgetAccess();
+  const canView = useBudgetVersionAccess();
 
   const versionId = Number(param);
   const {
@@ -45,7 +45,7 @@ export function ProjectBudgetVersionPage() {
   if (!canView) {
     return (
       <Alert color="red" variant="light" title="No tenés permiso">
-        Tu rol en esta obra no incluye ver los costos.
+        Tu rol en esta obra no incluye ver los presupuestos guardados.
       </Alert>
     );
   }

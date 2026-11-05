@@ -1,4 +1,4 @@
-# Backend image for Azure Container Apps (ADR-008). Built from backend/ as the
+# Backend image for the Render web service (ADR-011). Built from backend/ as the
 # context, so the repo-root .env never reaches the image: every setting comes
 # from the container's environment, as app/core/config.py expects in deploy.
 FROM python:3.12-slim
@@ -31,11 +31,11 @@ USER app
 
 EXPOSE 8000
 
-# Migrations run on every start. Safe only because the Container App is capped
-# at one replica: two replicas booting together would race on alembic_version.
-# A single uvicorn worker, because the replica has 0.5 GiB and each worker
+# Migrations run on every start. Safe only because Render's free plan runs a
+# single instance: two booting together would race on alembic_version.
+# A single uvicorn worker, because the instance has 512 MB and each worker
 # holds its own copy of the app and its connection pool.
-# --proxy-headers: Container Apps terminates TLS at its ingress, so without it
+# --proxy-headers: Render terminates TLS at its proxy, so without it
 # FastAPI believes every request is plain http and its redirects (a missing
 # trailing slash) point to http:// URLs the browser blocks as mixed content.
 CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips '*'"]

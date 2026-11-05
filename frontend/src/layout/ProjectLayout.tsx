@@ -17,6 +17,7 @@ import {
   useParams,
 } from "react-router-dom";
 import { useCurrentFirm } from "../features/firms/firmContext";
+import { seesOnlyOwnProjects } from "../features/projects/projectAccess";
 import {
   ProjectContext,
   type CurrentProject,
@@ -106,7 +107,7 @@ export function ProjectLayout() {
               belongs to. The sidebar already highlights "Obras", because its
               active check uses startsWith and this route sits under it. */}
           <Anchor component={Link} to={listingPath} size="sm" c="dimmed">
-            ← Obras
+            ← {seesOnlyOwnProjects(can) ? "Mis obras" : "Obras"}
           </Anchor>
         </div>
 
@@ -209,12 +210,13 @@ function ProjectTabs({ basePath, project, firmCan }: ProjectTabsProps) {
       // Plural: the tab is the list of budgets saved from the take-off, not
       // the live one, which is on "Cómputo".
       label: "Presupuestos",
-      // Costs, so a tighter rule than the take-off above: project.cost.view is
-      // what the client of the work lacks, and HU-12 keeps the saved budgets
-      // closed to them rather than emptied. project.view_all still lets the
-      // owner audit a work they are not on, as everywhere else.
+      // Its own permission since HU-25, and no longer project.cost.view: the
+      // saved budgets are what the studio froze to present, so the client of
+      // the work reads them, while the live budget on the take-off and every
+      // other cost stay closed (ADR-013 section 1). project.view_all still
+      // lets the owner audit a work they are not on, as everywhere else.
       visible:
-        project.permissions.includes("project.cost.view") ||
+        project.permissions.includes("project.budget_version.view") ||
         firmCan("project.view_all"),
     },
     {

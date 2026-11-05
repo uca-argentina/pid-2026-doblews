@@ -49,6 +49,16 @@ class MaterialComparisonOut(ComparedMaterial):
     has_suppliers: bool
 
 
+class ProjectPurchasingItem(ComparedMaterial):
+    """A material of the work's comparison, with how much of it is already on order.
+
+    Live lines of orders that were not cancelled, drafts included (HU-20): what
+    "Generar órdenes" subtracts from the take-off's quantity before asking again.
+    """
+
+    ordered_quantity: Decimal
+
+
 class ProjectPurchasingOut(BaseModel):
     """Each material of a work's take-off, compared at the quantity the work needs.
 
@@ -56,6 +66,6 @@ class ProjectPurchasingOut(BaseModel):
     optimal purchase, which HU-18 leaves out.
     """
 
-    items: list[ComparedMaterial]
+    items: list[ProjectPurchasingItem]
     currency: str
     has_suppliers: bool

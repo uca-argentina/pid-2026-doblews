@@ -1,3 +1,5 @@
+import type { WorkProgressOut } from "../planning/types";
+
 // Mirrors backend/app/schemas/project.py field for field. Kept in the wire's
 // own field names (snake_case) on purpose: there is no case-mapping layer
 // between the API and the frontend, and adding one would be one more place for
@@ -60,4 +62,33 @@ export interface ProjectWrite {
   /** An account id and not an email: the picker is fed by this firm's roster,
    * so the form already holds the id of everyone it may offer. */
   client_account_id: number | null;
+}
+
+/** The last budget the studio saved for a work (HU-26). */
+export interface LatestVersionOut {
+  id: number;
+  version_number: number;
+  created_at: string;
+  /** A decimal string, like every amount the API sends. */
+  total: string;
+  currency: string;
+}
+
+/** One work as "Mis obras" shows it (HU-26). The progress and the dates are
+ * the planning's own numbers, the ones the Avance tab shows. */
+export interface ProjectOverviewOut {
+  id: number;
+  name: string;
+  address: string | null;
+  client: ProjectClientOut | null;
+  has_tasks: boolean;
+  project_start_date: string | null;
+  /** As soon as there are tasks and a start date. */
+  planned_end_date: string | null;
+  /** Only once the planning was fixed. */
+  baseline_end_date: string | null;
+  /** null until there are tasks and a fixed planning to measure them by. */
+  progress: WorkProgressOut | null;
+  /** null with no saved budget, or for whoever may not read the versions. */
+  latest_version: LatestVersionOut | null;
 }

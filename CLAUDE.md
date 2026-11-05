@@ -28,11 +28,11 @@ cd ../frontend && npm install # instala deps del frontend
 
 ## Ambiente de deploy
 
-Azure, deployado desde `main` por `.github/workflows/deploy.yml`. Ver [docs/adr/0008-azure-deploy.md](docs/adr/0008-azure-deploy.md).
+Render (backend y front) + Neon (Postgres), definido en `render.yaml`. Render deploya solo cada push a `main` una vez que pasó el CI. Ver [docs/adr/0011-render-neon-deploy.md](docs/adr/0011-render-neon-deploy.md).
 
-- Frontend: https://orange-mushroom-009669d0f.6.azurestaticapps.net
-- API: https://ca-warchitecture-api.delightfuldune-fd794876.brazilsouth.azurecontainerapps.io (`/docs` para Swagger)
-- El primer request después de unos minutos sin tráfico tarda ~15 s (escala a cero). Para una demo: `az containerapp update -g rg-warchitecture -n ca-warchitecture-api --min-replicas 1`, y volver a `0` después.
+- Frontend: https://warchitecture-web.onrender.com
+- API: https://warchitecture-api.onrender.com (`/docs` para Swagger)
+- Plan gratis: después de 15 min sin tráfico el primer request tarda ~30–60 s. Para una demo, abrir `/health` unos minutos antes.
 - Las cuentas demo usan un `SEED_PASSWORD` propio del ambiente, no el de `.env.example`.
 
 ## Idioma

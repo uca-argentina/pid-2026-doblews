@@ -1,0 +1,292 @@
+import { useState } from "react";
+import {
+  Alert,
+  Anchor,
+  Button,
+  Center,
+  Group,
+  Loader,
+  Stack,
+  Text,
+} from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
+import { notifications } from "@mantine/notifications";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { PageHeader } from "../components/PageHeader";
+import { useCurrentFirm } from "../features/firms/firmContext";
+import {
+  AddLineModal,
+  DiscardOrderModal,
+  LineQuantityModal,
+  LineSupplierModal,
+} from "../features/purchase-orders/DraftModals";
+import { OrderHistory } from "../features/purchase-orders/OrderHistory";
+import { OrderLinesView } from "../features/purchase-orders/OrderLinesView";
+import { OrderStatusBadge } from "../features/purchase-orders/OrderStatusBadge";
+import {
+  CancelOrderModal,
+  CancelReceiptModal,
+  IssueOrderModal,
+} from "../features/purchase-orders/OrderStatusModals";
+import { ReceiptModal } from "../features/purchase-orders/ReceiptModal";
+import { ReceiptsList } from "../features/purchase-orders/ReceiptsList";
+import {
+  canCancel,
+  canIssue,
+  canReceive,
+  orderNumber,
+  tracksDeliveries,
+} from "../features/purchase-orders/orderDisplay";
+import type {
+  PurchaseOrderLineOut,
+  ReceiptOut,
+} from "../features/purchase-orders/types";
+import {
+  useDeactivateLine,
+  useOrder,
+} from "../features/purchase-orders/usePurchaseOrders";
+import { apiErrorMessage } from "../lib/apiError";
+import { formatMoney } from "../lib/format";
+
+/** One purchase order (HU-20): its supplier, its work and its lines, at the
+ * prices they froze when the draft was generated, and who moved it when
+ * (HU-21).
+ *
+ * Under the firm and not under the work, like the backend's route: the
+ * permissions are firm-scope, so an architect who is not on the work's team
+ * opens and edits it too (ADR-011 section 6).
+ *
+ * While it is a draft, and for whoever holds purchase_order.manage, each line
+ * can change its quantity or its supplier, or leave; materials can be added;
+ * and the draft can be discarded. HU-21 adds issuing a draft that has lines,
+ * after which it is read only, and cancelling a draft or an issued order. Only
+ * the moves the order's state allows are offered (ADR-011 section 3).
+ *
+ * Once it is issued, HU-22 adds its deliveries: what arrived of each line, what
+ * it really cost, and the one correction a receipt allows — letting go of the
+ * last one. Which receipt that is comes answered from the backend, so the rule
+ * is not written twice. */
+export function PurchaseOrderPage() {
+  const { firm, can } = useCurrentFirm();
+  const navigate = useNavigate();
+  const orderId = Number(useParams().orderId);
+  const { data: order, isLoading, isError } = useOrder(firm.id, orderId);
+  const removeLine = useDeactivateLine(firm.id, orderId);
+
+  const [quantityTarget, setQuantityTarget] =
+    useState<PurchaseOrderLineOut | null>(null);
+  const [supplierTarget, setSupplierTarget] =
+    useState<PurchaseOrderLineOut | null>(null);
+  const [addOpened, addModal] = useDisclosure(false);
+  const [discardOpened, discardModal] = useDisclosure(false);
+  const [issueOpened, issueModal] = useDisclosure(false);
+  const [cancelOpened, cancelModal] = useDisclosure(false);
+  const [receiptOpened, receiptModal] = useDisclosure(false);
+  const [dropTarget, setDropTarget] = useState<ReceiptOut | null>(null);
+
+  if (isLoading) {
+    return (
+      <Center>
+        <Loader />
+      </Center>
+    );
+  }
+
+  if (isError || !order) {
+    return (
+      <Alert color="red" variant="light" title="No encontramos esta orden">
+        Puede que se haya descartado o que no sea de este estudio.
+      </Alert>
+    );
+  }
+
+  const comprasPath = `/firms/${firm.id}/projects/${order.project.id}/purchasing`;
+  const canManage = can("purchase_order.manage");
+  const editable = order.status === "draft" && canManage;
+  const issuable = canManage && canIssue(order);
+  const cancellable = canManage && canCancel(order);
+  const receivable = canManage && canReceive(order);
+  const delivering = tracksDeliveries(order);
+
+  const remove = async (line: PurchaseOrderLineOut) => {
+    try {
+      await removeLine.mutateAsync(line.id);
+      notifications.show({
+        title: "Material quitado",
+        message: `${line.resource.name} salió de ${orderNumber(order.number)}.`,
+        color: "obra",
+      });
+    } catch (error) {
+      notifications.show({
+        title: "No pudimos quitar el material",
+        message: apiErrorMessage(error, "Probá de nuevo en un momento."),
+        color: "red",
+      });
+    }
+  };
+
+  return (
+    <Stack gap="md">
+      <Anchor component={Link} to={comprasPath} size="sm">
+        ← Compras de {order.project.name}
+      </Anchor>
+
+      <PageHeader
+        title={`${orderNumber(order.number)} · ${order.supplier.name}`}
+        description={`Obra: ${order.project.name}. Los precios son los que tenía el proveedor al generar la orden.`}
+        action={
+          editable || cancellable || receivable ? (
+            <Group gap="sm">
+              {issuable && <Button onClick={issueModal.open}>Emitir</Button>}
+              {receivable && (
+                <Button onClick={receiptModal.open}>Registrar recepción</Button>
+              )}
+              {editable && (
+                <Button variant="default" onClick={addModal.open}>
+                  Agregar material
+                </Button>
+              )}
+              {editable && (
+                <Button
+                  variant="subtle"
+                  color="red"
+                  onClick={discardModal.open}
+                >
+                  Descartar borrador
+                </Button>
+              )}
+              {cancellable && (
+                <Button variant="subtle" color="red" onClick={cancelModal.open}>
+                  Anular
+                </Button>
+              )}
+            </Group>
+          ) : undefined
+        }
+      />
+
+      <Group gap="md" align="baseline" wrap="wrap">
+        <OrderStatusBadge status={order.status} />
+        <Text fw={700} size="lg">
+          Total estimado: {formatMoney(order.estimated_total, order.currency)}
+        </Text>
+        {delivering && (
+          <Text fw={700} size="lg">
+            Total real: {formatMoney(order.actual_total, order.currency)}
+          </Text>
+        )}
+      </Group>
+
+      {order.lines.length === 0 ? (
+        <Text size="sm" c="dimmed" ta="center" py="md">
+          Esta orden no tiene materiales.
+          {editable && " Agregá alguno, o descartalo si ya no hace falta."}
+        </Text>
+      ) : (
+        <OrderLinesView
+          lines={order.lines}
+          currency={order.currency}
+          deliveries={delivering}
+          actions={
+            editable
+              ? {
+                  onQuantity: setQuantityTarget,
+                  onSupplier: setSupplierTarget,
+                  onRemove: remove,
+                }
+              : undefined
+          }
+        />
+      )}
+
+      {delivering && (
+        <ReceiptsList
+          receipts={order.receipts}
+          currency={order.currency}
+          cancelAction={
+            canManage
+              ? (receipt) => (
+                  <Button
+                    variant="subtle"
+                    color="red"
+                    size="compact-sm"
+                    onClick={() => setDropTarget(receipt)}
+                  >
+                    Anular última recepción
+                  </Button>
+                )
+              : undefined
+          }
+        />
+      )}
+
+      <OrderHistory history={order.history} />
+
+      {issuable && (
+        <IssueOrderModal
+          firmId={firm.id}
+          order={order}
+          opened={issueOpened}
+          onClose={issueModal.close}
+        />
+      )}
+      {cancellable && (
+        <CancelOrderModal
+          firmId={firm.id}
+          order={order}
+          opened={cancelOpened}
+          onClose={cancelModal.close}
+        />
+      )}
+      {/* Mounted per opening, like the draft's modals, so the form starts from
+          what is pending right now and not from what it was two deliveries ago. */}
+      {receivable && receiptOpened && (
+        <ReceiptModal
+          firmId={firm.id}
+          order={order}
+          opened
+          onClose={receiptModal.close}
+        />
+      )}
+      {canManage && dropTarget && (
+        <CancelReceiptModal
+          firmId={firm.id}
+          order={order}
+          receipt={dropTarget}
+          opened
+          onClose={() => setDropTarget(null)}
+        />
+      )}
+
+      {editable && (
+        <>
+          <LineQuantityModal
+            firmId={firm.id}
+            order={order}
+            line={quantityTarget}
+            onClose={() => setQuantityTarget(null)}
+          />
+          <LineSupplierModal
+            firmId={firm.id}
+            order={order}
+            line={supplierTarget}
+            onClose={() => setSupplierTarget(null)}
+          />
+          <AddLineModal
+            firmId={firm.id}
+            order={order}
+            opened={addOpened}
+            onClose={addModal.close}
+          />
+          <DiscardOrderModal
+            firmId={firm.id}
+            order={order}
+            opened={discardOpened}
+            onClose={discardModal.close}
+            onDiscarded={() => navigate(comprasPath)}
+          />
+        </>
+      )}
+    </Stack>
+  );
+}

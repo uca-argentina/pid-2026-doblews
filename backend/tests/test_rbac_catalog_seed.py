@@ -1,6 +1,6 @@
 """The seeded catalogue, checked against ADR-002 section 7, ADR-003 section 8,
-ADR-005 section 2, ADR-006 section 3, ADR-007 section 4, ADR-009 section 9
-and ADR-010 section 6.
+ADR-005 section 2, ADR-006 section 3, ADR-007 section 4, ADR-009 section 9,
+ADR-010 section 6, ADR-011 section 6 and ADR-013 section 1.
 
 The expected matrix is typed out here by hand rather than imported from the seed
 migrations. That duplication is the test: a check that reads the same source as
@@ -14,8 +14,10 @@ from sqlalchemy import Connection, text
 # project.recipe.*/project.cost.* rows come from ADR-003 section 8; catalog.manage
 # comes from ADR-005 section 2; recipe.manage from ADR-006 section 3;
 # project.budget.manage from ADR-007 section 4; project.task.* from ADR-009
-# section 9; supplier.view and supplier.manage from ADR-010 section 6; everything
-# else from ADR-002 section 7.
+# section 9; supplier.view and supplier.manage from ADR-010 section 6;
+# purchase_order.view and purchase_order.manage from ADR-011 section 6;
+# project.budget_version.view from ADR-013 section 1; everything else from
+# ADR-002 section 7.
 EXPECTED: dict[tuple[str, str], set[str]] = {
     ("support", "platform"): {
         "firm.create",
@@ -42,6 +44,8 @@ EXPECTED: dict[tuple[str, str], set[str]] = {
         "recipe.manage",
         "supplier.view",
         "supplier.manage",
+        "purchase_order.view",
+        "purchase_order.manage",
     },
     ("architect", "firm"): {
         "firm.view",
@@ -51,10 +55,12 @@ EXPECTED: dict[tuple[str, str], set[str]] = {
         "recipe.manage",
         "supplier.view",
         "supplier.manage",
+        "purchase_order.view",
+        "purchase_order.manage",
     },
     # No recipe.manage: the client reads the firm's recipes and never writes them
     # (HU-9). No supplier.* either: a supplier's prices are the firm's costs
-    # (ADR-010 section 6).
+    # (ADR-010 section 6). No purchase_order.* for the same reason (ADR-011 section 6).
     ("client", "firm"): {"firm.view", "catalog.view"},
     ("lead", "project"): {
         "project.view",
@@ -66,6 +72,7 @@ EXPECTED: dict[tuple[str, str], set[str]] = {
         "project.recipe.manage",
         "project.cost.view",
         "project.budget.manage",
+        "project.budget_version.view",
         "project.task.view",
         "project.task.manage",
     },
@@ -77,6 +84,7 @@ EXPECTED: dict[tuple[str, str], set[str]] = {
         "project.recipe.manage",
         "project.cost.view",
         "project.budget.manage",
+        "project.budget_version.view",
         "project.task.view",
         "project.task.manage",
     },
@@ -84,7 +92,17 @@ EXPECTED: dict[tuple[str, str], set[str]] = {
     # never what it costs the studio (ADR-003 section 8). The same goes for the
     # planning: project.task.view shows them the tasks, not what each one costs
     # (ADR-009 section 9).
-    ("client", "project"): {"project.view", "project.recipe.view", "project.task.view"},
+    #
+    # project.budget_version.view is the one exception that rule now has
+    # (ADR-013 section 1), and it is deliberately not project.cost.view: a saved
+    # version is the budget the studio froze to present, not the internal cost
+    # that moves while the take-off is edited.
+    ("client", "project"): {
+        "project.view",
+        "project.recipe.view",
+        "project.task.view",
+        "project.budget_version.view",
+    },
 }
 
 GRANTS = text("""
@@ -146,3 +164,21 @@ def test_the_project_client_does_not_see_costs(db: Connection) -> None:
     assert "project.recipe.view" in granted[("client", "project")]
     assert "project.cost.view" not in granted[("client", "project")]
     assert "project.cost.view" in granted[("collaborator", "project")]
+
+
+def test_the_client_sees_saved_budget_versions_and_no_other_cost(db: Connection) -> None:
+    """ADR-013 section 1: the exception to the rule above, and only this much.
+
+    Its own test beside the one before it, and for the same reason: the two
+    together say what a client may see about money. One permission opens the
+    budgets the studio chose to present; the other, which stays out, is every
+    cost that is still the studio's own.
+    """
+    granted = _granted(db)
+
+    assert "project.budget_version.view" in granted[("client", "project")]
+    assert "project.cost.view" not in granted[("client", "project")]
+    assert "project.budget.manage" not in granted[("client", "project")]
+    # Nobody lost the read they already had.
+    for role in ("lead", "collaborator"):
+        assert "project.budget_version.view" in granted[(role, "project")]
