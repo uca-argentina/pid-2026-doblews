@@ -1,4 +1,5 @@
-import { Group, Progress, SimpleGrid, Stack, Text } from "@mantine/core";
+import { Group, SimpleGrid, Stack, Text } from "@mantine/core";
+import { LabeledProgress } from "../../components/LabeledProgress";
 import { formatDate } from "../projects/projectFields";
 import { DashboardBlock, Figure, MissingData } from "./DashboardBlock";
 import type { ProgressBlockOut } from "./types";
@@ -69,8 +70,12 @@ function Content({
         </MissingData>
       ) : (
         <Stack gap="xs">
-          <Bar label="Real" value={progress.actual_percent} color="obra" />
-          <Bar
+          <LabeledProgress
+            label="Real"
+            value={progress.actual_percent}
+            color="obra"
+          />
+          <LabeledProgress
             label="Planificado a hoy"
             value={progress.planned_percent}
             color="gray"
@@ -104,28 +109,6 @@ function Content({
         </Figure>
       </SimpleGrid>
     </Stack>
-  );
-}
-
-function Bar({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: number;
-  color: string;
-}) {
-  return (
-    <div>
-      <Group justify="space-between" mb={4}>
-        <Text size="sm">{label}</Text>
-        <Text size="sm" fw={600}>
-          {value}%
-        </Text>
-      </Group>
-      <Progress value={value} color={color} size="lg" aria-label={label} />
-    </div>
   );
 }
 

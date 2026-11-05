@@ -1,6 +1,6 @@
 # ADR-013: Acceso de lectura del cliente a sus obras
 
-**Estado:** Aceptada en parte (HU-25). §1, §2 y §4 rigen; §3 ("Mis obras" y su endpoint) entra con HU-26
+**Estado:** Aceptada. §1, §2 y §4 rigen desde HU-25; §3 ("Mis obras" y su endpoint), desde HU-26
 **Fecha:** 2026-10-25
 **Contexto:** Qué ve el cliente de una obra y cómo entra a sus obras. Deja firmes HU-25 y HU-26 del [Sprint 4](../historias/sprint-4.md). **Reemplaza en parte** la regla "el cliente no ve costos" de [ADR-003](0003-recipe-catalog.md) §8 y el permiso de lectura de versiones de [ADR-007](0007-budget-versions.md) §4. El resto de esas dos secciones sigue vigente.
 
@@ -110,6 +110,15 @@ Dentro de una obra, el cliente navega las pestañas de la tabla de §2 que le co
 - **`useBudgetAccess` se partió en dos.** El hook seguía respondiendo una sola pregunta para dos cosas que ahora piden permisos distintos: queda para el presupuesto vivo del cómputo, y `useBudgetVersionAccess` es el de las versiones. La pestaña "Presupuestos" pasa a mirar el permiso nuevo.
 - **El estado vacío de Presupuestos ya contemplaba a quien no puede guardar** ("Vas a ver acá los presupuestos que se guarden de esta obra"), así que no hubo que escribir copy nuevo para el cliente.
 - **Los mensajes de permiso de las dos pantallas de versiones** dejaron de decir "no incluye ver los costos" y dicen "no incluye ver los presupuestos guardados", que es lo que ahora se chequea.
+
+### 6. Precisado al implementar HU-26 (2026-11-04)
+
+- **"Mis obras" vive en la misma URL que el listado**, `/firms/:id/projects`. `ProjectsPage` muestra el resumen a quien no tiene `project.create` ni `project.view_all`, y el listado de siempre a los demás. Así no hubo que tocar redirects: el inicio, el índice del estudio y el "← Mis obras" de cada obra ya llevaban ahí. La regla vive en una sola función del front (`seesOnlyOwnProjects`), que usan la página, el menú ("Mis obras" en lugar de "Obras") y el link de vuelta de la obra.
+- **La ruta es `GET /firms/{firm_id}/projects/overview`**, registrada antes de `/{project_id}` para que `overview` no se lea como un id. Cada obra trae nombre, dirección, cliente, `has_tasks`, `project_start_date`, `planned_end_date`, `baseline_end_date`, `progress` y `latest_version` (id, número, fecha, total y moneda).
+- **Los números salen de las mismas lecturas que las pestañas:** `planning_out(..., sees_cost=False)` para avance y fechas, la misma respuesta que lee Avance, y `BudgetVersionRepository.latest()`, gemela de `first()`, para la versión. Un test compara cada número contra `GET .../tasks` y `GET .../budget/versions`.
+- **El fin previsto viaja apenas hay tareas y fecha de inicio**, aunque todavía no se haya fijado la planificación. El avance, en cambio, espera a que se fije, y la tarjeta explica por qué no lo muestra.
+- **El permiso de las versiones se pregunta obra por obra**, con `project_permissions`, porque no hay `project_id` en la URL. Hoy ningún rol de obra deja de tenerlo; el test que lo fija le quita el permiso al rol para probar que la regla se pregunta igual.
+- **Ninguna pestaña del cliente necesitó cambios.** Datos y Cómputo ya tenían "Editar", "Dar de baja", "Agregar receta" y "Guardar versión" detrás de su permiso, igual que Planificación y Avance en HU-25.
 
 ---
 

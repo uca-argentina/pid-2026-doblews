@@ -1,9 +1,12 @@
 """What the API says about a work and about who it is being built for (HU-3)."""
 
-from datetime import date
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Annotated
 
 from pydantic import BaseModel, StringConstraints
+
+from app.schemas.task import WorkProgressOut
 
 # The same limits the columns carry, so an over-long name is a 422 naming the
 # field rather than a DataError surfacing as a 500.
@@ -89,3 +92,38 @@ class ProjectWrite(BaseModel):
     # An account id and not an email: the picker is fed by this firm's roster
     # (HU-3), so the frontend already holds the id of everyone it may offer.
     client_account_id: int | None = None
+
+
+class LatestVersionOut(BaseModel):
+    """The last budget the studio saved for a work: which, when, and how much."""
+
+    id: int
+    version_number: int
+    created_at: datetime
+    total: Decimal
+    currency: str
+
+
+class ProjectOverviewOut(BaseModel):
+    """One work as "Mis obras" shows it (HU-26, ADR-013 section 3).
+
+    The progress and the dates are the planning's own answer, the same numbers
+    the Avance tab and the dashboard show. progress is null until the work has
+    tasks and a fixed planning to measure them against; the planned end comes
+    as soon as there are tasks and a start date.
+
+    latest_version is null when the work has no saved budget, and also when the
+    caller may not read its versions: neither project.budget_version.view on
+    the work nor project.view_all on the firm.
+    """
+
+    id: int
+    name: str
+    address: str | None
+    client: ProjectClientOut | None
+    has_tasks: bool
+    project_start_date: date | None
+    planned_end_date: date | None
+    baseline_end_date: date | None
+    progress: WorkProgressOut | None
+    latest_version: LatestVersionOut | None

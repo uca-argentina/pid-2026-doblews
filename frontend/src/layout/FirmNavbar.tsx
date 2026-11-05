@@ -1,6 +1,7 @@
 import { NavLink, Stack, Text } from "@mantine/core";
 import { Link, useLocation } from "react-router-dom";
 import { useCurrentFirm } from "../features/firms/firmContext";
+import { seesOnlyOwnProjects } from "../features/projects/projectAccess";
 
 interface FirmNavbarProps {
   /** Called after a link is followed, so the mobile drawer folds away. */
@@ -16,7 +17,12 @@ export function FirmNavbar({ onNavigate }: FirmNavbarProps) {
 
   const base = `/firms/${firm.id}`;
   const sections = [
-    { to: `${base}/projects`, label: "Obras", visible: true },
+    {
+      to: `${base}/projects`,
+      // The same page, which is "Mis obras" for whoever only follows works.
+      label: seesOnlyOwnProjects(can) ? "Mis obras" : "Obras",
+      visible: true,
+    },
     {
       to: `${base}/catalog`,
       label: "Catálogo",

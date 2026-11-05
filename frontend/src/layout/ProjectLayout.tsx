@@ -17,6 +17,7 @@ import {
   useParams,
 } from "react-router-dom";
 import { useCurrentFirm } from "../features/firms/firmContext";
+import { seesOnlyOwnProjects } from "../features/projects/projectAccess";
 import {
   ProjectContext,
   type CurrentProject,
@@ -106,7 +107,7 @@ export function ProjectLayout() {
               belongs to. The sidebar already highlights "Obras", because its
               active check uses startsWith and this route sits under it. */}
           <Anchor component={Link} to={listingPath} size="sm" c="dimmed">
-            ← Obras
+            ← {seesOnlyOwnProjects(can) ? "Mis obras" : "Obras"}
           </Anchor>
         </div>
 
