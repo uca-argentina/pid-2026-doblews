@@ -327,7 +327,7 @@ flowchart LR
     HU22 --> T12[T-12 Datos de demo]
     HU23 --> T12
     HU26 --> T12
-    HU24 --> T13[T-13 Promoción y Azure]
+    HU24 --> T13[T-13 Promoción y verificación]
     T12 --> T13
 ```
 
