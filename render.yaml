@@ -37,7 +37,7 @@ services:
   - type: web
     name: warchitecture-web
     runtime: static
-    region: virginia
+    # No region: static sites are served from Render's global CDN.
     rootDir: frontend
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
