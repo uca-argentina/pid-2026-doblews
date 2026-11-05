@@ -1,6 +1,6 @@
 # ADR-008: Deploy en Azure — Container Apps, Static Web Apps y PostgreSQL Flexible Server
 
-**Estado:** Reemplazada por [ADR-011](0011-render-neon-deploy.md) (2026-11-05). La prueba de Azure venció, pago por uso no tiene tope de gasto, y los planes gratis de Render y Neon quedaron libres.
+**Estado:** Reemplazada por [ADR-014](0014-render-neon-deploy.md) (2026-11-05). La prueba de Azure venció, pago por uso no tiene tope de gasto, y los planes gratis de Render y Neon quedaron libres.
 **Fecha:** 2026-09-30
 **Contexto:** T-07 (deploy y promoción `dev → main`), arrastrada del Sprint 1. Reemplaza la parte "Deploy" de [ADR-001](0001-stack.md) (Render/Railway + Vercel).
 

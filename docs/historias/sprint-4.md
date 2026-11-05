@@ -250,7 +250,8 @@ No son decisiones de este sprint: son lo que los sprints anteriores dejaron fija
 *Habilitadora: sin datos, las pantallas nuevas se muestran vacías en la defensa.*
 
 - Casa Rodríguez suma órdenes en todos los estados: un borrador, una emitida, una recibida parcialmente, varias recibidas y una anulada.
-- Las recibidas muestran las tres reglas de puntos y dejan a Estudio Norte en **Plata**, con algún proveedor en **Oro**.
+- Las recibidas muestran las tres reglas de puntos y dejan a Estudio Norte en **Plata**, con Corralón Norte también en **Plata**.
+  > **Corregido al implementar (2026-11-05):** decía "con algún proveedor en **Oro**", que es imposible. Los umbrales son los mismos para el estudio y para cada proveedor (ADR-012 §5), y los puntos con un proveedor son parte de los del estudio: un proveedor en Oro (150) deja al estudio en Oro como mínimo.
 - carla (cliente de Casa Rodríguez) queda lista para recorrer "Mis obras".
 - Como en T-04, T-06 y T-09, el seed **no pisa** lo editado por pantalla.
 
@@ -259,12 +260,12 @@ No son decisiones de este sprint: son lo que los sprints anteriores dejaron fija
 
 ---
 
-## T-13 — Promoción `dev → main` y verificación en Azure
+## T-13 — Promoción `dev → main` y verificación en el ambiente
 
 *Cierra la Definition of Done de todas las historias del sprint ([reglas-de-trabajo §3](../reglas-de-trabajo.md)).*
 
-- PR `dev → main` con merge commit, que dispara `deploy.yml`.
-- Recorrida de las siete historias en el ambiente de Azure, con las cuentas de demo.
+- PR `dev → main` con merge commit. Render deploya `main` solo, una vez que pasa el CI ([ADR-014](../adr/0014-render-neon-deploy.md); hasta el 2026-11-05 era `deploy.yml` contra Azure).
+- Recorrida de las siete historias en el ambiente, con las cuentas de demo.
 
 **Depende de:** todas las historias.
 **Estimación:** 0,5 día.
@@ -326,7 +327,7 @@ flowchart LR
     HU22 --> T12[T-12 Datos de demo]
     HU23 --> T12
     HU26 --> T12
-    HU24 --> T13[T-13 Promoción y Azure]
+    HU24 --> T13[T-13 Promoción y verificación]
     T12 --> T13
 ```
 
@@ -446,3 +447,14 @@ El detalle de lo que se precisó está en ADR-013 §5.
 - **Estado vacío:** "Todavía no tenés obras asignadas". Una columna a 375px, dos desde `sm` y tres desde `lg`.
 
 El detalle de lo que se precisó está en ADR-013 §6.
+
+**2026-11-05 (deploy).** La prueba de Azure venció y el ambiente quedó caído. **El deploy pasó a Render y Neon** ([ADR-014](../adr/0014-render-neon-deploy.md), que reemplaza a ADR-008): `render.yaml` versiona los dos servicios, Render deploya `main` cuando pasa el CI, y se borró `deploy.yml`. `dev` se promocionó a `main` (PR #61) con todas las historias del sprint.
+
+**2026-11-05 (T-12).** **T-12 implementada** en `chore/t12-demo-data`.
+
+- **Diez órdenes de Casa Rodríguez**, en todos los estados: siete recibidas (una en dos entregas), una recibida parcialmente, una emitida, una anulada y un borrador. Se emiten, reciben y anulan **con los servicios de HU-21 y HU-22**, así que los estados se derivan y los puntos se suman igual que por HTTP. Las fechas van en el pasado, alrededor del día en que corre el seed.
+- **Las cuatro reglas en el historial** (10, 6, 3 y 0): Estudio Norte queda en **Plata** con 59 puntos, Corralón Norte en **Plata** con 56, y Corralón Sur y Arenera del Río en Bronce. El criterio decía "algún proveedor en Oro", que no es posible con el estudio en Plata (ver la nota en T-12).
+- **Queda algo para generar en vivo:** 200 ladrillos y 3 bolsas de cemento sin pedir, y Corralón Sur es el más barato para esas cantidades. La cal y la arena fina siguen "sin proveedor".
+- **No pisa lo hecho por pantalla:** solo carga órdenes si la obra no tuvo ninguna, descartadas incluidas.
+- carla ya era cliente de Casa Rodríguez, así que "Mis obras" no necesitó datos nuevos.
+

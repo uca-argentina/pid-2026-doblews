@@ -1,7 +1,7 @@
-# ADR-011: Deploy en Render y Neon
+# ADR-014: Deploy en Render y Neon
 
-**Estado:** Propuesta
-**Fecha:** 2026-11-05
+**Estado:** Aceptada
+**Fecha:** 2026-11-05 (aceptada el mismo día, con `main` deployado y verificado en Render y Neon)
 **Contexto:** El ambiente de deploy de [ADR-008](0008-azure-deploy.md) se cayó al vencer la prueba de Azure. Esta ADR **reemplaza a ADR-008**.
 
 ## Contexto

@@ -1,4 +1,4 @@
-# Render Blueprint for the deploy environment (ADR-011). Render reads this file
+# Render Blueprint for the deploy environment (ADR-014). Render reads this file
 # from the branch the Blueprint tracks, which is main: staging always mirrors
 # main (reglas-de-trabajo §6). The database is not here: it lives in Neon, and
 # the API only receives its URL as a secret.
