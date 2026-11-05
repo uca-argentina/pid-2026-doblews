@@ -28,7 +28,7 @@ cd ../frontend && npm install # instala deps del frontend
 
 ## Ambiente de deploy
 
-Render (backend y front) + Neon (Postgres), definido en `render.yaml`. Render deploya solo cada push a `main` (a `main` solo se llega por PR con el CI verde). Ver [docs/adr/0014-render-neon-deploy.md](docs/adr/0014-render-neon-deploy.md).
+Render (backend y front) + Neon (Postgres), definido en `render.yaml`. Cada push a `main` corre el CI y, si pasa, `.github/workflows/deploy.yml` deploya en Render por API (backend y después frontend). Ver [docs/adr/0014-render-neon-deploy.md](docs/adr/0014-render-neon-deploy.md).
 
 - Frontend: https://warchitecture-web.onrender.com
 - API: https://warchitecture-api.onrender.com (`/docs` para Swagger)

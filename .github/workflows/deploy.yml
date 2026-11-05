@@ -1,0 +1,61 @@
+name: Deploy
+
+# Every push to main (a merged PR) runs the whole CI again on that commit and,
+# only if it passes, deploys it to Render: backend first, then frontend. The
+# deploys are requested through Render's API instead of Render's own
+# auto-deploy, which never fired for this repo (ADR-014). workflow_dispatch
+# redeploys main by hand from the Actions tab.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Two merges in a row deploy one after the other, never interleaved, and a
+# deploy already running is never cancelled halfway.
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+env:
+  API_SERVICE_ID: srv-dbm8mvm1egvs73bmc160
+  WEB_SERVICE_ID: srv-dbm8mvm1egvs73bmc15g
+  API_URL: https://warchitecture-api.onrender.com
+
+jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+
+  backend:
+    name: Backend — deploy to Render
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy and wait until live
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: .github/scripts/render-deploy.sh "$API_SERVICE_ID" "$GITHUB_SHA"
+
+      - name: Smoke test
+        # Live means Render's own /health check passed; this checks it from
+        # outside, through the public URL the frontend uses.
+        run: curl --silent --fail --max-time 90 --retry 3 --retry-delay 10 "$API_URL/health"
+
+  frontend:
+    name: Frontend — deploy to Render
+    # After the backend, so a front that calls a new endpoint never ships
+    # before the endpoint does.
+    needs: backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy and wait until live
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: .github/scripts/render-deploy.sh "$WEB_SERVICE_ID" "$GITHUB_SHA"
