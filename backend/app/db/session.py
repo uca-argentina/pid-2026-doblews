@@ -17,8 +17,9 @@ settings = get_settings()
 # doubles the connections held against Postgres without buying anything.
 engine = create_engine(
     settings.database_url,
-    # Managed Postgres (Azure) drops idle connections. Without this, the first
-    # request after a quiet period fails instead of getting a fresh connection.
+    # Neon suspends its compute after a few idle minutes, dropping every pooled
+    # connection. Without this, the first request after a quiet period fails
+    # instead of getting a fresh connection.
     pool_pre_ping=True,
 )
 
