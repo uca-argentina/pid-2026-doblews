@@ -436,3 +436,13 @@ El detalle de lo que se precisó está en ADR-012 §9.
 El detalle de lo que se precisó está en ADR-013 §5.
 
 **Falta para cerrar HU-25:** correr migración y tests, la revisión visual con la cuenta del cliente, y el PR a `dev`. **Queda liberada HU-26** ("Mis obras").
+
+**2026-11-04 (HU-26).** HU-25 mergeada a `dev`. **HU-26 implementada** en `feat/hu26-client-projects`. **ADR-013 queda Aceptada** completa.
+
+- **"Mis obras"** en la misma URL que el listado de obras: quien no tiene `project.create` ni `project.view_all` (hoy, el cliente) ve una tarjeta por obra con el avance real contra el planificado y su desvío, el fin previsto (y el planificado, si ya se fijó) y el último presupuesto guardado, con su fecha, su total y un link a esa versión. Los demás siguen viendo el listado de siempre.
+- **Un endpoint de resumen**, `GET /firms/{id}/projects/overview`, sin migración: el avance y las fechas son los de la pestaña Avance, y la versión es la más reciente. La versión solo viaja a quien puede leer versiones en esa obra.
+- **El menú dice "Mis obras"** para el cliente, y el link de vuelta de cada obra también. Lo demás del menú ya se filtraba por permiso.
+- **Las pestañas del cliente**, Datos, Cómputo, Planificación, Avance y Presupuestos, no necesitaron cambios: cada botón de edición ya dependía de su permiso.
+- **Estado vacío:** "Todavía no tenés obras asignadas". Una columna a 375px, dos desde `sm` y tres desde `lg`.
+
+El detalle de lo que se precisó está en ADR-013 §6.

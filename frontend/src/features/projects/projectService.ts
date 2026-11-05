@@ -2,6 +2,7 @@ import { api } from "../../lib/api";
 import type {
   ProjectDetail,
   ProjectOut,
+  ProjectOverviewOut,
   ProjectSummary,
   ProjectWrite,
 } from "./types";
@@ -18,6 +19,17 @@ function projectsUrl(firmId: number): string {
  * never a filter applied here. */
 export async function fetchProjects(firmId: number): Promise<ProjectSummary[]> {
   const { data } = await api.get<ProjectSummary[]>(projectsUrl(firmId));
+  return data;
+}
+
+/** The caller's works at a glance, for "Mis obras" (HU-26): the same works as
+ * the listing, each with its progress, planned end and latest budget. */
+export async function fetchProjectsOverview(
+  firmId: number,
+): Promise<ProjectOverviewOut[]> {
+  const { data } = await api.get<ProjectOverviewOut[]>(
+    `${projectsUrl(firmId)}/overview`,
+  );
   return data;
 }
 
