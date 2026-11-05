@@ -1,4 +1,4 @@
-# Backend image for the Render web service (ADR-011). Built from backend/ as the
+# Backend image for the Render web service (ADR-014). Built from backend/ as the
 # context, so the repo-root .env never reaches the image: every setting comes
 # from the container's environment, as app/core/config.py expects in deploy.
 FROM python:3.12-slim
