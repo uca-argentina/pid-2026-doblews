@@ -7,13 +7,13 @@ with a known password. Idempotent: running it twice changes nothing.
     uv run python -m app.db.seed_dev
 """
 
-from datetime import date
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
 from sqlalchemy import make_url, select
 from sqlalchemy.orm import Session
 
-from app.core.clock import today
+from app.core.clock import LOCAL_ZONE, today
 from app.core.config import get_settings
 from app.core.security import hash_password
 from app.db.session import SessionLocal
@@ -22,10 +22,13 @@ from app.models import (
     BudgetVersion,
     Firm,
     FirmMember,
+    FirmPointsEntry,
     PlatformMember,
     Project,
     ProjectRecipe,
     ProjectTask,
+    PurchaseOrder,
+    PurchaseOrderLine,
     Recipe,
     Resource,
     Role,
@@ -33,10 +36,16 @@ from app.models import (
     UnitOfMeasure,
 )
 from app.repositories.project_task import ProjectTaskRepository
+from app.repositories.purchase_order import PurchaseOrderRepository
+from app.repositories.supplier import SupplierPriceRepository
 from app.services.budget_versions import BudgetVersionError, save_version
 from app.services.catalog_admin import CatalogError, InvalidReferenceError, RecipeLineInput
 from app.services.firm_recipes import create_firm_recipe
 from app.services.project import ProjectError, create_project
+from app.services.purchase_orders import RECEIVED, ReceiptLineIn, register_receipt
+from app.services.purchase_orders import add_line as add_order_line
+from app.services.purchase_orders import cancel as cancel_order
+from app.services.purchase_orders import issue as issue_order
 from app.services.schedule import (
     TaskInput,
     add_business_days,
@@ -199,6 +208,78 @@ SUPPLIERS = [
     ),
 ]
 
+# Casa Rodríguez's purchase orders (HU-20 to HU-24), oldest first, dated in
+# calendar days before the day the seed runs, like the planning. One order in
+# every status, and received ones that earn each points rule of ADR-012 section
+# 3: bricks and cement in batches of about 1,500 and 12 from Corralón Norte
+# (similar quantity, 10), one batch of 20 bags (same material, 6), the sand
+# after the rubble from Arenera del Río (same supplier, 3), and every supplier's
+# first order (0). That leaves Estudio Norte and Corralón Norte in Plata, and
+# the other two in Bronce.
+#
+# What is left of the take-off — 200 bricks and 3 bags — is on purpose: it is
+# what HU-20's "Generar órdenes" has to offer during the demo, and Corralón Sur
+# is the cheapest for both at that quantity.
+#
+# (supplier, [(material, quantity)], issued days ago or None for a draft,
+#  [(received days ago, [(material, quantity)], note)], cancelled days ago or None)
+DEMO_ORDERS = [
+    (
+        "Corralón Norte",
+        [("Ladrillo común", "1500"), ("Cemento portland (bolsa 50 kg)", "12")],
+        29,
+        [(27, [("Ladrillo común", "1500"), ("Cemento portland (bolsa 50 kg)", "12")], None)],
+        None,
+    ),
+    ("Arenera del Río", [("Cascote", "5.4")], 27, [(25, [("Cascote", "5.4")], None)], None),
+    (
+        "Corralón Norte",
+        [("Ladrillo común", "1500"), ("Cemento portland (bolsa 50 kg)", "12")],
+        22,
+        [
+            (
+                20,
+                [("Ladrillo común", "1000"), ("Cemento portland (bolsa 50 kg)", "12")],
+                "Primer camión",
+            ),
+            (18, [("Ladrillo común", "500")], "Resto de los ladrillos"),
+        ],
+        None,
+    ),
+    (
+        "Arenera del Río",
+        [("Arena gruesa", "4")],
+        14,
+        [(12, [("Arena gruesa", "4")], None)],
+        None,
+    ),
+    (
+        "Corralón Norte",
+        [("Ladrillo común", "1500"), ("Cemento portland (bolsa 50 kg)", "20")],
+        10,
+        [(8, [("Ladrillo común", "1500"), ("Cemento portland (bolsa 50 kg)", "20")], None)],
+        None,
+    ),
+    # Issued and cancelled before anything arrived: the supplier had no stock.
+    ("Corralón Sur", [("Cemento portland (bolsa 50 kg)", "3")], 7, [], 6),
+    (
+        "Corralón Norte",
+        [("Ladrillo común", "1200"), ("Cemento portland (bolsa 50 kg)", "12")],
+        6,
+        [(4, [("Ladrillo común", "1200"), ("Cemento portland (bolsa 50 kg)", "12")], None)],
+        None,
+    ),
+    (
+        "Corralón Sur",
+        [("Ladrillo común", "1000")],
+        3,
+        [(2, [("Ladrillo común", "600")], "Entrega parcial, el resto la semana próxima")],
+        None,
+    ),
+    ("Arenera del Río", [("Arena gruesa", "4.34")], 1, [], None),
+    ("Corralón Norte", [("Ladrillo común", "300")], None, [], None),
+]
+
 
 def _role(session: Session, code: str, scope: str) -> Role:
     role = session.scalar(select(Role).where(Role.code == code, Role.scope == scope))
@@ -278,6 +359,7 @@ def seed(session: Session, password: str) -> None:
     _seed_demo_budget(session, firms)
     _seed_demo_planning(session, firms)
     _seed_suppliers(session, firms)
+    _seed_demo_orders(session, firms)
 
 
 def _seed_firm_recipe(session: Session, firms: dict[str, Firm]) -> None:
@@ -586,6 +668,129 @@ def _seed_suppliers(session: Session, firms: dict[str, Firm]) -> None:
                 print(f"salteado  precio    {material}: {error.detail}")
                 continue
             print(f"creado    precio    {material} a {unit_price} + envío {shipping}")
+
+
+def _seed_demo_orders(session: Session, firms: dict[str, Firm]) -> None:
+    """The demo work's purchase orders, their deliveries and the points they earned.
+
+    Runs only on a work that never had an order, discarded drafts included: any
+    order means someone bought on the screen, and the numbers are theirs.
+
+    Issuing, receiving and cancelling go through HU-21 and HU-22's services, so
+    the statuses are derived and the points earned exactly as over HTTP. What
+    the services stamp with now() is then moved to the day it is meant to have
+    happened, oldest order first. That order matters: "the last time" a material
+    was bought is read by received_at, and inside one transaction now() is the
+    same instant for every order.
+    """
+    _, work_name, lead_email, *_ = DEMO_WORK
+    project = _demo_project(session, firms)
+    if project is None:
+        print(f"salteadas ordenes: la obra {work_name} no existe o no está activa")
+        return
+    had_orders = session.scalar(
+        select(PurchaseOrder.id).where(PurchaseOrder.project_id == project.id).limit(1)
+    )
+    if had_orders is not None:
+        print(f"ya estaban ordenes de {work_name}")
+        return
+
+    firm_id = project.firm_id
+    lead = session.scalar(select(Account).where(Account.email == lead_email))
+
+    def at(days_ago: int, hour: int) -> datetime:
+        return datetime.combine(today() - timedelta(days=days_ago), time(hour), LOCAL_ZONE)
+
+    for supplier_name, lines, issued, receipts, cancelled in DEMO_ORDERS:
+        supplier_id = session.scalar(
+            select(Supplier.id).where(
+                Supplier.firm_id == firm_id, Supplier.name == supplier_name, Supplier.is_active
+            )
+        )
+        if supplier_id is None:
+            print(f"salteada  orden    {supplier_name}: el estudio ya no tiene ese proveedor")
+            continue
+        resource_ids = {
+            material: session.scalar(select(Resource.id).where(Resource.name == material))
+            for material, _ in lines
+        }
+        offered = {
+            offer.resource_id
+            for offer in SupplierPriceRepository(session, firm_id=firm_id).offers(
+                [r for r in resource_ids.values() if r is not None]
+            )
+            if offer.supplier_id == supplier_id
+        }
+        # A price list edited by hand can stop offering a material. The demo goes
+        # on without that order, checked before writing so none is left half made.
+        missing = [m for m, r in resource_ids.items() if r not in offered]
+        if missing:
+            print(f"salteada  orden    {supplier_name}: ya no ofrece {', '.join(missing)}")
+            continue
+
+        order = PurchaseOrder(
+            firm_id=firm_id,
+            project_id=project.id,
+            supplier_id=supplier_id,
+            number=PurchaseOrderRepository(session, firm_id=firm_id).highest_number() + 1,
+            created_by=lead.id,
+        )
+        session.add(order)
+        session.flush()
+        if issued is not None:
+            order.created_at = at(issued, 9)
+
+        # HU-20's own add_line: checks the take-off and freezes today's price.
+        frozen: dict[str, PurchaseOrderLine] = {
+            material: add_order_line(
+                session, firm_id, order.id, resource_ids[material], Decimal(quantity)
+            )
+            for material, quantity in lines
+        }
+
+        if issued is not None:
+            issue_order(session, firm_id, order.id, issued_by=lead.id)
+            order.issued_at = at(issued, 10)
+            session.flush()
+
+        for index, (days_ago, delivered, note) in enumerate(receipts):
+            register_receipt(
+                session,
+                firm_id,
+                order.id,
+                received_on=today() - timedelta(days=days_ago),
+                note=note,
+                # A remito charges the freight once, so only the first truck has it.
+                shipping_cost=(
+                    sum(line.shipping_cost for line in frozen.values()) if index == 0 else None
+                ),
+                # Paid as ordered: the order froze the price, and the demo has
+                # no reason to show an invoice that disagrees with it.
+                lines=[
+                    ReceiptLineIn(
+                        line_id=frozen[material].id,
+                        quantity=Decimal(quantity),
+                        actual_cost=frozen[material].unit_price * Decimal(quantity),
+                    )
+                    for material, quantity in delivered
+                ],
+                created_by=lead.id,
+            )
+        if order.status == RECEIVED:
+            done = at(receipts[-1][0], 17)
+            order.received_at = done
+            for entry in session.scalars(
+                select(FirmPointsEntry).where(FirmPointsEntry.purchase_order_id == order.id)
+            ):
+                entry.created_at = done
+            session.flush()
+
+        if cancelled is not None:
+            cancel_order(session, firm_id, order.id, cancelled_by=lead.id)
+            order.cancelled_at = at(cancelled, 11)
+            session.flush()
+
+        print(f"creada    orden    OC-{order.number:04d} a {supplier_name} ({order.status})")
 
 
 def main() -> None:
