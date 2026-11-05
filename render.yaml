@@ -1,0 +1,73 @@
+# Render Blueprint for the deploy environment (ADR-011). Render reads this file
+# from the branch the Blueprint tracks, which is main: staging always mirrors
+# main (reglas-de-trabajo §6). The database is not here: it lives in Neon, and
+# the API only receives its URL as a secret.
+services:
+  - type: web
+    name: warchitecture-api
+    runtime: docker
+    plan: free
+    # Render has no South American region. Virginia sits next to Neon's
+    # us-east-1, so the many short queries per request stay inside one region.
+    region: virginia
+    # Docker context and Dockerfile are resolved inside backend/, so the
+    # repo-root .env never reaches the image. With a root directory set, only
+    # changes under it trigger a backend deploy.
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    # Render waits for this to answer before routing traffic to a new deploy.
+    # Migrations run on start, so a failing one keeps the previous deploy live.
+    healthCheckPath: /health
+    # Deploy only once ci.yml passed on the commit, never on the push alone.
+    autoDeployTrigger: checksPass
+    envVars:
+      # Neon's direct (non-pooler) connection string, with the scheme changed
+      # to postgresql+psycopg://. Set by hand in the dashboard, never in git.
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      # Must match the static site's URL exactly: CORS takes no wildcards.
+      - key: CORS_ORIGINS
+        value: https://warchitecture-web.onrender.com
+      # Render routes traffic to $PORT; the Dockerfile's uvicorn listens on 8000.
+      - key: PORT
+        value: "8000"
+
+  - type: web
+    name: warchitecture-web
+    runtime: static
+    region: virginia
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    autoDeployTrigger: checksPass
+    envVars:
+      # Vite inlines it at build time; the deployed bundle cannot read it at
+      # runtime, so changing it needs a redeploy of this site.
+      - key: VITE_API_URL
+        value: https://warchitecture-api.onrender.com
+      - key: NODE_VERSION
+        value: "24"
+    # The app uses BrowserRouter, so an F5 on an internal route must still get
+    # index.html instead of a 404. Render skips rewrites for files that exist,
+    # so assets are still served as themselves.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      # Vite hashes every file under assets/, so they can be cached forever.
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      # index.html names the current hashes, so it must never be cached.
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache
