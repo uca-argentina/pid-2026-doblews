@@ -35,6 +35,8 @@ El documento de propuesta del cliente evalúa un abanico amplio de opciones (Nex
 - **Deploy**: backend + base de datos en Render o Railway, frontend en Vercel. Deploy funcionando desde los primeros días del sprint, no reservado para el final.
 
   > **Reemplazado por [ADR-008](0008-azure-deploy.md) (2026-09-30).** El deploy es en Azure: backend en Container Apps, base en PostgreSQL Flexible Server y frontend en Static Web Apps. Los planes gratis de Render y Neon ya estaban ocupados por otros proyectos del equipo. El resto de esta sección sigue vigente.
+  >
+  > **Reemplazado por [ADR-011](0011-render-neon-deploy.md) (2026-11-05).** Al vencer la prueba de Azure el deploy volvió a Render (backend y front) y Neon (base), con los planes gratis ya libres.
 - **CI**: GitHub Actions con lint (`ruff` + `eslint`) y verificación de build en cada Pull Request.
 
 ## Fuera de alcance (explícitamente, para este momento del proyecto)
