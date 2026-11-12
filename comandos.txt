@@ -1,0 +1,210 @@
+COMANDOS — warchitecture
+================================================================================
+Todo desde la RAÍZ del repo salvo que diga "cd backend" / "cd frontend".
+En el back todo lleva "uv run" adelante (corre dentro del .venv).
+Guías de código: guia-back.txt y guia-front.txt.
+
+
+================================================================================
+1. LEVANTAR TODO (día a día)
+================================================================================
+docker compose up -d                  Postgres (Docker Desktop ABIERTO).
+cd backend
+uv run alembic upgrade head           Aplica migraciones pendientes.
+uv run uvicorn app.main:app --reload  API en :8000. Los errores salen en esta terminal.
+cd frontend && npm run dev            Front en :5173.
+
+
+================================================================================
+2. SETUP DE CERO
+================================================================================
+cp .env.example .env && pre-commit install
+docker compose up -d
+cd backend && uv sync && uv run alembic upgrade head && uv run python -m app.db.seed_dev
+cd ../frontend && npm install
+
+Cuentas demo (password: warchitecture)
+  soporte@warchitecture.test   support
+  ana@estudionorte.test        owner Estudio Norte
+  alba@estudionorte.test       architect Estudio Norte
+  carla@estudionorte.test      client Estudio Norte (probar permisos)
+  bruno@estudiosur.test        owner Estudio Sur (probar aislamiento → 404)
+
+
+================================================================================
+3. DOCKER
+================================================================================
+docker compose up -d       Levanta Postgres.
+
+
+================================================================================
+4. ALEMBIC (migraciones)                                           cd backend
+================================================================================
+uv run alembic upgrade head
+    Aplica todas las pendientes.
+
+uv run alembic revision --autogenerate -m "add notes to supplier"
+    Genera la migración comparando modelos vs base.
+      1) modificar/crear el modelo (si es NUEVO: importarlo en app/models/__init__.py)
+      2) base al día ANTES (upgrade head)
+      3) correr este comando
+      4) REVISAR el archivo generado (no detecta renombres, CHECKs, server_default)
+      5) upgrade head
+
+uv run alembic revision -m "seed foo permissions"
+    Migración vacía, a mano. Para permisos nuevos copiar:
+    alembic/versions/e7b2c5a93f68_seed_supplier_permissions.py
+    (inserta permission + role_permission en upgrade(), los borra en downgrade()).
+
+uv run alembic downgrade -1   Deshace la última (para rehacer: borrar archivo y regenerar).
+uv run alembic heads          Si hay más de una: editar down_revision de la nueva.
+uv run alembic check          Falla si falta generar una migración (lo corre el CI).
+
+
+================================================================================
+5. DIAGRAMA DER                                                    cd backend
+================================================================================
+uv run python -m scripts.generate_erd           Regenera docs/der.md (commitear con el modelo).
+uv run python -m scripts.generate_erd --check   Falla si quedó viejo (CI).
+
+
+================================================================================
+6. TESTS                                                           cd backend
+================================================================================
+Necesitan Postgres. Si una migración está rota, fallan todos.
+
+uv run pytest                                   Todos.
+uv run pytest tests/test_suppliers_api.py       Un archivo.
+uv run pytest -k supplier                       Por nombre.
+uv run pytest -x                                Frena en el primer fallo.
+uv run pytest --lf                              Solo los que fallaron la última vez.
+uv run pytest -vv tests/test_x.py::test_nombre  Un test, con detalle.
+uv run pytest -s                                Muestra los print().
+uv run pytest tests/test_route_permissions.py   Todo endpoint declara permiso.
+
+Modelo para uno nuevo: tests/test_suppliers_api.py + fixtures de tests/conftest.py.
+
+
+================================================================================
+7. SWAGGER                                       http://localhost:8000/docs
+================================================================================
+POST /auth/login → copiar access_token → "Authorize" → pegar.
+401 sin token/vencido · 403 sin permiso · 404 no existe/otro estudio/baja
+409 regla de negocio · 422 body inválido
+
+
+================================================================================
+8. LINT Y FORMATO (antes de commitear)
+================================================================================
+cd backend  && uv run ruff check . --fix && uv run black .
+cd frontend && npm run lint && npm run format
+cd frontend && npm run build      Muestra todos los errores de TypeScript.
+
+
+================================================================================
+9. GIT
+================================================================================
+git status
+git diff / git diff --staged
+git switch dev && git pull
+git switch -c feat/huXX-algo
+git add <archivo>   /   git add -p
+git commit -m "feat: ..."         feat / fix / refactor / docs / test / chore
+git push -u origin feat/huXX-algo
+git log --oneline -10
+git restore <archivo>             DESCARTA cambios sin commitear.
+git stash / git stash pop
+
+Rama desde otro remoto:
+git remote -v                              Lista los remotos
+git fetch <remoto>
+git switch -c <rama> <remoto>/dev
+git push -u <remoto> <rama>
+
+Copiar patrones de una feature parecida:
+git log --oneline -- backend/app/api/routes/suppliers.py
+git show <hash> --stat / git show <hash>
+git grep -n "supplier.manage"
+
+
+================================================================================
+10. VS CODE: NAVEGAR EL CÓDIGO
+================================================================================
+Abrir SIEMPRE desde WSL: cd ~/warchitecture && code .   (abajo a la izq: "WSL: Ubuntu")
+Intérprete (si los imports del back salen subrayados o F12 no anda):
+  Ctrl+Shift+P → "Python: Seleccionar intérprete" → ./backend/.venv/bin/python
+  (si no aparece: "Enter interpreter path…" → backend/.venv/bin/python)
+  Probar: Ctrl+clic en SupplierRepository dentro de routes/suppliers.py.
+Extensiones: Python + Pylance (back), TS viene incluido (front). Opcionales: ESLint, Prettier.
+
+F12 / Ctrl+clic      Ir a la definición
+Alt+F12              Ver la definición en un recuadro, sin salir del archivo
+Shift+F12            Dónde se usa (referencias)
+Alt+← / Alt+→        Volver / avanzar después de saltar
+Ctrl+P               Abrir archivo por nombre
+Ctrl+T               Buscar clase/función en todo el proyecto
+Ctrl+Shift+O         Clases/funciones del archivo abierto
+Ctrl+Shift+F         Buscar texto en todo el repo
+F2                   Renombrar en todos lados
+Ctrl+Espacio         Autocompletar (qué campos/métodos tiene)
+Hover                Tipo y documentación
+Terminal: git grep -n "texto"
+
+
+================================================================================
+11. PROBLEMAS COMUNES Y CÓMO SALIR
+================================================================================
+"connection refused" / no conecta a la base
+    → Docker Desktop cerrado o contenedor caído. Abrir Docker Desktop,
+      docker compose up -d, docker compose ps (healthy).
+
+"Address already in use" al levantar uvicorn (puerto 8000) o vite (5173)
+    → Ya hay una instancia corriendo en otra terminal. Cerrala (Ctrl+C). Si no la
+      encontrás: lsof -i :8000  → kill <PID>
+      (Vite, si el 5173 está ocupado, usa el 5174 solo: mirá la URL que imprime.)
+
+autogenerate generó una migración vacía
+    → El modelo nuevo no está importado en app/models/__init__.py, o no
+      guardaste el archivo.
+
+autogenerate quiere borrar/crear cosas que no tocaste
+    → La base no estaba al día. downgrade/borrar la migración, upgrade head,
+      y generar de nuevo.
+
+"Multiple head revisions are present"
+    → Dos migraciones con el mismo down_revision. alembic heads, y editar el
+      down_revision de la tuya para que apunte a la otra.
+
+"Can't locate revision identified by 'xxxx'"
+    → La base tiene migraciones de OTRA rama. Volver a esa rama,
+      uv run alembic downgrade -N (N = migraciones que agregó), volver a la tuya.
+      Base de tests igual: DROP DATABASE warchitecture_test; (pytest la recrea).
+      Prevención: antes de cambiar de rama, downgrade de lo que agregó la actual.
+
+"Target database is not up to date"
+    → Falta uv run alembic upgrade head antes de autogenerate.
+
+El front da error de CORS
+    → Casi siempre en realidad es que el back está caído o tiró un 500: mirá la
+      terminal del back. CORS_ORIGINS del .env tiene que incluir http://localhost:5173.
+
+El front muestra datos viejos después de crear/editar
+    → La mutation no invalida la query key correcta (useXxx.ts: onSuccess →
+      queryClient.invalidateQueries({ queryKey: ... })).
+
+401 en todo el front
+    → Token vencido (60 min). Cerrar sesión y volver a entrar.
+
+ModuleNotFoundError en el back
+    → Corriste sin "uv run", o desde la carpeta equivocada (tiene que ser backend/),
+      o falta uv sync.
+
+Los tests fallan todos de golpe al arrancar
+    → La migración nueva tiene un error (los tests aplican todas al arrancar).
+      Leé el primer error del traceback.
+
+Ver en el navegador qué manda/recibe el front
+    → F12 → pestaña Network → filtrar por Fetch/XHR → click en el request:
+      Payload (lo que mandó) y Response (lo que contestó el back).
+
+

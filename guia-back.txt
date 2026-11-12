@@ -1,0 +1,161 @@
+GUÍA BACK — warchitecture
+================================================================================
+Modelo a copiar: proveedores (models/supplier.py, repositories/supplier.py,
+schemas/supplier.py, services/suppliers.py, api/routes/suppliers.py).
+
+
+================================================================================
+1. MODELADO (app/models/)
+================================================================================
+Tabla nueva: crear app/models/foo.py, importarla en app/models/__init__.py,
+alembic autogenerate, revisar la migración, upgrade head, generate_erd.
+
+class Foo(Base):
+    __tablename__ = "foo"
+    __table_args__ = (...constraints...)
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    firm_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("firm.id"))
+    name: Mapped[str] = mapped_column(String(150))
+    notes: Mapped[str | None] = mapped_column(Text)
+    amount: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+Mapped[str]          NOT NULL
+Mapped[str | None]   acepta NULL
+Tipos: String(n), Text, Integer, BigInteger, Numeric(14, 2) (plata), Boolean, Date, DateTime
+server_default=      valor por defecto en la base: text("true"), text("'ARS'"), func.now()
+
+Constraints (en __table_args__):
+ForeignKey("b.id")                                  FK, en el mapped_column
+ForeignKey("b.id", ondelete="CASCADE")              se borra con el padre
+UniqueConstraint("project_id", "number")            combinación única
+CheckConstraint("amount >= 0", name="amount_not_negative")
+CheckConstraint("status IN ('draft', 'done')", name="status_valid")
+CheckConstraint("end_date >= start_date", name="end_after_start")
+CheckConstraint("status <> 'done' OR end_date IS NOT NULL", name="done_has_end")   si X entonces Y
+Index("ix_foo_firm_id", "firm_id")                  índice
+
+Único solo entre activos (va debajo de la clase):
+Index("uq_foo_name_active", Foo.firm_id, func.lower(Foo.name),
+      unique=True, postgresql_where=text("is_active"))
+
+Columna NOT NULL nueva en una tabla con datos: necesita server_default.
+
+
+================================================================================
+2. SQLALCHEMY (consultas)
+================================================================================
+Armar la consulta:
+select(Foo)                      SELECT * FROM foo
+.where(Foo.x == 1, Foo.y > 2)    WHERE (varias condiciones = AND)
+.order_by(Foo.name)              ORDER BY  (.desc() para descendente)
+.limit(10)                       LIMIT
+.join(B, B.id == Foo.b_id)       INNER JOIN
+.outerjoin(B, B.id == Foo.b_id)  LEFT JOIN
+.add_columns(B.name)             agrega columnas al resultado
+.group_by(Foo.b_id)              GROUP BY
+.having(func.count(Foo.id) > 1)  HAVING
+
+Ejecutarla:
+db.scalars(stmt).all()      lista de objetos
+db.scalars(stmt).first()    un objeto o None
+db.scalar(stmt)             un solo valor (count, sum)
+db.execute(stmt).all()      lista de tuplas (cuando hay varias columnas)
+db.get(Foo, id)             buscar por id (no filtra por firm ni is_active)
+
+Condiciones:
+or_(a, b)                   OR
+Foo.x.in_([1, 2])           IN
+Foo.x.is_(None)             IS NULL  (no usar == None)
+Foo.name.ilike("%texto%")   LIKE sin distinguir mayúsculas
+Foo.is_active               booleano directo
+
+Funciones:
+func.count(Foo.id)   func.sum(Foo.qty)   func.max()   func.min()   func.avg()
+func.coalesce(func.sum(Foo.qty), 0)       si no hay filas devuelve 0 y no NULL
+func.lower(Foo.name)
+.label("total")                           nombre de la columna en el resultado
+
+Existe:
+db.scalar(select(exists().where(Foo.b_id == b_id)))    True / False
+
+Repositorio del proyecto (filtra por firm_id e is_active solo):
+class FooRepository(FirmScopedRepository[Foo]):
+    model = Foo
+    def get(self, foo_id: int) -> Foo | None:
+        return self.db.scalars(self.select().where(Foo.id == foo_id)).first()
+Uso: FooRepository(db, firm_id=firm_id).get(foo_id)
+
+Escribir (en services: flush, el commit lo hace la ruta):
+db.add(foo); db.flush()             crear (después del flush foo.id existe)
+foo.name = "x"; db.flush()          editar
+foo.is_active = False; db.flush()   baja lógica (nunca delete)
+
+
+================================================================================
+3. SCHEMAS PYDANTIC (app/schemas/)
+================================================================================
+FooCreate   lo que manda el front en el POST (sin id ni firm_id)
+FooUpdate   lo que manda el front en el PATCH (todo opcional)
+FooOut      lo que devuelve la API
+
+class FooCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=150)
+    notes: str | None = None                       opcional
+    amount: Decimal = Field(ge=0)                  >= 0
+    status: Literal["draft", "done"] = "draft"
+
+class FooUpdate(BaseModel):
+    name: str | None = None
+
+class FooOut(BaseModel):
+    id: int
+    name: str
+    notes: str | None
+
+Validaciones: Field(ge=, gt=, le=, lt=, min_length=, max_length=)
+Validar varios campos juntos:
+    @model_validator(mode="after")
+    def check(self):
+        if self.end < self.start: raise ValueError("mensaje")
+        return self
+
+payload.model_dump()                    dict con todos los campos
+payload.model_dump(exclude_unset=True)  solo los que mandó el front (PATCH)
+
+
+================================================================================
+4. RUTAS, PERMISOS Y ERRORES (app/api/routes/)
+================================================================================
+router = APIRouter(prefix="/firms/{firm_id}/foos", tags=["foos"])
+Registrarlo en app/api/router.py con api_router.include_router(foos.router).
+
+MANAGE = requires("foo.manage", "firm")        scope: "firm" o "project"
+
+@router.post("", response_model=FooOut, status_code=201, dependencies=[Depends(MANAGE)])
+def create_foo(payload: FooCreate, db: DbSession, membership: CurrentMembership) -> FooOut:
+    foo = foos.create_foo(db, membership.firm_id, **payload.model_dump())
+    db.commit()
+    return FooOut(id=foo.id, name=foo.name, notes=foo.notes)
+
+Lo que puede recibir una ruta:
+db: DbSession                    sesión de la base
+membership: CurrentMembership    membership.firm_id
+account: CurrentAccount          account.id (usuario logueado)
+foo_id: int                      parámetro de la URL
+payload: FooCreate               body
+q: str | None = None             query param (?q=)
+
+Toda ruta necesita dependencies=[Depends(requires(...))].
+Baja lógica: POST /{foo_id}/deactivate con status_code=204.
+Permiso nuevo: migración a mano, copiando
+alembic/versions/e7b2c5a93f68_seed_supplier_permissions.py
+Roles: firm (owner, architect, client) · project (lead, collaborator, client)
+
+Errores:
+raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Foo no encontrado")
+404 no existe o es de otro estudio
+409 choca con una regla (nombre repetido)
+422 datos inválidos (lo tira Pydantic solo)
+403 sin permiso (lo tira requires solo)

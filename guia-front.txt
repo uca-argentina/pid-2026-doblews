@@ -1,0 +1,121 @@
+GUÍA FRONT — warchitecture
+================================================================================
+Modelo a copiar: features/suppliers/ y pages/SuppliersPage.tsx.
+Archivos de una feature: types.ts, fooService.ts, useFoos.ts, fooForm.ts,
+FooFormModal.tsx, FoosTable.tsx, FooCard.tsx, pages/FoosPage.tsx.
+
+
+================================================================================
+1. TIPOS (types.ts)
+================================================================================
+Copia de los schemas del back, con los mismos nombres de campo.
+int → number   str → string   bool → boolean   X | None → X | null   list[X] → X[]
+Decimal → string ("230.00")   date / datetime → string
+
+export interface FooOut { id: number; name: string; notes: string | null; amount: string; }
+export interface FooCreate { name: string; notes: string | null; amount: string; }
+
+
+================================================================================
+2. SERVICE Y HOOKS
+================================================================================
+fooService.ts: las llamadas a la API.
+export async function fetchFoos(firmId: number): Promise<FooOut[]> {
+  const { data } = await api.get<FooOut[]>(`/firms/${firmId}/foos`);
+  return data;
+}
+export async function createFoo(firmId: number, payload: FooCreate): Promise<FooOut> {
+  const { data } = await api.post<FooOut>(`/firms/${firmId}/foos`, payload);
+  return data;
+}
+api.get / api.post / api.patch(url, payload)
+Query params: api.get(url, { params: { q } })
+
+useFoos.ts: React Query, guarda los datos en cache.
+useQuery     para leer
+useMutation  para crear, editar o borrar
+invalidateQueries  vuelve a pedir los datos después de un cambio
+
+export function useFoos(firmId: number) {
+  return useQuery({ queryKey: ["firm", firmId, "foos"], queryFn: () => fetchFoos(firmId) });
+}
+export function useCreateFoo(firmId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: FooCreate) => createFoo(firmId, payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["firm", firmId, "foos"] }),
+  });
+}
+
+En el componente:
+const { data, isLoading, isError } = useFoos(firm.id);
+const create = useCreateFoo(firm.id);
+await create.mutateAsync(payload);      create.isPending mientras espera
+
+
+================================================================================
+3. FORMULARIO (@mantine/form)
+================================================================================
+const form = useForm({
+  initialValues: { name: "", amount: "", unit_id: null as string | null },
+  validate: {
+    name: (v) => (v.trim() ? null : "Ingresá el nombre"),   null = sin error
+  },
+});
+
+<form onSubmit={form.onSubmit(async (values) => { ... })}>
+  <TextInput label="Nombre" {...form.getInputProps("name")} />
+  <NumberInput label="Importe" decimalScale={2} {...form.getInputProps("amount")} />
+  <Select label="Unidad" data={units.map((u) => ({ value: String(u.id), label: u.name }))}
+          {...form.getInputProps("unit_id")} />
+  <DateInput label="Fecha" valueFormat="DD/MM/YYYY" {...form.getInputProps("date")} />
+  <Checkbox label="Activo" {...form.getInputProps("ok", { type: "checkbox" })} />
+  <Button type="submit" loading={create.isPending}>Guardar</Button>
+</form>
+
+form.getInputProps("x")   conecta el input con el campo
+form.onSubmit(fn)         valida y, si está todo bien, llama a fn
+form.setFieldValue("x", v)
+
+Al mandar:
+Select devuelve string → Number(values.unit_id)
+Plata → String(values.amount)
+Campo opcional vacío → values.notes.trim() || null
+
+Errores de la API: apiErrorMessage(error, "No pudimos guardar")  (lib/apiError.ts)
+Aviso de éxito: notifications.show({ title: "Guardado", message: "..." })
+Unidades: const units = useUnitsOfMeasure();
+
+
+================================================================================
+4. PANTALLA, RUTA Y NAVBAR
+================================================================================
+pages/FoosPage.tsx:
+const { firm, can } = useCurrentFirm();          en una obra: useCurrentProject()
+const { data: foos, isLoading } = useFoos(firm.id);
+const [opened, modal] = useDisclosure(false);    modal.open() / modal.close()
+
+{isLoading && <Loader />}
+{foos && foos.length === 0 && <Text>No hay foos</Text>}
+<Box visibleFrom="sm"><FoosTable foos={foos} /></Box>      tabla en desktop
+<Stack hiddenFrom="sm">{foos.map(...<FooCard />)}</Stack>   cards en mobile
+
+Tabla:
+<Table>
+  <Table.Thead><Table.Tr><Table.Th>Nombre</Table.Th></Table.Tr></Table.Thead>
+  <Table.Tbody>{foos.map((f) => <Table.Tr key={f.id}><Table.Td>{f.name}</Table.Td></Table.Tr>)}</Table.Tbody>
+</Table>
+
+Ruta (App.tsx, junto a "suppliers"):
+<Route path="foos" element={<RequirePermission code="foo.view"><FoosPage /></RequirePermission>} />
+De una obra: adentro de <Route path="projects/:projectId" ...>
+Parámetro de la URL: const fooId = Number(useParams().fooId);
+
+Link en el menú:
+Estudio: layout/FirmNavbar.tsx, en el array sections
+  { to: `${base}/foos`, label: "Foos", visible: can("foo.view") }
+Obra: layout/ProjectLayout.tsx, en el array tabs
+
+Navegar: const navigate = useNavigate(); navigate(`/firms/${firm.id}/foos`);
+Ocultar un botón: {can("foo.manage") && <Button>...</Button>}
+Formato: formatMoney(amount, currency) en lib/format.ts

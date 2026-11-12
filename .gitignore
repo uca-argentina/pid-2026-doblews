@@ -2,7 +2,6 @@
 .env
 .env.*
 !.env.example
-comandos.txt
 
 # Python
 __pycache__/
