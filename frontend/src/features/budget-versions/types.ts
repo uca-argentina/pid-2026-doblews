@@ -76,3 +76,9 @@ export interface BudgetVersionLoadOut {
   loaded: number;
   skipped: string[];
 }
+
+/**Aca iria el mismo schema espejado del back */
+/**export interface BudgetComparison {}
+
+/**Aca iria el payload hacia el endpoint del back 
+export interface BudgetCompareIds {}*/

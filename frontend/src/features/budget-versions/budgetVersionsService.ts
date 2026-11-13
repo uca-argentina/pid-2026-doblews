@@ -1,5 +1,7 @@
 import { api } from "../../lib/api";
 import type {
+  BudgetCompareIds,
+  BudgetComparison,
   BudgetVersionCreate,
   BudgetVersionLoadOut,
   BudgetVersionOut,
@@ -60,6 +62,18 @@ export async function loadVersion(
   const { data } = await api.post<BudgetVersionLoadOut>(
     `${versionsUrl(firmId, projectId)}/${versionId}/load`,
     {},
+  );
+  return data;
+}
+
+export async function compareBudgets(
+  firmId: number,
+  projectId: number,
+  payload: BudgetCompareIds,
+): Promise<BudgetComparison> {
+  const { data } = await api.post<BudgetComparison>(
+    `${versionsUrl(firmId, projectId)}/compare`,
+    payload,
   );
   return data;
 }

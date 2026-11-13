@@ -24,6 +24,7 @@ from app.models import (
     Recipe,
 )
 from app.repositories.project_recipe import ProjectRecipeRepository
+from app.schemas.comparacion import Comparacion
 from app.services.budget import build_budget
 from app.services.takeoff import TakeoffError, add_line
 
@@ -224,3 +225,9 @@ def _recipe_name(db: Session, recipe_id: int) -> str:
     """
     name = db.execute(select(Recipe.name).where(Recipe.id == recipe_id)).scalar_one_or_none()
     return name or f"Receta #{recipe_id}"
+
+
+def compare_budgets(
+    db: Session, project: Project, version_1: BudgetVersion, version_2: BudgetVersion
+) -> Comparacion:
+    """Aca iria la logica de la comparacion"""

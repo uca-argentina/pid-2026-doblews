@@ -39,7 +39,11 @@ from app.schemas.budget_version import (
     BudgetVersionSummary,
 )
 from app.services.budget import BUDGET_GROUPS
-from app.services.budget_versions import BudgetVersionError, load_version, save_version
+from app.services.budget_versions import (
+    BudgetVersionError,
+    load_version,
+    save_version,
+)
 
 router = APIRouter(
     prefix="/firms/{firm_id}/projects/{project_id}/budget/versions", tags=["budget-versions"]
@@ -252,3 +256,19 @@ def load_into_draft(
     db.commit()
 
     return BudgetVersionLoadOut(loaded=outcome.loaded, skipped=list(outcome.skipped))
+
+
+"""@router.get("/compare/", response_model=Comparacion, dependencies=[Depends(READ)])
+def compare_budgets(
+    project_id: int,
+    version_id_1: int,
+    version_id_2: int,
+    account: CurrentAccount,
+    membership: CurrentMembership,
+    granted: FirmPermissions,
+    db: DbSession,
+) -> BudgetVersionOut:
+    project = _load_project(db, membership, account.id, granted, project_id)
+    comparacion = compare_budgets(db, project, version_id_1, version_id_2)
+
+    return comparacion"""
