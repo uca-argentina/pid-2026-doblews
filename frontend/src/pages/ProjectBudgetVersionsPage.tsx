@@ -1,23 +1,28 @@
-import { useState } from "react";
+import { use, useState } from "react";
 import {
   Alert,
   Button,
   Card,
   Center,
   Loader,
+  NumberInput,
+  SegmentedControl,
   Stack,
   Text,
+  TextInput,
 } from "@mantine/core";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { LoadVersionModal } from "../features/budget-versions/LoadVersionModal";
 import { VersionsList } from "../features/budget-versions/VersionsList";
 import type { BudgetVersionSummary } from "../features/budget-versions/types";
-import { useBudgetVersions } from "../features/budget-versions/useBudgetVersions";
+import { useBudgetVersions, useBudgetVersion } from "../features/budget-versions/useBudgetVersions";
 import { useBudgetVersionAccess } from "../features/budget/useBudgetAccess";
 import { useCurrentFirm } from "../features/firms/firmContext";
 import { useCurrentProject } from "../features/projects/projectContext";
+import { formatMoney } from "../lib/format";
 
+type View = "budget" | "compare";
 /** HU-12: every budget this work has saved, newest first. It is what the
  * "Presupuestos" tab opens on: the live budget is on the take-off, and this is
  * what was frozen from it.
@@ -31,6 +36,7 @@ export function ProjectBudgetVersionsPage() {
   const { firm } = useCurrentFirm();
   const { project, can } = useCurrentProject();
   const canView = useBudgetVersionAccess();
+  
 
   if (!canView) {
     return (
@@ -58,15 +64,25 @@ function VersionsView({
   projectId: number;
   canManage: boolean;
 }) {
+
+  const [loading, setLoading] = useState<BudgetVersionSummary | null>(null);
+
+  const projectPath = `/firms/${firmId}/projects/${projectId}`;
+  const takeoffPath = `${projectPath}/takeoff`;
   const {
     data: versions,
     isLoading,
     isError,
   } = useBudgetVersions(firmId, projectId);
-  const [loading, setLoading] = useState<BudgetVersionSummary | null>(null);
 
-  const projectPath = `/firms/${firmId}/projects/${projectId}`;
-  const takeoffPath = `${projectPath}/takeoff`;
+  const budgets = useBudgetVersions(firmId,projectId);
+  const [view, setView] = useState<View>("budget");
+  const [version1, setVersion1] = useState<number | string >(1);
+  const [version2, setVersion2] = useState<number | string >(1);
+  
+  const {data: data1} = useBudgetVersion(firmId, projectId,Number(version1));
+  const {data: data2} = useBudgetVersion(firmId, projectId,Number(version1));
+
 
   if (isLoading) {
     return (
@@ -84,13 +100,28 @@ function VersionsView({
     );
   }
 
+
+
   return (
     <Stack gap="md">
       <PageHeader title="Presupuestos guardados" order={4} />
-
-      {versions.length === 0 ? (
+      <SegmentedControl
+                value={view}
+                onChange={(value) => setView(value as View)}
+                data={[
+                  { value: "budget", label: "Presupuesto" },
+                  { value: "compare", label: "Comparar" },
+                ]}
+                // Full width on a phone so both options are an easy tap, as on the
+                // catalogue.
+                fullWidth
+                maw={{ sm: 320 }}
+              />
+      {versions.length === 0 && (
         <EmptyVersions takeoffPath={takeoffPath} canManage={canManage} />
-      ) : (
+      )}
+      {view === "budget" && (
+
         <VersionsList
           versions={versions}
           hrefFor={(versionId) => `${projectPath}/budget/versions/${versionId}`}
@@ -117,6 +148,39 @@ function VersionsView({
               : undefined
           }
         />
+      )}
+      {view === "compare" && (
+        <>
+          <NumberInput
+            label="Primer Version"
+            value={version1}
+            onChange={setVersion1}
+            min={0}
+            allowNegative={false}
+            hideControls
+            error={
+              typeof version1 === "number" && version1 > 0 
+                ? undefined
+                : "Ingresá una cantidad mayor a cero y entera"
+            }
+            maw={{ sm: 200 }}
+          />
+          <NumberInput
+            label="Segunda Version"
+
+            value={version2}
+            onChange={setVersion2}
+            min={0}
+            allowNegative={false}
+            hideControls
+            error={
+              typeof version2 === "number" && version2 > 0 
+                ? undefined
+                : "Ingresá una cantidad mayor a cero y entera"
+            }
+            maw={{ sm: 200 }}
+          />
+        </>
       )}
 
       {/* Outside the branch above on purpose: loading a version changes the

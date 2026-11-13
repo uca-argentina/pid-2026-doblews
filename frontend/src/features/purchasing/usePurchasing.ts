@@ -34,6 +34,7 @@ export function useMaterialComparison(
   });
 }
 
+
 /** Every material of a work, each at the quantity the work needs. */
 export function useProjectPurchasing(firmId: number, projectId: number) {
   return useQuery({
